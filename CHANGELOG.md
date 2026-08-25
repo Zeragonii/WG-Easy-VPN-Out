@@ -1,4 +1,42 @@
+
 # Changelog
+
+## 1.0.0
+
+First stable OpenVPN release.
+
+### Stable feature set
+
+- WG-Easy client discovery and status tracking.
+- Outbound OpenVPN profile import, activation and persistent auto-connect.
+- Per-client routing groups with nftables policy routing.
+- Deterministic fwmark/routing-table allocation.
+- VPN kill-switch and WAN fallback modes.
+- Local/private-network bypass for policy-routed clients.
+- Automatic routing reconciliation.
+- Exponential VPN retry/recovery with connecting timeout.
+- Async exit-IP observability and GitHub update awareness.
+- Portable backup/restore with optional SECRET_KEY inclusion.
+- Versioned database migrations.
+- Hardened restore validation, staging and rollback.
+- Redacted diagnostics and release-readiness preflight.
+
+### Release validation
+
+The final release candidate was tested with:
+
+- a fresh install
+- restore from an existing deployment backup
+- successful restored VPN reconnection
+- deliberate broken-VPN timeout/retry behavior
+- stale policy-rule/table cleanup
+- kill-switch operation
+- 11/11 release-readiness checks passing
+
+### Development transparency
+
+OpenAI ChatGPT was used extensively as an AI development assistant throughout
+the project. See the README's **AI-assisted development** section for details.
 
 ## 0.9.3b
 

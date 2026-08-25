@@ -45,6 +45,14 @@ def main():
         if forbidden in diagnostics:
             fail(f"diagnostics source references forbidden secret: {forbidden}")
 
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    if "AI-assisted development" not in readme:
+        fail("README.md is missing the AI-assisted development disclosure")
+
+    changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    if f"## {version}" not in changelog_text:
+        fail(f"CHANGELOG.md has no section for {version}")
+
     if not (ROOT / "CHANGELOG.md").is_file():
         fail("CHANGELOG.md is missing")
     if not (ROOT / "RELEASE_CHECKLIST.md").is_file():

@@ -656,3 +656,55 @@ Fixes the Diagnostics **Run preflight** button. The preflight JavaScript is now 
 ## v0.9.3b - Resilience accounting hotfix
 
 A retry process successfully starting is no longer counted as a successful VPN connection. Retry failures and exponential backoff remain intact until the tunnel is actually observed as connected.
+
+
+## v1.0.0 - Stable OpenVPN Release
+
+v1.0.0 marks the first stable release of WG-Easy-VPN-Out.
+
+The 1.0 feature set includes:
+
+- WG-Easy client discovery and live status
+- outbound OpenVPN profile management
+- persistent auto-connect and retry/recovery
+- per-client routing-group assignment
+- nftables-based policy routing
+- deterministic fwmark/routing-table allocation
+- VPN kill-switch and optional WAN fallback
+- local/RFC1918 destination bypass
+- live routing reconciliation
+- asynchronous exit-IP observability
+- GitHub update awareness
+- portable backup/restore with optional SECRET_KEY inclusion
+- versioned database schema migrations
+- restore validation and rollback hardening
+- diagnostics export and release-readiness preflight
+
+The 1.0 release was validated through:
+
+- a fresh installation
+- restore of an existing production backup
+- successful recovery of restored VPN profiles and routing assignments
+- deliberate OpenVPN connection failure and timeout/retry testing
+- stale routing-rule/table deletion testing
+- kill-switch behavior verification
+- a clean 11/11 release-readiness preflight
+
+Outbound WireGuard support remains intentionally deferred to a post-1.0 release.
+
+
+## AI-assisted development
+
+This project was created with substantial assistance from **OpenAI's ChatGPT**.
+
+AI assistance was used during the design and implementation process for tasks
+including architecture discussion, code generation and refactoring, debugging,
+release planning, documentation, test design, and analysis of diagnostic output.
+
+The project was not developed autonomously by an AI system. Its requirements,
+deployment environment, testing decisions, validation, and release approval
+were directed and performed by the project maintainer. Changes were repeatedly
+tested against a real WG-Easy/OpenVPN deployment before the 1.0 release.
+
+This disclosure is included intentionally so users and contributors can make an
+informed judgement about the project's development process and provenance.
