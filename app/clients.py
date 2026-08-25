@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, render_template
+from flask import Blueprint, jsonify, render_template
 from flask_login import login_required
 
 from .services.wg_easy import WGEasyError, WGEasyService
@@ -39,3 +39,36 @@ def index():
         clients=clients,
         error=error,
     )
+
+
+@bp.get("/api")
+@login_required
+def api():
+    try:
+        clients = _wg_easy_service().get_clients()
+    except WGEasyError as exc:
+        return jsonify({
+            "ok": False,
+            "error": str(exc),
+            "clients": [],
+        }), 502
+
+    return jsonify({
+        "ok": True,
+        "clients": [
+            {
+                "id": client.external_id,
+                "name": client.name,
+                "ipv4_address": client.ipv4_address,
+                "enabled": client.enabled,
+                "connection_state": client.connection_state,
+                "latest_handshake_at": client.latest_handshake_at,
+                "handshake_age_seconds": client.handshake_age_seconds,
+                "transfer_rx": client.transfer_rx,
+                "transfer_tx": client.transfer_tx,
+                "transfer_rx_display": client.transfer_rx_display,
+                "transfer_tx_display": client.transfer_tx_display,
+            }
+            for client in clients
+        ],
+    })

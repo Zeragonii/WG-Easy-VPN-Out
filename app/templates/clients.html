@@ -3,79 +3,240 @@
 {% block content %}
 <h1>WG-Easy Clients</h1>
 <p class="muted">
-  Read-only discovery from the WG-Easy API. Connection state is inferred from WireGuard handshake age.
+  Read-only discovery from the WG-Easy API. Data refreshes automatically every 5 seconds.
 </p>
 
-{% if error %}
-  <div class="error-box">
-    <strong>WG-Easy API unavailable</strong>
-    <div style="margin-top:.35rem;">{{ error }}</div>
-  </div>
-{% else %}
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
-      <div>
-        <strong>{{ clients|length }} client{% if clients|length != 1 %}s{% endif %} discovered</strong>
-        <div class="muted" style="margin-top:.2rem;">Source: WG-Easy <code>/api/client</code></div>
+<div id="wg-error" class="error-box" {% if not error %}style="display:none;"{% endif %}>
+  <strong>WG-Easy API unavailable</strong>
+  <div id="wg-error-text" style="margin-top:.35rem;">{{ error or "" }}</div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <div>
+      <strong id="client-count">
+        {{ clients|length }} client{% if clients|length != 1 %}s{% endif %} discovered
+      </strong>
+      <div class="muted" style="margin-top:.2rem;">
+        Source: WG-Easy <code>/api/client</code> ·
+        <span id="refresh-status">Live refresh enabled</span>
       </div>
-      <a href="{{ url_for('clients.index') }}" style="color:var(--accent);">Refresh</a>
     </div>
-
-    {% if clients %}
-    <div class="table-wrap" style="margin-top:.8rem;">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>IPv4</th>
-            <th>Enabled</th>
-            <th>Connection</th>
-            <th>Last handshake</th>
-            <th>RX</th>
-            <th>TX</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for client in clients %}
-          <tr>
-            <td>
-              <strong>{{ client.name }}</strong>
-              <div class="muted" style="font-size:.8rem;">ID {{ client.external_id }}</div>
-            </td>
-            <td><code>{{ client.ipv4_address }}</code></td>
-            <td>
-              {% if client.enabled %}
-                <span class="status-good">● Enabled</span>
-              {% else %}
-                <span class="status-bad">● Disabled</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if client.connection_state == "online" %}
-                <span class="status-good">● Online</span>
-              {% elif client.connection_state == "recent" %}
-                <span class="status-warn">◐ Recently active</span>
-              {% elif client.connection_state == "offline" %}
-                <span class="muted">○ Offline</span>
-              {% else %}
-                <span class="muted">○ Never connected</span>
-              {% endif %}
-            </td>
-            <td>{{ client.handshake_age_display }}</td>
-            <td>{{ client.transfer_rx_display }}</td>
-            <td>{{ client.transfer_tx_display }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-      <p class="muted" style="margin-bottom:0;">WG-Easy returned no clients.</p>
-    {% endif %}
+    <button id="refresh-now" class="inline-button" type="button">Refresh now</button>
   </div>
 
-  <p class="muted" style="margin-top:.8rem;font-size:.88rem;">
-    Status thresholds: Online &lt; 3 minutes, Recently active &lt; 10 minutes, Offline ≥ 10 minutes.
+  <div class="table-wrap" style="margin-top:.8rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>IPv4</th>
+          <th>Enabled</th>
+          <th>Connection</th>
+          <th>Last handshake</th>
+          <th>RX</th>
+          <th>TX</th>
+        </tr>
+      </thead>
+      <tbody id="clients-body">
+        {% for client in clients %}
+        <tr data-client-id="{{ client.external_id }}">
+          <td>
+            <strong class="client-name">{{ client.name }}</strong>
+            <div class="muted client-id" style="font-size:.8rem;">ID {{ client.external_id }}</div>
+          </td>
+          <td><code class="client-ip">{{ client.ipv4_address }}</code></td>
+          <td class="client-enabled">
+            {% if client.enabled %}
+              <span class="status-good">● Enabled</span>
+            {% else %}
+              <span class="status-bad">● Disabled</span>
+            {% endif %}
+          </td>
+          <td class="client-connection">
+            {% if client.connection_state == "online" %}
+              <span class="status-good">● Online</span>
+            {% elif client.connection_state == "recent" %}
+              <span class="status-warn">◐ Recently active</span>
+            {% elif client.connection_state == "offline" %}
+              <span class="muted">○ Offline</span>
+            {% else %}
+              <span class="muted">○ Never connected</span>
+            {% endif %}
+          </td>
+          <td class="client-handshake"
+              data-handshake="{{ client.latest_handshake_at or '' }}">
+            {{ client.handshake_age_display }}
+          </td>
+          <td class="client-rx">{{ client.transfer_rx_display }}</td>
+          <td class="client-tx">{{ client.transfer_tx_display }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p id="empty-state" class="muted" style="margin-bottom:0;{% if clients %}display:none;{% endif %}">
+    WG-Easy returned no clients.
   </p>
-{% endif %}
+</div>
+
+<p class="muted" style="margin-top:.8rem;font-size:.88rem;">
+  Status thresholds: Online &lt; 3 minutes, Recently active &lt; 10 minutes, Offline ≥ 10 minutes.
+</p>
+
+<script>
+(() => {
+  const POLL_MS = 5000;
+  const body = document.getElementById("clients-body");
+  const count = document.getElementById("client-count");
+  const emptyState = document.getElementById("empty-state");
+  const errorBox = document.getElementById("wg-error");
+  const errorText = document.getElementById("wg-error-text");
+  const refreshStatus = document.getElementById("refresh-status");
+  const refreshNow = document.getElementById("refresh-now");
+
+  let polling = false;
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function stateHtml(state) {
+    if (state === "online") return '<span class="status-good">● Online</span>';
+    if (state === "recent") return '<span class="status-warn">◐ Recently active</span>';
+    if (state === "offline") return '<span class="muted">○ Offline</span>';
+    return '<span class="muted">○ Never connected</span>';
+  }
+
+  function enabledHtml(enabled) {
+    return enabled
+      ? '<span class="status-good">● Enabled</span>'
+      : '<span class="status-bad">● Disabled</span>';
+  }
+
+  function formatAge(timestamp) {
+    if (!timestamp) return "Never";
+
+    const time = Date.parse(timestamp);
+    if (Number.isNaN(time)) return "Unknown";
+
+    const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+
+    if (seconds < 60) return `${seconds}s ago`;
+
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+
+  function tickHandshakeAges() {
+    document.querySelectorAll(".client-handshake").forEach(cell => {
+      cell.textContent = formatAge(cell.dataset.handshake);
+    });
+  }
+
+  function renderClients(clients) {
+    const existing = new Map(
+      [...body.querySelectorAll("tr[data-client-id]")].map(row => [
+        row.dataset.clientId,
+        row
+      ])
+    );
+
+    const seen = new Set();
+
+    for (const client of clients) {
+      const id = String(client.id);
+      seen.add(id);
+
+      let row = existing.get(id);
+
+      if (!row) {
+        row = document.createElement("tr");
+        row.dataset.clientId = id;
+        row.innerHTML = `
+          <td>
+            <strong class="client-name"></strong>
+            <div class="muted client-id" style="font-size:.8rem;"></div>
+          </td>
+          <td><code class="client-ip"></code></td>
+          <td class="client-enabled"></td>
+          <td class="client-connection"></td>
+          <td class="client-handshake"></td>
+          <td class="client-rx"></td>
+          <td class="client-tx"></td>
+        `;
+        body.appendChild(row);
+      }
+
+      row.querySelector(".client-name").textContent = client.name;
+      row.querySelector(".client-id").textContent = `ID ${id}`;
+      row.querySelector(".client-ip").textContent = client.ipv4_address;
+      row.querySelector(".client-enabled").innerHTML = enabledHtml(client.enabled);
+      row.querySelector(".client-connection").innerHTML = stateHtml(client.connection_state);
+
+      const handshake = row.querySelector(".client-handshake");
+      handshake.dataset.handshake = client.latest_handshake_at || "";
+      handshake.textContent = formatAge(client.latest_handshake_at);
+
+      row.querySelector(".client-rx").textContent = client.transfer_rx_display;
+      row.querySelector(".client-tx").textContent = client.transfer_tx_display;
+    }
+
+    for (const [id, row] of existing) {
+      if (!seen.has(id)) row.remove();
+    }
+
+    count.textContent = `${clients.length} client${clients.length === 1 ? "" : "s"} discovered`;
+    emptyState.style.display = clients.length ? "none" : "";
+  }
+
+  async function refreshClients() {
+    if (polling) return;
+    polling = true;
+    refreshNow.disabled = true;
+    refreshStatus.textContent = "Refreshing…";
+
+    try {
+      const response = await fetch("{{ url_for('clients.api') }}", {
+        headers: { "Accept": "application/json" },
+        cache: "no-store"
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+
+      renderClients(data.clients);
+      errorBox.style.display = "none";
+      errorText.textContent = "";
+      refreshStatus.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    } catch (error) {
+      errorText.textContent = error.message || "WG-Easy refresh failed.";
+      errorBox.style.display = "";
+      refreshStatus.textContent = "Refresh failed";
+    } finally {
+      refreshNow.disabled = false;
+      polling = false;
+    }
+  }
+
+  refreshNow.addEventListener("click", refreshClients);
+  setInterval(refreshClients, POLL_MS);
+  setInterval(tickHandshakeAges, 1000);
+  tickHandshakeAges();
+})();
+</script>
 {% endblock %}

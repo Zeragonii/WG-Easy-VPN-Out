@@ -79,3 +79,17 @@ VPN Router now derives a useful UI state from `latestHandshakeAt`:
 - no handshake: Never connected
 
 The clients page also displays human-readable RX/TX counters.
+
+
+## v0.2.2 - Live WG-Easy client refresh
+
+The WG-Easy Clients page now:
+
+- polls VPN Router's read-only WG-Easy adapter every 5 seconds
+- updates rows in place without a full-page reload
+- updates handshake age locally every second
+- shows the time of the latest successful API refresh
+- keeps the last known client table visible if a refresh temporarily fails
+- provides a manual "Refresh now" button
+
+No routing or firewall changes are performed in this release.
