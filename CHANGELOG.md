@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3a
+
+- Fixed Diagnostics release-readiness JavaScript being emitted inside the
+  document title/head block before the preflight controls existed.
+- The Run preflight button now attaches its click handler after the page
+  content is rendered.
+
 ## 0.9.3
 
 Release-candidate hygiene and preflight validation.

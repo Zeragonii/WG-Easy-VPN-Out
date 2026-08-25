@@ -648,3 +648,7 @@ Warnings do not block readiness; failed checks do.
 
 See `RELEASE_CHECKLIST.md` for the manual tests to perform before tagging
 `v1.0.0`, and `CHANGELOG.md` for the consolidated project history.
+
+## v0.9.3a - Preflight UI hotfix
+
+Fixes the Diagnostics **Run preflight** button. The preflight JavaScript is now rendered after the Diagnostics content rather than inside the document title/head block, so the DOM elements exist before event listeners are attached.

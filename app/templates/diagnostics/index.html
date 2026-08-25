@@ -1,76 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Diagnostics · VPN Router
-<script>
-(() => {
-  const button = document.getElementById("run-preflight");
-  const summary = document.getElementById("preflight-summary");
-  const results = document.getElementById("preflight-results");
-
-  function statusClass(status) {
-    if (status === "pass") return "status-good";
-    if (status === "warn") return "status-warn";
-    return "status-bad";
-  }
-
-  async function run() {
-    button.disabled = true;
-    summary.textContent = "Running checks…";
-    results.innerHTML = "";
-
-    try {
-      const response = await fetch("{{ url_for('diagnostics.preflight') }}", {
-        headers: {"Accept": "application/json"},
-        cache: "no-store"
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error("Preflight request failed.");
-
-      summary.innerHTML = data.ready
-        ? `<span class="status-good">● Ready</span> · ${data.summary.pass} passed, ${data.summary.warn} warning(s)`
-        : `<span class="status-bad">● Not ready</span> · ${data.summary.fail} failed, ${data.summary.warn} warning(s)`;
-
-      const table = document.createElement("table");
-      table.innerHTML = `
-        <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
-        <tbody></tbody>
-      `;
-      const tbody = table.querySelector("tbody");
-
-      for (const check of data.checks || []) {
-        const row = document.createElement("tr");
-
-        const label = document.createElement("td");
-        label.textContent = check.label;
-
-        const state = document.createElement("td");
-        const stateSpan = document.createElement("span");
-        stateSpan.className = statusClass(check.status);
-        stateSpan.textContent =
-          check.status === "pass" ? "● Pass" :
-          check.status === "warn" ? "◐ Warning" : "● Fail";
-        state.appendChild(stateSpan);
-
-        const detail = document.createElement("td");
-        detail.textContent = check.detail;
-
-        row.append(label, state, detail);
-        tbody.appendChild(row);
-      }
-
-      results.appendChild(table);
-    } catch (error) {
-      summary.innerHTML =
-        '<span class="status-bad">● Preflight could not be completed.</span>';
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  button.addEventListener("click", run);
-})();
-</script>
-
-{% endblock %}
+{% block title %}Diagnostics · VPN Router{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
   <div>
@@ -214,4 +143,73 @@
   <summary><strong>wg0 link state</strong></summary>
   <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.wg0 or "—" }}</pre>
 </details>
+<script>
+(() => {
+  const button = document.getElementById("run-preflight");
+  const summary = document.getElementById("preflight-summary");
+  const results = document.getElementById("preflight-results");
+
+  function statusClass(status) {
+    if (status === "pass") return "status-good";
+    if (status === "warn") return "status-warn";
+    return "status-bad";
+  }
+
+  async function run() {
+    button.disabled = true;
+    summary.textContent = "Running checks…";
+    results.innerHTML = "";
+
+    try {
+      const response = await fetch("{{ url_for('diagnostics.preflight') }}", {
+        headers: {"Accept": "application/json"},
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error("Preflight request failed.");
+
+      summary.innerHTML = data.ready
+        ? `<span class="status-good">● Ready</span> · ${data.summary.pass} passed, ${data.summary.warn} warning(s)`
+        : `<span class="status-bad">● Not ready</span> · ${data.summary.fail} failed, ${data.summary.warn} warning(s)`;
+
+      const table = document.createElement("table");
+      table.innerHTML = `
+        <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector("tbody");
+
+      for (const check of data.checks || []) {
+        const row = document.createElement("tr");
+
+        const label = document.createElement("td");
+        label.textContent = check.label;
+
+        const state = document.createElement("td");
+        const stateSpan = document.createElement("span");
+        stateSpan.className = statusClass(check.status);
+        stateSpan.textContent =
+          check.status === "pass" ? "● Pass" :
+          check.status === "warn" ? "◐ Warning" : "● Fail";
+        state.appendChild(stateSpan);
+
+        const detail = document.createElement("td");
+        detail.textContent = check.detail;
+
+        row.append(label, state, detail);
+        tbody.appendChild(row);
+      }
+
+      results.appendChild(table);
+    } catch (error) {
+      summary.innerHTML =
+        '<span class="status-bad">● Preflight could not be completed.</span>';
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  button.addEventListener("click", run);
+})();
+</script>
 {% endblock %}
