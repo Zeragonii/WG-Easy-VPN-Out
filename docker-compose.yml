@@ -1,8 +1,8 @@
 services:
   vpn-router:
     build: .
-    # Replace with your GHCR image after the first successful GitHub build:
-    # image: ghcr.io/YOUR_GITHUB_USER/vpn-router:latest
+    # For GHCR deployments:
+    # image: ghcr.io/zeragonii/wg-easy-vpn-out:latest
     container_name: vpn-router
 
     network_mode: host
@@ -18,27 +18,13 @@ services:
       TZ: Europe/London
       VPN_ROUTER_PORT: "8085"
       VPN_ROUTER_BIND: "0.0.0.0"
-
-      # CHANGE THESE BEFORE DEPLOYING.
       SECRET_KEY: "CHANGE-ME-TO-A-LONG-RANDOM-STRING"
-      ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD: "CHANGE-ME-NOW"
 
-      # WG-Easy integration will use this later.
-      WG_EASY_URL: "http://127.0.0.1:51821"
-      WG_EASY_USERNAME: "CHANGE-ME"
-      WG_EASY_PASSWORD: "CHANGE-ME"
-      WG_EASY_VERIFY_TLS: "true"
-      ROUTING_RECONCILE_INTERVAL: "3"
-      VPN_RETRY_CHECK_INTERVAL: "2"
-      VPN_RETRY_BASE_SECONDS: "5"
-      VPN_RETRY_MAX_SECONDS: "300"
-      VPN_RETRY_MAX_FAILURES: "0"
-      VPN_CONNECT_TIMEOUT_SECONDS: "45"
-      EXIT_IP_PROBE_INTERVAL: "60"
-      UPDATE_CHECK_CACHE_SECONDS: "900"
-      UPDATE_VERSION_URL: "https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION"
-      UPDATE_REPOSITORY_URL: "https://github.com/Zeragonii/WG-Easy-VPN-Out"
+      # Optional deployment-level override:
+      # VPN_ROUTER_DATA_DIR: "/data"
+
+      # Legacy v1.0 application environment variables are still imported on
+      # upgrade when their corresponding database setting does not yet exist.
 
     volumes:
       - vpn-router-data:/data

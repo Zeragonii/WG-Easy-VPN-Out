@@ -88,3 +88,17 @@ class ClientAssignment(db.Model):
     )
 
     routing_group = db.relationship("RoutingGroup")
+
+
+class AppSetting(db.Model):
+    __tablename__ = "app_settings"
+
+    key = db.Column(db.String(120), primary_key=True)
+    value = db.Column(db.Text, nullable=True)
+    is_secret = db.Column(db.Boolean, nullable=False, default=False)
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )

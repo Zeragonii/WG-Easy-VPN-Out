@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import threading
 
 from .routing import RoutingEngine, RoutingEngineError
@@ -13,13 +12,22 @@ class RoutingReconciler:
         self.app = app
         self.db = db
         self.RoutingGroup = RoutingGroup
-        self.interval_seconds = float(
-            interval_seconds
-            or os.getenv("ROUTING_RECONCILE_INTERVAL", "3")
-        )
+        self.interval_override = interval_seconds
+        self.reload_settings()
         self._stop = threading.Event()
         self._thread = None
         self._last_signature = None
+
+    def reload_settings(self):
+        if self.interval_override is not None:
+            self.interval_seconds = float(self.interval_override)
+            return
+        from ..models import AppSetting
+        from .settings import SettingsService
+        with self.app.app_context():
+            self.interval_seconds = float(
+                SettingsService(self.db, AppSetting).get("routing_reconcile_interval")
+            )
 
     def _snapshot(self):
         engine = RoutingEngine()

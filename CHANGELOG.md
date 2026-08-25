@@ -1,3 +1,25 @@
+# Changelog
+
+## 1.1.0
+
+### First-run setup
+
+- Added one-time setup-token protection for unconfigured installations.
+- Added browser-based administrator creation.
+- Added WG-Easy connection validation during setup.
+- Existing deployments remain backward compatible through legacy environment
+  import.
+
+### Application settings
+
+- Added schema v2 and persistent `app_settings`.
+- Added encrypted WG-Easy credentials.
+- Added Settings UI for WG-Easy, routing, resilience and observability.
+- Added WG-Easy connection test and administrator account management.
+- Runtime managers reload applicable settings without a container restart.
+- Reduced the recommended Compose environment to deployment-level values.
+- Added settings to backup/restore.
+
 
 # Changelog
 

@@ -17,7 +17,7 @@ from flask_login import login_required
 
 from . import db
 from .main import application_version
-from .models import ClientAssignment, RoutingGroup, VPNProfile
+from .models import AppSetting, ClientAssignment, RoutingGroup, VPNProfile
 from .services.backups import BackupError, export_backup, inspect_backup, restore_backup
 from .services.routing import RoutingEngine, RoutingEngineError
 
@@ -64,6 +64,7 @@ def export():
             ClientAssignment,
             application_version(),
             include_secret=include_secret,
+            AppSetting=AppSetting,
         )
     except BackupError as exc:
         flash(str(exc), "error")
@@ -139,6 +140,7 @@ def restore():
             VPNProfile,
             RoutingGroup,
             ClientAssignment,
+            AppSetting=AppSetting,
         )
     except BackupError as exc:
         flash(str(exc), "error")

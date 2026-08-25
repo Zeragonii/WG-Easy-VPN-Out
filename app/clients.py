@@ -7,8 +7,9 @@ from flask import Blueprint, jsonify, render_template, request
 from flask_login import login_required
 
 from . import db
-from .models import ClientAssignment, RoutingGroup
+from .models import AppSetting, ClientAssignment, RoutingGroup
 from .services.routing import RoutingEngine, RoutingEngineError
+from .services.settings import SettingsService
 from .services.wg_easy import WGEasyError, WGEasyService
 
 
@@ -16,18 +17,12 @@ bp = Blueprint("clients", __name__, url_prefix="/clients")
 
 
 def _wg_easy_service() -> WGEasyService:
-    verify_tls = os.getenv("WG_EASY_VERIFY_TLS", "true").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
-
+    settings = SettingsService(db, AppSetting)
     return WGEasyService(
-        base_url=os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
-        username=os.getenv("WG_EASY_USERNAME", ""),
-        password=os.getenv("WG_EASY_PASSWORD", ""),
-        verify_tls=verify_tls,
+        base_url=str(settings.get("wg_easy_url")),
+        username=str(settings.get("wg_easy_username")),
+        password=str(settings.get("wg_easy_password")),
+        verify_tls=bool(settings.get("wg_easy_verify_tls")),
     )
 
 

@@ -41,7 +41,7 @@ def _data_root():
     return root
 
 
-def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, include_secret=False):
+def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, include_secret=False, AppSetting=None):
     profiles = db.session.execute(
         db.select(VPNProfile).order_by(VPNProfile.id.asc())
     ).scalars().all()
@@ -52,7 +52,16 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
         db.select(ClientAssignment).order_by(ClientAssignment.id.asc())
     ).scalars().all()
 
+    app_settings = []
+    if AppSetting is not None:
+        rows = db.session.execute(db.select(AppSetting).order_by(AppSetting.key.asc())).scalars().all()
+        app_settings = [
+            {"key": row.key, "value": row.value, "is_secret": bool(row.is_secret)}
+            for row in rows
+        ]
+
     payload = {
+        "app_settings": app_settings,
         "vpn_profiles": [{
             "id": p.id,
             "name": p.name,
@@ -94,6 +103,7 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
         "created_at": _now().isoformat(),
         "secret_key_included": bool(include_secret),
         "contents": {
+            "app_settings": len(app_settings),
             "vpn_profiles": len(profiles),
             "routing_groups": len(groups),
             "client_assignments": len(assignments),
@@ -164,7 +174,8 @@ def _require_text(value, label, max_length, allow_empty=False):
 
 
 def _validate_backup_data(data, configs):
-    for key in ("vpn_profiles", "routing_groups", "client_assignments"):
+    data.setdefault("app_settings", [])
+    for key in ("app_settings", "vpn_profiles", "routing_groups", "client_assignments"):
         rows = data.get(key)
         if not isinstance(rows, list):
             raise BackupError(f"Backup data is missing '{key}'.")
@@ -498,6 +509,7 @@ def restore_backup(
     VPNProfile,
     RoutingGroup,
     ClientAssignment,
+    AppSetting=None,
 ):
     manifest, data, included_secret, configs = inspect_backup(raw)
     current_secret = os.getenv("SECRET_KEY", "")
@@ -563,6 +575,23 @@ def restore_backup(
 
         try:
             # Replace ORM-managed persistent configuration as one transaction.
+            if AppSetting is not None and "app_settings" in data:
+                # Preserve setup state if restoring an older backup with no settings.
+                restored_settings = data.get("app_settings", [])
+                if restored_settings:
+                    db.session.query(AppSetting).delete()
+                    db.session.flush()
+                    for row in restored_settings:
+                        key = str(row.get("key", "")).strip()
+                        if not key or len(key) > 120:
+                            raise BackupError("Backup contains an invalid application setting key.")
+                        db.session.add(AppSetting(
+                            key=key,
+                            value=row.get("value"),
+                            is_secret=bool(row.get("is_secret", False)),
+                        ))
+                    db.session.flush()
+
             db.session.query(ClientAssignment).delete()
             db.session.query(RoutingGroup).delete()
             db.session.query(VPNProfile).delete()

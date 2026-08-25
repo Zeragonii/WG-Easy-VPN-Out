@@ -38,13 +38,7 @@ class VPNResilienceManager:
         self.VPNProfile = VPNProfile
         self.runtime = VPNRuntimeService()
 
-        self.interval = float(os.getenv("VPN_RETRY_CHECK_INTERVAL", "2"))
-        self.base_delay = float(os.getenv("VPN_RETRY_BASE_SECONDS", "5"))
-        self.max_delay = float(os.getenv("VPN_RETRY_MAX_SECONDS", "300"))
-        self.max_failures = int(os.getenv("VPN_RETRY_MAX_FAILURES", "0"))
-        self.connect_timeout = float(
-            os.getenv("VPN_CONNECT_TIMEOUT_SECONDS", "45")
-        )
+        self.reload_settings()
 
         self.state_dir = Path(os.getenv("VPN_ROUTER_DATA_DIR", "/data")) / "runtime"
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -54,6 +48,17 @@ class VPNResilienceManager:
         self._thread = None
         self._states: dict[int, RetryState] = {}
         self._load_state()
+
+    def reload_settings(self):
+        from ..models import AppSetting
+        from .settings import SettingsService
+        with self.app.app_context():
+            settings = SettingsService(self.db, AppSetting)
+            self.interval = float(settings.get("vpn_retry_check_interval"))
+            self.base_delay = float(settings.get("vpn_retry_base_seconds"))
+            self.max_delay = float(settings.get("vpn_retry_max_seconds"))
+            self.max_failures = int(settings.get("vpn_retry_max_failures"))
+            self.connect_timeout = float(settings.get("vpn_connect_timeout_seconds"))
 
     def _load_state(self):
         try:

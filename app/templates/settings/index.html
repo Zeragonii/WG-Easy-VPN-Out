@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Settings · VPN Router{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<p class="muted">Application settings are stored persistently in the database. Legacy environment values are used only to bootstrap settings that do not yet exist.</p>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for section, rows in sections.items() %}
+  <section class="card" style="margin-bottom:1rem;">
+    <h2>{{ section }}</h2>
+    {% for row in rows %}
+      {% set d = row.definition %}
+      {% if d.value_type == "bool" %}
+      <label style="display:flex;gap:.6rem;align-items:center;">
+        <input type="checkbox" name="{{ d.key }}" value="1" style="width:auto;" {% if row.value in ["true", "1", true] %}checked{% endif %}>
+        {{ d.label }}
+      </label>
+      {% else %}
+      <label>
+        {{ d.label }}
+        {% if d.secret %}
+          <input type="password" name="{{ d.key }}" placeholder="{% if row.configured_secret %}Leave blank to keep existing secret{% endif %}">
+        {% else %}
+          <input name="{{ d.key }}" value="{{ row.value }}">
+        {% endif %}
+      </label>
+      {% endif %}
+      <div class="muted" style="font-size:.78rem;margin-top:.2rem;">Source: {{ row.source }}</div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+  <button type="submit">Save settings</button>
+</form>
+
+<form method="post" action="{{ url_for('settings.test_wg_easy') }}" class="card" style="margin-top:1rem;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h2>WG-Easy connection</h2>
+  <button type="submit" class="inline-button">Test saved connection</button>
+</form>
+
+<form method="post" action="{{ url_for('settings.account') }}" class="card" style="margin-top:1rem;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h2>Administrator account</h2>
+  <label>Username<input name="username" value="{{ user.username if user else '' }}" required></label>
+  <label>New password<input type="password" name="new_password" placeholder="Leave blank to keep current password"></label>
+  <label>Confirm new password<input type="password" name="new_password_confirm"></label>
+  <button type="submit">Update administrator</button>
+</form>
+
+<div class="card" style="margin-top:1rem;">
+  <h2>Deployment-level settings</h2>
+  <p class="muted">These remain environment/container settings because they are needed before the web application can serve this page:</p>
+  <code>SECRET_KEY</code> · <code>VPN_ROUTER_BIND</code> · <code>VPN_ROUTER_PORT</code> · <code>VPN_ROUTER_DATA_DIR</code> · <code>TZ</code>
+</div>
+{% endblock %}

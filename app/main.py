@@ -7,9 +7,10 @@ from flask import Blueprint, current_app, jsonify, render_template
 from flask_login import login_required
 
 from . import db
-from .models import ClientAssignment, RoutingGroup, VPNProfile
+from .models import AppSetting, ClientAssignment, RoutingGroup, VPNProfile
 from .services.routing import RoutingEngine
 from .services.vpn_runtime import VPNRuntimeService
+from .services.settings import SettingsService
 from .services.wg_easy import WGEasyError, WGEasyService
 
 bp = Blueprint("main", __name__)
@@ -62,18 +63,12 @@ def _count_model(model):
 
 
 def _wg_easy_service():
-    verify_tls = os.getenv("WG_EASY_VERIFY_TLS", "true").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
-
+    settings = SettingsService(db, AppSetting)
     return WGEasyService(
-        base_url=os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
-        username=os.getenv("WG_EASY_USERNAME", ""),
-        password=os.getenv("WG_EASY_PASSWORD", ""),
-        verify_tls=verify_tls,
+        base_url=str(settings.get("wg_easy_url")),
+        username=str(settings.get("wg_easy_username")),
+        password=str(settings.get("wg_easy_password")),
+        verify_tls=bool(settings.get("wg_easy_verify_tls")),
     )
 
 
@@ -259,15 +254,12 @@ def operational_status():
 def system_status():
     return {
         "version": application_version(),
-        "wg_easy_url": os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
+        "wg_easy_url": str(SettingsService(db, AppSetting).get("wg_easy_url")),
         "wg0_present": wg0_present(),
-        "routing_reconcile_interval": os.getenv(
-            "ROUTING_RECONCILE_INTERVAL",
-            "3",
-        ),
-        "retry_base_seconds": os.getenv("VPN_RETRY_BASE_SECONDS", "5"),
-        "retry_max_seconds": os.getenv("VPN_RETRY_MAX_SECONDS", "300"),
-        "connect_timeout_seconds": os.getenv("VPN_CONNECT_TIMEOUT_SECONDS", "45"),
+        "routing_reconcile_interval": SettingsService(db, AppSetting).get("routing_reconcile_interval"),
+        "retry_base_seconds": SettingsService(db, AppSetting).get("vpn_retry_base_seconds"),
+        "retry_max_seconds": SettingsService(db, AppSetting).get("vpn_retry_max_seconds"),
+        "connect_timeout_seconds": SettingsService(db, AppSetting).get("vpn_connect_timeout_seconds"),
         "tools": {
             "openvpn": command_exists("openvpn"),
             "wg": command_exists("wg"),

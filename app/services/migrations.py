@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 
 class MigrationError(RuntimeError):
@@ -45,8 +45,21 @@ def _migration_1_baseline(connection):
         )
 
 
+
+def _migration_2_application_settings(connection):
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key VARCHAR(120) PRIMARY KEY,
+            value TEXT,
+            is_secret BOOLEAN NOT NULL DEFAULT 0,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
+    Migration(2, "application-settings", _migration_2_application_settings),
 )
 
 

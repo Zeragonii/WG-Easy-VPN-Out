@@ -11,6 +11,7 @@ from .migrations import (
     migration_history,
 )
 from .routing import RoutingEngine
+from .settings import DEFINITIONS, SettingsService
 from .vpn_runtime import VPNRuntimeService
 
 
@@ -29,23 +30,9 @@ def _run(args, timeout=5):
 
 
 def _safe_env():
-    names = (
-        "TZ",
-        "VPN_ROUTER_PORT",
-        "VPN_ROUTER_BIND",
-        "WG_EASY_URL",
-        "WG_EASY_VERIFY_TLS",
-        "ROUTING_RECONCILE_INTERVAL",
-        "VPN_RETRY_CHECK_INTERVAL",
-        "VPN_RETRY_BASE_SECONDS",
-        "VPN_RETRY_MAX_SECONDS",
-        "VPN_RETRY_MAX_FAILURES",
-        "VPN_CONNECT_TIMEOUT_SECONDS",
-        "EXIT_IP_PROBE_INTERVAL",
-        "UPDATE_CHECK_CACHE_SECONDS",
-        "UPDATE_VERSION_URL",
-        "UPDATE_REPOSITORY_URL",
-    )
+    # Deployment-level environment only; application settings are reported
+    # separately without exposing secret values.
+    names = ("TZ", "VPN_ROUTER_PORT", "VPN_ROUTER_BIND", "VPN_ROUTER_DATA_DIR")
     return {name: os.getenv(name) for name in names if os.getenv(name) is not None}
 
 
@@ -137,6 +124,20 @@ def build_diagnostics(
             "platform": platform.platform(),
             "safe_environment": _safe_env(),
         },
+        "application_settings": {
+            key: {
+                "source": SettingsService(db, __import__("app.models", fromlist=["AppSetting"]).AppSetting).source(key),
+                "value": (
+                    "<configured secret>"
+                    if definition.secret and SettingsService(db, __import__("app.models", fromlist=["AppSetting"]).AppSetting).raw(key)
+                    else (
+                        None if definition.secret
+                        else str(SettingsService(db, __import__("app.models", fromlist=["AppSetting"]).AppSetting).raw(key))
+                    )
+                ),
+            }
+            for key, definition in DEFINITIONS.items()
+        },
         "counts": {
             "vpn_profiles": len(profiles),
             "routing_groups": len(groups),
@@ -199,6 +200,12 @@ def render_text(data):
 
     for key, value in sorted(data["system"]["safe_environment"].items()):
         lines.append(f"{key}={value}")
+
+    lines.extend(["", "Application settings", "-" * 72])
+    for key, item in sorted(data.get("application_settings", {}).items()):
+        lines.append(
+            f"{key}={item.get('value')} (source={item.get('source')})"
+        )
 
     lines.extend(["", "Background services", "-" * 72])
     for service in data.get("services", []):

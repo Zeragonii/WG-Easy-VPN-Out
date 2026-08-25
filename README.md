@@ -708,3 +708,35 @@ tested against a real WG-Easy/OpenVPN deployment before the 1.0 release.
 
 This disclosure is included intentionally so users and contributors can make an
 informed judgement about the project's development process and provenance.
+
+
+## v1.1.0 - First-run setup and application settings
+
+Fresh deployments now require only the deployment-level environment values
+needed before the web application can start:
+
+- `SECRET_KEY`
+- `VPN_ROUTER_BIND`
+- `VPN_ROUTER_PORT`
+- `VPN_ROUTER_DATA_DIR` (optional)
+- `TZ`
+
+On a new empty `/data` volume, VPN Router generates a one-time setup token and
+prints it to the container logs. The browser setup wizard uses that token to
+create the administrator account and validate/store the WG-Easy connection.
+
+Application settings now live in the database and are editable from
+**Settings**. WG-Easy credentials are encrypted using the existing
+`SECRET_KEY`-derived Fernet mechanism.
+
+Legacy v1.0 environment variables remain backward compatible: on upgrade they
+are imported only when the corresponding database setting does not already
+exist. Once imported, the database/UI value becomes authoritative, so users can
+remove the old Compose variables at their convenience.
+
+Settings cover WG-Easy, routing reconciliation, VPN resilience, observability,
+update awareness, and administrator account management. Runtime background
+services reload applicable settings after a save.
+
+Backups created by v1.1 include application settings. Older backups without
+settings remain accepted.

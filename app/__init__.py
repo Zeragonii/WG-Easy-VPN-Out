@@ -44,6 +44,8 @@ def create_app():
     from .routing_groups import bp as routing_groups_bp
     from .backups import bp as backups_bp
     from .diagnostics import bp as diagnostics_bp
+    from .setup import bp as setup_bp
+    from .settings import bp as settings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -52,6 +54,21 @@ def create_app():
     app.register_blueprint(routing_groups_bp)
     app.register_blueprint(backups_bp)
     app.register_blueprint(diagnostics_bp)
+    app.register_blueprint(setup_bp)
+    app.register_blueprint(settings_bp)
+
+    @app.before_request
+    def require_initial_setup():
+        from flask import request, redirect, url_for
+        from .models import AppSetting
+        from .services.settings import SettingsService
+        if request.endpoint in {"setup.index", "static"}:
+            return None
+        if request.path.startswith("/health"):
+            return None
+        if not SettingsService(db, AppSetting).setup_complete():
+            return redirect(url_for("setup.index"))
+        return None
 
     with app.app_context():
         # Fresh-install bootstrap only. Existing/future schema evolution is
@@ -62,9 +79,19 @@ def create_app():
         migration_result = run_migrations(db, app.logger)
         app.extensions["schema_migrations"] = migration_result
 
-        _bootstrap_admin()
+        from .models import AppSetting, VPNProfile
+        from .services.settings import SettingsService
 
-        from .models import VPNProfile
+        settings = SettingsService(db, AppSetting)
+        migrated_settings = settings.migrate_legacy_environment()
+        if migrated_settings:
+            app.logger.info(
+                "Imported legacy environment settings: %s",
+                ", ".join(migrated_settings),
+            )
+
+        _bootstrap_or_prepare_setup(app, settings)
+
         from .services.secrets import migrate_legacy_profile_passwords
 
         migrated = migrate_legacy_profile_passwords(db, VPNProfile)
@@ -115,21 +142,39 @@ def create_app():
     return app
 
 
-def _bootstrap_admin():
+
+def _bootstrap_or_prepare_setup(app, settings):
+    """
+    Backward-compatible bootstrap:
+    - Existing user => mark setup complete.
+    - Legacy ADMIN_PASSWORD on a fresh DB => create admin and mark complete.
+    - Otherwise generate a one-time setup token and require the web wizard.
+    """
     from .models import User
-
-    username = os.getenv("ADMIN_USERNAME", "admin").strip()
-    password = os.getenv("ADMIN_PASSWORD", "")
-
-    if not password:
-        raise RuntimeError("ADMIN_PASSWORD must be set")
+    from .services.setup import ensure_setup_token, remove_setup_token
 
     user = db.session.execute(
-        db.select(User).filter_by(username=username)
-    ).scalar_one_or_none()
+        db.select(User).order_by(User.id.asc())
+    ).scalars().first()
 
-    if user is None:
+    if user is not None:
+        if not settings.setup_complete():
+            settings.mark_setup_complete()
+        remove_setup_token()
+        return
+
+    username = os.getenv("ADMIN_USERNAME", "admin").strip() or "admin"
+    password = os.getenv("ADMIN_PASSWORD", "")
+    if password:
         user = User(username=username)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
+        settings.mark_setup_complete()
+        remove_setup_token()
+        app.logger.info(
+            "Created administrator from legacy ADMIN_* environment values."
+        )
+        return
+
+    ensure_setup_token(app.logger)

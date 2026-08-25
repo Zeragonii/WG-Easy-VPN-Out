@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Initial Setup · VPN Router{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto;">
+  <h1>Welcome to WG-Easy-VPN-Out</h1>
+  <p class="muted">This instance has not been configured yet. Enter the setup token printed in the container logs, create the administrator account, and connect WG-Easy.</p>
+  <form class="card" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h2>1. Setup authorization</h2>
+    <label>Setup token<input name="setup_token" required autocomplete="off" placeholder="AB12-CD34-EF56-7890"></label>
+    <h2>2. Administrator</h2>
+    <label>Username<input name="admin_username" value="admin" required></label>
+    <label>Password<input type="password" name="admin_password" required minlength="10"></label>
+    <label>Confirm password<input type="password" name="admin_password_confirm" required minlength="10"></label>
+    <h2>3. WG-Easy</h2>
+    <label>WG-Easy URL<input name="wg_easy_url" value="http://127.0.0.1:51821" required></label>
+    <label>Username<input name="wg_easy_username" required></label>
+    <label>Password<input type="password" name="wg_easy_password" required></label>
+    <label style="display:flex;gap:.6rem;align-items:center;">
+      <input type="checkbox" name="wg_easy_verify_tls" value="1" checked style="width:auto;"> Verify TLS certificates
+    </label>
+    <button type="submit" style="margin-top:1rem;">Test connection & finish setup</button>
+  </form>
+</div>
+{% endblock %}

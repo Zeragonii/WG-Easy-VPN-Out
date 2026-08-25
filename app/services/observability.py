@@ -120,24 +120,8 @@ class ObservabilityService:
         self.VPNProfile = VPNProfile
         self.runtime = VPNRuntimeService()
 
-        self.loop_interval = float(
-            os.getenv("OBSERVABILITY_LOOP_INTERVAL", "2")
-        )
-        self.exit_ip_interval = float(
-            os.getenv("EXIT_IP_PROBE_INTERVAL", "60")
-        )
-        self.update_cache_seconds = float(
-            os.getenv("UPDATE_CHECK_CACHE_SECONDS", "900")
-        )
-        self.update_url = os.getenv(
-            "UPDATE_VERSION_URL",
-            "https://raw.githubusercontent.com/"
-            "Zeragonii/WG-Easy-VPN-Out/main/VERSION",
-        ).strip()
-        self.repository_url = os.getenv(
-            "UPDATE_REPOSITORY_URL",
-            "https://github.com/Zeragonii/WG-Easy-VPN-Out",
-        ).strip()
+        self.loop_interval = 2.0
+        self.reload_settings()
 
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -156,6 +140,18 @@ class ObservabilityService:
         self._update_checked_monotonic = None
 
         self._next_exit_refresh = 0.0
+
+    def reload_settings(self):
+        from ..models import AppSetting
+        from .settings import SettingsService
+        with self.app.app_context():
+            settings = SettingsService(self.db, AppSetting)
+            self.exit_ip_interval = float(settings.get("exit_ip_probe_interval"))
+            self.update_cache_seconds = float(settings.get("update_check_cache_seconds"))
+            self.update_url = str(settings.get("update_version_url")).strip()
+            self.repository_url = str(settings.get("update_repository_url")).strip()
+            if hasattr(self, "_update") and isinstance(self._update, dict):
+                self._update["repository_url"] = self.repository_url
 
     def exit_ip_state(self, profile_id):
         with self._lock:
