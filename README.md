@@ -65,3 +65,17 @@ After deployment, open `/clients/` in VPN Router.
 
 This milestone is read-only and does not alter routes, nftables, WireGuard,
 OpenVPN, or WG-Easy configuration.
+
+
+## v0.2.1 - Handshake-derived client status
+
+WG-Easy does not provide a persistent `online` boolean for clients.
+
+VPN Router now derives a useful UI state from `latestHandshakeAt`:
+
+- `< 3 minutes`: Online
+- `< 10 minutes`: Recently active
+- `>= 10 minutes`: Offline
+- no handshake: Never connected
+
+The clients page also displays human-readable RX/TX counters.

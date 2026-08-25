@@ -3,7 +3,7 @@
 {% block content %}
 <h1>WG-Easy Clients</h1>
 <p class="muted">
-  Read-only discovery from the WG-Easy API. No routing state is changed on this page.
+  Read-only discovery from the WG-Easy API. Connection state is inferred from WireGuard handshake age.
 </p>
 
 {% if error %}
@@ -30,7 +30,9 @@
             <th>IPv4</th>
             <th>Enabled</th>
             <th>Connection</th>
-            <th>Latest handshake</th>
+            <th>Last handshake</th>
+            <th>RX</th>
+            <th>TX</th>
           </tr>
         </thead>
         <tbody>
@@ -49,21 +51,19 @@
               {% endif %}
             </td>
             <td>
-              {% if client.online is sameas true %}
+              {% if client.connection_state == "online" %}
                 <span class="status-good">● Online</span>
-              {% elif client.online is sameas false %}
+              {% elif client.connection_state == "recent" %}
+                <span class="status-warn">◐ Recently active</span>
+              {% elif client.connection_state == "offline" %}
                 <span class="muted">○ Offline</span>
               {% else %}
-                <span class="status-warn">● Unknown</span>
+                <span class="muted">○ Never connected</span>
               {% endif %}
             </td>
-            <td>
-              {% if client.latest_handshake_at %}
-                {{ client.latest_handshake_at }}
-              {% else %}
-                <span class="muted">Not reported</span>
-              {% endif %}
-            </td>
+            <td>{{ client.handshake_age_display }}</td>
+            <td>{{ client.transfer_rx_display }}</td>
+            <td>{{ client.transfer_tx_display }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -73,5 +73,9 @@
       <p class="muted" style="margin-bottom:0;">WG-Easy returned no clients.</p>
     {% endif %}
   </div>
+
+  <p class="muted" style="margin-top:.8rem;font-size:.88rem;">
+    Status thresholds: Online &lt; 3 minutes, Recently active &lt; 10 minutes, Offline ≥ 10 minutes.
+  </p>
 {% endif %}
 {% endblock %}

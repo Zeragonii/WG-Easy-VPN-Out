@@ -34,6 +34,93 @@ class WGEasyClient:
     latest_handshake_at: str | None
     transfer_rx: int | None
     transfer_tx: int | None
+    endpoint: str | None
+
+    @property
+    def connection_state(self) -> str:
+        """
+        WireGuard has no conventional persistent 'connected' state.
+        Infer a useful UI state from the latest handshake age.
+        """
+        age = self.handshake_age_seconds
+
+        if age is None:
+            return "never"
+
+        if age < 180:
+            return "online"
+
+        if age < 600:
+            return "recent"
+
+        return "offline"
+
+    @property
+    def handshake_age_seconds(self) -> float | None:
+        if not self.latest_handshake_at:
+            return None
+
+        try:
+            value = self.latest_handshake_at.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(value)
+
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+
+            return max(
+                0.0,
+                (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds(),
+            )
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def handshake_age_display(self) -> str:
+        age = self.handshake_age_seconds
+
+        if age is None:
+            return "Never"
+
+        seconds = int(age)
+
+        if seconds < 60:
+            return f"{seconds}s ago"
+
+        minutes = seconds // 60
+        if minutes < 60:
+            return f"{minutes}m ago"
+
+        hours = minutes // 60
+        if hours < 24:
+            return f"{hours}h ago"
+
+        days = hours // 24
+        return f"{days}d ago"
+
+    @staticmethod
+    def _format_bytes(value: int | None) -> str:
+        if value is None:
+            return "—"
+
+        size = float(value)
+        units = ["B", "KB", "MB", "GB", "TB", "PB"]
+
+        for unit in units:
+            if size < 1024 or unit == units[-1]:
+                if unit == "B":
+                    return f"{int(size)} {unit}"
+                return f"{size:.1f} {unit}"
+            size /= 1024
+
+        return f"{value} B"
+
+    @property
+    def transfer_rx_display(self) -> str:
+        return self._format_bytes(self.transfer_rx)
+
+    @property
+    def transfer_tx_display(self) -> str:
+        return self._format_bytes(self.transfer_tx)
 
 
 def _first(data: dict[str, Any], *names: str, default=None):
@@ -117,6 +204,14 @@ def _normalise_client(raw: dict[str, Any], index: int) -> WGEasyClient:
         default=None,
     )
 
+    endpoint = _first(
+        raw,
+        "endpoint",
+        "remoteEndpoint",
+        "remote_endpoint",
+        default=None,
+    )
+
     try:
         rx = int(rx) if rx is not None else None
     except (TypeError, ValueError):
@@ -136,6 +231,7 @@ def _normalise_client(raw: dict[str, Any], index: int) -> WGEasyClient:
         latest_handshake_at=latest_handshake,
         transfer_rx=rx,
         transfer_tx=tx,
+        endpoint=str(endpoint) if endpoint else None,
     )
 
 
