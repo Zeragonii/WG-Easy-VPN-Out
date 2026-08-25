@@ -74,6 +74,12 @@ def create_app():
         except RoutingEngineError as exc:
             app.logger.error("Initial routing rebuild failed: %s", exc)
 
+    from .services.routing_reconciler import RoutingReconciler
+
+    routing_reconciler = RoutingReconciler(app, db, RoutingGroup)
+    routing_reconciler.start()
+    app.extensions["routing_reconciler"] = routing_reconciler
+
     return app
 
 

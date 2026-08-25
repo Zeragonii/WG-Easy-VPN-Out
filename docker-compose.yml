@@ -29,7 +29,8 @@ services:
       WG_EASY_USERNAME: "CHANGE-ME"
       WG_EASY_PASSWORD: "CHANGE-ME"
       WG_EASY_VERIFY_TLS: "true"
-      APP_VERSION: "0.5.1"
+      APP_VERSION: "0.5.2"
+      ROUTING_RECONCILE_INTERVAL: "3"
 
     volumes:
       - vpn-router-data:/data

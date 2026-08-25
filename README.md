@@ -208,3 +208,24 @@ Fixes a Jinja template compilation error on the WG-Easy Clients page caused
 by using Python list-comprehension syntax inside a Jinja expression.
 
 Routing/assignment behaviour is unchanged from v0.5.0.
+
+
+## v0.5.2 - Automatic routing reconciliation
+
+Adds a lightweight routing-state reconciler. Every 3 seconds by default it
+checks VPN-backed Routing Groups and rebuilds only when effective tunnel state
+changes, including:
+
+- connecting -> connected
+- connected -> disconnected
+- reconnect with a new tunnel IPv4
+- reconnect with a different pushed `route-gateway`
+- interface change
+- fallback mode change
+
+This fixes the case where a kill-switch group could receive `blackhole default`
+while OpenVPN was still connecting and remain blocked until a manual rebuild.
+
+Configure the interval with:
+
+    ROUTING_RECONCILE_INTERVAL=3
