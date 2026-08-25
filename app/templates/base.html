@@ -64,7 +64,7 @@
     .status-good { color: var(--good); }
     .status-warn { color: var(--warn); }
     .status-bad { color: var(--bad); }
-    input, button {
+    input, select, button {
       width: 100%;
       padding: .75rem;
       margin-top: .4rem;
@@ -127,11 +127,13 @@
       <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
       <a href="{{ url_for('clients.index') }}">WG-Easy Clients</a>
       <a href="{{ url_for('vpn_profiles.index') }}">VPN Clients</a>
+      <a href="{{ url_for('routing_groups.index') }}">Routing Groups</a>
     </nav>
     {% endif %}
   </div>
   {% if current_user.is_authenticated %}
   <form method="post" action="{{ url_for('auth.logout') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="inline-button" type="submit">Log out</button>
   </form>
   {% endif %}

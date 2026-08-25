@@ -10,6 +10,8 @@ import re
 import subprocess
 import time
 
+from .secrets import decrypt_secret
+
 
 class VPNRuntimeError(RuntimeError):
     pass
@@ -227,7 +229,11 @@ class VPNRuntimeService:
         ]
 
         if profile.username or profile.password:
-            auth_path.write_text(f"{profile.username or ''}\n{profile.password or ''}\n", encoding="utf-8")
+            decrypted_password = decrypt_secret(profile.password) or ""
+            auth_path.write_text(
+                f"{profile.username or ''}\n{decrypted_password}\n",
+                encoding="utf-8",
+            )
             os.chmod(auth_path, 0o600)
             args.extend(["--auth-user-pass", str(auth_path)])
 

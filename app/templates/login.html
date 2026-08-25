@@ -5,6 +5,7 @@
   <h1 style="margin-top:0;">Sign in</h1>
   <p class="muted">VPN Router administration</p>
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>
       Username
       <input name="username" autocomplete="username" required>

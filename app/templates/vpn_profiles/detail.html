@@ -6,7 +6,7 @@
 <p class="muted" style="margin-top:0;">{{ profile.provider or "Unknown provider" }} · {{ profile.type_label }}</p></div>
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
 <a class="button-link secondary" href="{{ url_for('vpn_profiles.edit', profile_id=profile.id) }}">Edit</a>
-<form method="post" action="{{ url_for('vpn_profiles.delete', profile_id=profile.id) }}" onsubmit="return confirm('Delete this VPN profile?');">
+<form method="post" action="{{ url_for('vpn_profiles.delete', profile_id=profile.id) }}" onsubmit="return confirm('Delete this VPN profile?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <button class="danger-button" type="submit">Delete</button></form>
 </div></div>
 
@@ -42,15 +42,15 @@
 <div id="runtime-error" class="error-box" style="{% if not runtime.last_error %}display:none;{% endif %}">{{ runtime.last_error or "" }}</div>
 {% if profile.vpn_type == "openvpn" %}
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
-<form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><button type="submit" style="width:auto;">Connect</button></form>
-<form method="post" action="{{ url_for('vpn_profiles.disconnect', profile_id=profile.id) }}"><button class="button-link secondary" type="submit">Disconnect</button></form>
+<form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="width:auto;">Connect</button></form>
+<form method="post" action="{{ url_for('vpn_profiles.disconnect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button-link secondary" type="submit">Disconnect</button></form>
 {% if profile.enabled %}
-<form method="post" action="{{ url_for('vpn_profiles.autoconnect', profile_id=profile.id) }}">
+<form method="post" action="{{ url_for('vpn_profiles.autoconnect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="enabled" value="0">
   <button class="button-link secondary" type="submit">Disable Auto-connect</button>
 </form>
 {% else %}
-<form method="post" action="{{ url_for('vpn_profiles.autoconnect', profile_id=profile.id) }}">
+<form method="post" action="{{ url_for('vpn_profiles.autoconnect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="enabled" value="1">
   <button class="button-link secondary" type="submit">Enable Auto-connect</button>
 </form>

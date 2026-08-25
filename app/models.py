@@ -32,3 +32,35 @@ class VPNProfile(db.Model):
     @property
     def type_label(self):
         return "OpenVPN" if self.vpn_type == "openvpn" else "WireGuard"
+
+
+class RoutingGroup(db.Model):
+    __tablename__ = "routing_groups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), unique=True, nullable=False)
+    vpn_profile_id = db.Column(
+        db.Integer,
+        db.ForeignKey("vpn_profiles.id"),
+        nullable=True,
+    )
+    fallback_mode = db.Column(db.String(16), nullable=False, default="block")
+    fwmark = db.Column(db.Integer, unique=True, nullable=True)
+    table_id = db.Column(db.Integer, unique=True, nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )
+
+    vpn_profile = db.relationship("VPNProfile")
+
+    @property
+    def target_label(self):
+        return self.vpn_profile.name if self.vpn_profile else "Default WAN"
+
+    @property
+    def mark_hex(self):
+        return f"0x{self.fwmark:x}" if self.fwmark is not None else "—"

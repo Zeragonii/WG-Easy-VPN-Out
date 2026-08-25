@@ -8,6 +8,8 @@ from . import db
 from .models import VPNProfile
 from .services.vpn_profiles import VPNProfileValidationError, safe_filename, validate_config
 from .services.vpn_runtime import VPNRuntimeError, VPNRuntimeService
+from .services.secrets import encrypt_secret
+from .services.routing import RoutingEngine, RoutingEngineError
 
 bp = Blueprint("vpn_profiles", __name__, url_prefix="/vpn-profiles")
 
@@ -70,7 +72,7 @@ def new():
             vpn_type=vpn_type,
             config_filename=stored_name,
             username=supplied["username"].strip() or None,
-            password=request.form.get("password", "") or None,
+            password=encrypt_secret(request.form.get("password", "") or None),
             enabled=False,
         )
         try:
@@ -118,6 +120,11 @@ def connect(profile_id):
     else:
         profile.enabled = True
         db.session.commit()
+        try:
+            from .models import RoutingGroup
+            RoutingEngine().rebuild(db, RoutingGroup)
+        except RoutingEngineError as routing_exc:
+            flash(f"VPN connected, but routing rebuild failed: {routing_exc}", "error")
         flash(f"Connecting '{profile.name}'… Auto-connect enabled.", "success")
     return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
@@ -128,6 +135,11 @@ def disconnect(profile_id):
     VPNRuntimeService().stop(profile)
     profile.enabled = False
     db.session.commit()
+    try:
+        from .models import RoutingGroup
+        RoutingEngine().rebuild(db, RoutingGroup)
+    except RoutingEngineError as routing_exc:
+        flash(f"VPN disconnected, but routing rebuild failed: {routing_exc}", "error")
     flash(f"Disconnected '{profile.name}'. Auto-connect disabled.", "success")
     return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
@@ -163,7 +175,7 @@ def edit(profile_id):
         profile.username = request.form.get("username", "").strip() or None
         password = request.form.get("password", "")
         if password:
-            profile.password = password
+            profile.password = encrypt_secret(password)
         if not profile.name:
             flash("Friendly name is required.", "error")
             return render_template("vpn_profiles/form.html", profile=profile, supplied=None)
@@ -181,6 +193,19 @@ def edit(profile_id):
 @login_required
 def delete(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
+
+    from .models import RoutingGroup
+    in_use = db.session.execute(
+        db.select(RoutingGroup).where(RoutingGroup.vpn_profile_id == profile.id)
+    ).scalar_one_or_none()
+    if in_use is not None:
+        flash(
+            f"Cannot delete '{profile.name}' while routing group "
+            f"'{in_use.name}' uses it.",
+            "error",
+        )
+        return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
+
     VPNRuntimeService().stop(profile)
     path = _profile_dir(profile.vpn_type) / profile.config_filename
     name = profile.name

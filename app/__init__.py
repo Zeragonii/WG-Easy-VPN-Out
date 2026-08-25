@@ -4,9 +4,11 @@ from pathlib import Path
 from flask import Flask
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFProtect
 
 db = SQLAlchemy()
 login_manager = LoginManager()
+csrf = CSRFProtect()
 login_manager.login_view = "auth.login"
 login_manager.login_message_category = "info"
 
@@ -27,6 +29,7 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
+    csrf.init_app(app)
 
     from .models import User
 
@@ -38,20 +41,38 @@ def create_app():
     from .clients import bp as clients_bp
     from .main import bp as main_bp
     from .vpn_profiles import bp as vpn_profiles_bp
+    from .routing_groups import bp as routing_groups_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(clients_bp)
     app.register_blueprint(vpn_profiles_bp)
+    app.register_blueprint(routing_groups_bp)
 
     with app.app_context():
         db.create_all()
         _bootstrap_admin()
 
+        from .models import VPNProfile
+        from .services.secrets import migrate_legacy_profile_passwords
+
+        migrated = migrate_legacy_profile_passwords(db, VPNProfile)
+        if migrated:
+            app.logger.info("Encrypted %s legacy VPN password(s).", migrated)
+
     from .models import VPNProfile
     from .services.vpn_startup import restore_enabled_profiles
 
     restore_enabled_profiles(app, db, VPNProfile)
+
+    with app.app_context():
+        from .models import RoutingGroup
+        from .services.routing import RoutingEngine, RoutingEngineError
+
+        try:
+            RoutingEngine().rebuild(db, RoutingGroup)
+        except RoutingEngineError as exc:
+            app.logger.error("Initial routing rebuild failed: %s", exc)
 
     return app
 

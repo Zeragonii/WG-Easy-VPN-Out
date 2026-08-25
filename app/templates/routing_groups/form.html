@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{% if group %}Edit {{ group.name }}{% else %}Add Routing Group{% endif %} · VPN Router{% endblock %}
+{% block content %}
+<h1>{% if group %}Edit Routing Group{% else %}Add Routing Group{% endif %}</h1>
+
+<div class="card" style="max-width:760px;">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <label>
+    Friendly name
+    <input name="name" required value="{{ group.name if group else '' }}"
+           placeholder="e.g. PIA Manchester">
+  </label>
+
+  <label>
+    Exit
+    <select name="target">
+      <option value="wan" {% if not group or not group.vpn_profile_id %}selected{% endif %}>
+        Default WAN
+      </option>
+      {% for profile in profiles %}
+      <option value="{{ profile.id }}"
+        {% if group and group.vpn_profile_id == profile.id %}selected{% endif %}>
+        {{ profile.name }} · {{ profile.type_label }}
+      </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>
+    VPN unavailable behaviour
+    <select name="fallback_mode">
+      <option value="block" {% if not group or group.fallback_mode == "block" %}selected{% endif %}>
+        Block traffic (kill-switch)
+      </option>
+      <option value="wan" {% if group and group.fallback_mode == "wan" %}selected{% endif %}>
+        Fall back to Default WAN
+      </option>
+    </select>
+  </label>
+
+  <p class="muted">
+    Fallback only applies when a VPN profile is selected. WAN groups always use the host default WAN.
+  </p>
+
+  <div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1rem;">
+    <button type="submit" style="width:auto;">
+      {% if group %}Save changes{% else %}Create group{% endif %}
+    </button>
+    <a class="button-link secondary" href="{{ url_for('routing_groups.index') }}">Cancel</a>
+  </div>
+</form>
+</div>
+{% endblock %}

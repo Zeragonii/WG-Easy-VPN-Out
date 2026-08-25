@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Routing Groups · VPN Router{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+  <div>
+    <h1 style="margin-bottom:.35rem;">Routing Groups</h1>
+    <p class="muted" style="margin-top:0;">
+      nftables source sets → fwmarks → dedicated Linux routing tables.
+      Client assignment arrives in v0.5.0.
+    </p>
+  </div>
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+    <form method="post" action="{{ url_for('routing_groups.rebuild') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="button-link secondary" type="submit">Rebuild Routing</button>
+    </form>
+    <a class="button-link" href="{{ url_for('routing_groups.new') }}">+ Add Routing Group</a>
+  </div>
+</div>
+
+<div class="card">
+{% if groups %}
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+  <th>Name</th>
+  <th>Configured exit</th>
+  <th>Effective exit</th>
+  <th>Fallback</th>
+  <th>fwmark</th>
+  <th>Table</th>
+  <th>State</th>
+  <th></th>
+</tr>
+</thead>
+<tbody>
+{% for group in groups %}
+{% set rt = runtime[group.id] %}
+<tr>
+  <td><strong>{{ group.name }}</strong></td>
+  <td>{{ group.target_label }}</td>
+  <td>{{ rt.effective_exit }}</td>
+  <td>{% if group.vpn_profile_id %}{{ group.fallback_mode|capitalize }}{% else %}—{% endif %}</td>
+  <td><code>{{ group.mark_hex }}</code></td>
+  <td><code>{{ group.table_id }}</code></td>
+  <td>
+    {% if rt.state == "ready" %}<span class="status-good">● Ready</span>
+    {% elif rt.state == "fallback" %}<span class="status-warn">◐ WAN fallback</span>
+    {% else %}<span class="status-bad">● Blocked</span>{% endif %}
+    <div class="muted" style="font-size:.8rem;">{{ rt.detail }}</div>
+  </td>
+  <td>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      <a class="button-link secondary" href="{{ url_for('routing_groups.edit', group_id=group.id) }}">Edit</a>
+      <form method="post" action="{{ url_for('routing_groups.delete', group_id=group.id) }}"
+            onsubmit="return confirm('Delete this routing group?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="danger-button" type="submit">Delete</button>
+      </form>
+    </div>
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% else %}
+<p class="muted" style="margin:0;">
+  No routing groups yet. Create a WAN or VPN-backed group to initialise the routing engine.
+</p>
+{% endif %}
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2>v0.4.0 boundary</h2>
+  <p class="muted">
+    The nftables sets are intentionally empty in this release. Nothing from WG-Easy
+    is assigned to a routing group until the v0.5.0 client-assignment UI.
+  </p>
+</div>
+{% endblock %}

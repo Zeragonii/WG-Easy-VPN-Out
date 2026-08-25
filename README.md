@@ -134,3 +134,39 @@ Adds persistent tunnel intent across container restarts.
 
 This makes VPN profiles survive Portainer/container restarts while keeping
 failure behaviour predictable.
+
+
+## v0.4.0 - Routing groups and security tidy-up
+
+### Routing groups
+
+Adds the first policy-routing engine:
+
+- Routing Group CRUD UI
+- each group receives a stable fwmark (`0x100 + group ID`)
+- each group receives a dedicated route table (`10000 + group ID`)
+- nftables table `inet vpn_router`
+- one IPv4 source set per routing group
+- nftables prerouting rules map source sets to fwmarks
+- Linux `ip rule` entries map fwmarks to group route tables
+- VPN-backed route tables use the active OpenVPN tunnel and provider gateway
+- VPN groups can either block (kill-switch) or fall back to WAN when unavailable
+- VPN-marked traffic is masqueraded on the selected VPN interface
+- routing state rebuilds on application startup and Connect/Disconnect events
+
+The nftables source sets remain intentionally empty in v0.4.0. WG-Easy client
+assignment is planned for v0.5.0.
+
+### CSRF protection
+
+All state-changing web forms are protected with Flask-WTF CSRF tokens.
+
+### VPN credential encryption
+
+VPN passwords are encrypted at rest using Fernet with a key derived from
+`SECRET_KEY`. Existing v0.3.x plaintext VPN passwords are migrated
+automatically at startup.
+
+**Important:** keep the same `SECRET_KEY` across upgrades/redeployments.
+Changing it after credentials have been encrypted will make those stored
+passwords undecryptable.
