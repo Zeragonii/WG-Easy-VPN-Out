@@ -26,6 +26,22 @@
   </section>
 
   <section class="card">
+    <h2>Background services</h2>
+    {% for service in diagnostics.services %}
+      <p>
+        {{ service.name }}:
+        {% if service.running %}
+          <span class="status-good">● running</span>
+        {% else %}
+          <span class="status-bad">● stopped</span>
+        {% endif %}
+      </p>
+    {% else %}
+      <p class="muted">No service status available.</p>
+    {% endfor %}
+  </section>
+
+  <section class="card">
     <h2>Host routing</h2>
     <p><strong>Main default</strong></p>
     <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.main_default or "—" }}</pre>
@@ -43,7 +59,17 @@
         {% for vpn in diagnostics.vpns %}
         <tr>
           <td><strong>{{ vpn.name }}</strong><div class="muted">{{ vpn.provider or "—" }}</div></td>
-          <td>{{ vpn.state }}</td>
+          <td>
+            {{ vpn.state }}
+            {% if vpn.retry and vpn.retry.failures %}
+              <div class="status-warn" style="font-size:.8rem;">
+                retries: {{ vpn.retry.failures }}
+                {% if vpn.retry.retry_in_seconds is not none %}
+                  · next in {{ vpn.retry.retry_in_seconds }}s
+                {% endif %}
+              </div>
+            {% endif %}
+          </td>
           <td><code>{{ vpn.interface }}</code></td>
           <td>{{ vpn.tunnel_ipv4 or "—" }}</td>
           <td>{{ vpn.gateway or "—" }}</td>

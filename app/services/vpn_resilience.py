@@ -123,6 +123,19 @@ class VPNResilienceManager:
 
         self._save_state()
 
+    def prune(self, valid_profile_ids):
+        valid = {int(profile_id) for profile_id in valid_profile_ids}
+        stale = [
+            profile_id
+            for profile_id in self._states
+            if profile_id not in valid
+        ]
+        for profile_id in stale:
+            self._states.pop(profile_id, None)
+        if stale:
+            self._save_state()
+        return stale
+
     def public_state(self, profile_id):
         state = self._state_for(profile_id)
         retry_in = None
@@ -255,6 +268,8 @@ class VPNResilienceManager:
         if self._thread and self._thread.is_alive():
             return
 
+        self._stop.clear()
+
         self._thread = threading.Thread(
             target=self._loop,
             name="vpn-router-vpn-resilience",
@@ -271,5 +286,25 @@ class VPNResilienceManager:
             self.connect_timeout,
         )
 
-    def stop(self):
+    def status(self):
+        return {
+            "name": "vpn_resilience",
+            "running": bool(self._thread and self._thread.is_alive()),
+            "interval_seconds": self.interval,
+            "base_delay_seconds": self.base_delay,
+            "max_delay_seconds": self.max_delay,
+            "max_failures": self.max_failures,
+            "connect_timeout_seconds": self.connect_timeout,
+            "tracked_profiles": len(self._states),
+        }
+
+    def stop(self, timeout=3.0):
         self._stop.set()
+        thread = self._thread
+        if (
+            thread
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=max(0.0, float(timeout)))
+        return not bool(thread and thread.is_alive())

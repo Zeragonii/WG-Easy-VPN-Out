@@ -44,7 +44,14 @@ def _safe_env():
     return {name: os.getenv(name) for name in names if os.getenv(name) is not None}
 
 
-def build_diagnostics(db, VPNProfile, RoutingGroup, ClientAssignment, version):
+def build_diagnostics(
+    db,
+    VPNProfile,
+    RoutingGroup,
+    ClientAssignment,
+    version,
+    app=None,
+):
     runtime = VPNRuntimeService()
     engine = RoutingEngine()
 
@@ -61,6 +68,17 @@ def build_diagnostics(db, VPNProfile, RoutingGroup, ClientAssignment, version):
     vpn_rows = []
     for profile in profiles:
         status = runtime.status(profile, include_probe=False)
+        resilience = (
+            app.extensions.get("vpn_resilience")
+            if app is not None
+            else None
+        )
+        retry = (
+            resilience.public_state(profile.id)
+            if resilience
+            else None
+        )
+
         vpn_rows.append({
             "id": profile.id,
             "name": profile.name,
@@ -77,6 +95,7 @@ def build_diagnostics(db, VPNProfile, RoutingGroup, ClientAssignment, version):
                 else None
             ),
             "last_error": status.last_error,
+            "retry": retry,
         })
 
     group_rows = []
@@ -118,6 +137,14 @@ def build_diagnostics(db, VPNProfile, RoutingGroup, ClientAssignment, version):
             "routing_groups": len(groups),
             "client_assignments": len(assignments),
         },
+        "services": (
+            __import__(
+                "app.services.lifecycle",
+                fromlist=["background_service_status"],
+            ).background_service_status(app)
+            if app is not None
+            else []
+        ),
         "vpns": vpn_rows,
         "routing_groups": group_rows,
         "network": {
@@ -154,6 +181,15 @@ def render_text(data):
     for key, value in sorted(data["system"]["safe_environment"].items()):
         lines.append(f"{key}={value}")
 
+    lines.extend(["", "Background services", "-" * 72])
+    for service in data.get("services", []):
+        details = ", ".join(
+            f"{key}={value}"
+            for key, value in service.items()
+            if key not in ("name",)
+        )
+        lines.append(f"{service.get('name', 'unknown')}: {details}")
+
     lines.extend(["", "VPN profiles", "-" * 72])
     for vpn in data["vpns"]:
         lines.append(
@@ -164,6 +200,17 @@ def render_text(data):
         )
         if vpn["last_error"]:
             lines.append(f"  last_error={vpn['last_error']}")
+        if vpn.get("retry"):
+            retry = vpn["retry"]
+            lines.append(
+                "  retry="
+                f"failures:{retry.get('failures')} "
+                f"retry_in:{retry.get('retry_in_seconds')} "
+                f"gave_up:{retry.get('gave_up')} "
+                f"last_success:{retry.get('last_success_at')}"
+            )
+            if retry.get("last_error"):
+                lines.append(f"  retry_error={retry['last_error']}")
 
     lines.extend(["", "Routing groups", "-" * 72])
     for group in data["routing_groups"]:

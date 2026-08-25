@@ -150,9 +150,27 @@ def restore():
         )
 
     resilience = current_app.extensions.get("vpn_resilience")
+    restored_profiles = db.session.execute(
+        db.select(VPNProfile).order_by(VPNProfile.id.asc())
+    ).scalars().all()
+
     if resilience:
-        for profile in db.session.execute(db.select(VPNProfile)).scalars():
+        # Remove retry state belonging to profiles that disappeared in the
+        # restore, then initialise the restored IDs cleanly.
+        restored_ids = {profile.id for profile in restored_profiles}
+        resilience.prune(restored_ids)
+        for profile in restored_profiles:
             resilience.reset(profile.id, success=False)
+
+    reconciler = current_app.extensions.get("routing_reconciler")
+    if reconciler:
+        reconciler.invalidate()
+
+    observability = current_app.extensions.get("observability")
+    if observability:
+        observability.invalidate_profiles(
+            {profile.id for profile in restored_profiles}
+        )
 
     msg = (
         f"Restore complete: {result['profiles']} VPN profile(s), "

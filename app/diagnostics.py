@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import io
 
-from flask import Blueprint, jsonify, render_template, send_file
+from flask import Blueprint, current_app, jsonify, render_template, send_file
 from flask_login import login_required
 
 from . import db
@@ -22,6 +22,7 @@ def _snapshot():
         RoutingGroup,
         ClientAssignment,
         application_version(),
+        app=current_app,
     )
 
 

@@ -209,6 +209,22 @@ class VPNRuntimeService:
         value = result.stdout.strip()
         return value if result.returncode == 0 and value and len(value) < 65 else None
 
+    def exit_ip(self, profile, iface=None, tunnel_ip=None):
+        """
+        Probe the public IPv4 exit for a connected profile.
+
+        iface/tunnel_ip may be supplied by a caller that already has status,
+        avoiding duplicate interface inspection.
+        """
+        if iface is None or tunnel_ip is None:
+            status = self.status(profile, include_probe=False)
+            if status.state != "connected" or not status.tunnel_ipv4:
+                return None
+            iface = status.interface_name
+            tunnel_ip = status.tunnel_ipv4
+
+        return self._exit_ip(profile, iface, tunnel_ip)
+
     def start(self, profile):
         if profile.vpn_type != "openvpn":
             raise VPNRuntimeError("WireGuard runtime activation is not implemented in v0.3.1 yet.")

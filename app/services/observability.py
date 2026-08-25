@@ -218,7 +218,7 @@ class ObservabilityService:
                 )
 
                 try:
-                    exit_ip = self.runtime._exit_ip(
+                    exit_ip = self.runtime.exit_ip(
                         profile,
                         status.interface_name,
                         status.tunnel_ipv4,
@@ -333,6 +333,8 @@ class ObservabilityService:
         if self._thread and self._thread.is_alive():
             return
 
+        self._stop.clear()
+
         self._thread = threading.Thread(
             target=self._loop,
             name="vpn-router-observability",
@@ -347,5 +349,46 @@ class ObservabilityService:
             self.update_cache_seconds,
         )
 
-    def stop(self):
+    def invalidate_profiles(self, valid_profile_ids=None):
+        """
+        Drop cached exit-IP rows, optionally retaining only current profile IDs.
+        """
+        with self._lock:
+            if valid_profile_ids is None:
+                self._exit_ips.clear()
+                return
+
+            valid = {int(profile_id) for profile_id in valid_profile_ids}
+            stale = [
+                profile_id
+                for profile_id in self._exit_ips
+                if profile_id not in valid
+            ]
+            for profile_id in stale:
+                self._exit_ips.pop(profile_id, None)
+
+    def status(self):
+        with self._lock:
+            cached_exit_ips = len(self._exit_ips)
+            update_checked_at = self._update.get("checked_at")
+
+        return {
+            "name": "observability",
+            "running": bool(self._thread and self._thread.is_alive()),
+            "loop_interval_seconds": self.loop_interval,
+            "exit_ip_interval_seconds": self.exit_ip_interval,
+            "update_cache_seconds": self.update_cache_seconds,
+            "cached_exit_ips": cached_exit_ips,
+            "update_checked_at": update_checked_at,
+        }
+
+    def stop(self, timeout=3.0):
         self._stop.set()
+        thread = self._thread
+        if (
+            thread
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=max(0.0, float(timeout)))
+        return not bool(thread and thread.is_alive())

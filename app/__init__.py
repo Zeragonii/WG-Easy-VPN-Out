@@ -96,6 +96,15 @@ def create_app():
     observability.start()
     app.extensions["observability"] = observability
 
+    app.extensions["background_services"] = [
+        routing_reconciler,
+        vpn_resilience,
+        observability,
+    ]
+
+    from .services.lifecycle import register_shutdown
+    register_shutdown(app)
+
     return app
 
 

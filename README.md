@@ -537,3 +537,40 @@ credentials, VPN usernames/passwords, and VPN configuration file contents.
 
 Cross-service users now call public VPN runtime helpers for log-tail/gateway
 inspection rather than depending directly on private helper methods.
+
+
+## v0.9.1 - Service lifecycle and recovery hardening
+
+### Graceful background-service shutdown
+
+Routing reconciliation, VPN resilience and observability managers now expose
+bounded `stop()` operations that signal and join their worker threads. The app
+tracks them centrally and registers process-exit cleanup in reverse startup
+order. A stuck background thread cannot delay shutdown indefinitely.
+
+Managers also clear their stop event when restarted, making their lifecycle
+safe for development/test application recreation.
+
+### Restore reconciliation
+
+After a configuration restore:
+
+- retry state for removed VPN profile IDs is pruned immediately
+- restored profiles receive clean retry state
+- the routing reconciler is explicitly invalidated so the next tick performs
+  a fresh comparison/rebuild
+- stale exit-IP cache entries are removed immediately
+
+This reduces the small post-restore window where background managers could
+still contain state from the replaced configuration.
+
+### Diagnostics expansion
+
+Diagnostics now reports whether each background manager is running and includes
+VPN retry/recovery state such as failure count, next retry delay and last
+successful recovery timestamp.
+
+### Runtime API cleanup
+
+The observability service now uses a public `VPNRuntimeService.exit_ip()` API
+instead of directly calling the private `_exit_ip()` helper.

@@ -82,6 +82,8 @@ class RoutingReconciler:
         if self._thread and self._thread.is_alive():
             return
 
+        self._stop.clear()
+
         with self.app.app_context():
             self._last_signature = self._snapshot()
             self.db.session.remove()
@@ -98,5 +100,29 @@ class RoutingReconciler:
             self.interval_seconds,
         )
 
-    def stop(self):
+    def invalidate(self):
+        """Force the next reconciliation tick to evaluate/rebuild state."""
+        self._last_signature = None
+
+    def status(self):
+        return {
+            "name": "routing_reconciler",
+            "running": bool(self._thread and self._thread.is_alive()),
+            "interval_seconds": self.interval_seconds,
+            "last_signature_groups": (
+                len(self._last_signature)
+                if self._last_signature is not None
+                else None
+            ),
+        }
+
+    def stop(self, timeout=3.0):
         self._stop.set()
+        thread = self._thread
+        if (
+            thread
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=max(0.0, float(timeout)))
+        return not bool(thread and thread.is_alive())
