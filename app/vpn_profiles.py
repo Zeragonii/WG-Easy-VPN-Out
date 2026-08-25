@@ -13,6 +13,12 @@ from .services.routing import RoutingEngine, RoutingEngineError
 
 bp = Blueprint("vpn_profiles", __name__, url_prefix="/vpn-profiles")
 
+
+def _resilience_manager():
+    from flask import current_app
+    return current_app.extensions.get("vpn_resilience")
+
+
 def _data_root():
     return Path(os.getenv("VPN_ROUTER_DATA_DIR", "/data"))
 
@@ -120,6 +126,10 @@ def connect(profile_id):
     else:
         profile.enabled = True
         db.session.commit()
+
+        resilience = _resilience_manager()
+        if resilience:
+            resilience.reset(profile.id, success=False)
         try:
             from .models import RoutingGroup
             RoutingEngine().rebuild(db, RoutingGroup)
@@ -135,6 +145,10 @@ def disconnect(profile_id):
     VPNRuntimeService().stop(profile)
     profile.enabled = False
     db.session.commit()
+
+    resilience = _resilience_manager()
+    if resilience:
+        resilience.reset(profile.id, success=False)
     try:
         from .models import RoutingGroup
         RoutingEngine().rebuild(db, RoutingGroup)
@@ -148,7 +162,21 @@ def disconnect(profile_id):
 def runtime(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
     status = VPNRuntimeService().status(profile, include_probe=True)
-    return jsonify({"ok": True, **status.to_dict()})
+
+    resilience = _resilience_manager()
+    retry = resilience.public_state(profile.id) if resilience else {
+        "failures": 0,
+        "retry_in_seconds": None,
+        "last_error": None,
+        "gave_up": False,
+        "last_success_at": None,
+    }
+
+    return jsonify({
+        "ok": True,
+        **status.to_dict(),
+        "retry": retry,
+    })
 
 
 @bp.post("/<int:profile_id>/autoconnect")
@@ -158,6 +186,11 @@ def autoconnect(profile_id):
     enabled = request.form.get("enabled") == "1"
     profile.enabled = enabled
     db.session.commit()
+
+    resilience = _resilience_manager()
+    if resilience:
+        resilience.reset(profile.id, success=False)
+
     flash(
         f"Auto-connect {'enabled' if enabled else 'disabled'} for '{profile.name}'.",
         "success",

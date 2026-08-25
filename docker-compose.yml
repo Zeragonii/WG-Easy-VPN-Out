@@ -29,8 +29,12 @@ services:
       WG_EASY_USERNAME: "CHANGE-ME"
       WG_EASY_PASSWORD: "CHANGE-ME"
       WG_EASY_VERIFY_TLS: "true"
-      APP_VERSION: "0.5.2"
+      APP_VERSION: "0.6.0"
       ROUTING_RECONCILE_INTERVAL: "3"
+      VPN_RETRY_CHECK_INTERVAL: "2"
+      VPN_RETRY_BASE_SECONDS: "5"
+      VPN_RETRY_MAX_SECONDS: "300"
+      VPN_RETRY_MAX_FAILURES: "0"
 
     volumes:
       - vpn-router-data:/data

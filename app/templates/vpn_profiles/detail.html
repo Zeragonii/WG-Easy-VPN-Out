@@ -40,6 +40,7 @@
 <p>Uptime: <span id="runtime-uptime">—</span></p>
 <p>Exit IP: <code id="runtime-exit">—</code></p>
 <div id="runtime-error" class="error-box" style="{% if not runtime.last_error %}display:none;{% endif %}">{{ runtime.last_error or "" }}</div>
+<div id="retry-status" class="muted" style="margin:.65rem 0;"></div>
 {% if profile.vpn_type == "openvpn" %}
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
 <form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="width:auto;">Connect</button></form>
@@ -87,6 +88,7 @@
   const uptime = document.getElementById("runtime-uptime");
   const exitIp = document.getElementById("runtime-exit");
   const errorBox = document.getElementById("runtime-error");
+  const retryStatus = document.getElementById("retry-status");
   const log = document.getElementById("runtime-log");
 
   function fmt(seconds) {
@@ -124,6 +126,22 @@
         errorBox.textContent = "";
         errorBox.style.display = "none";
       }
+
+      const retry = data.retry || {};
+      if (retry.gave_up) {
+        retryStatus.innerHTML =
+          `<span class="status-bad">● Retry stopped</span> after ${retry.failures || 0} failures`;
+      } else if (retry.retry_in_seconds !== null && retry.retry_in_seconds !== undefined) {
+        retryStatus.innerHTML =
+          `<span class="status-warn">◐ Retry scheduled</span> in ${retry.retry_in_seconds}s ` +
+          `(${retry.failures || 0} failed attempt${(retry.failures || 0) === 1 ? "" : "s"})`;
+      } else if ((retry.failures || 0) > 0) {
+        retryStatus.innerHTML =
+          `<span class="status-warn">◐ Recovering</span> after ${retry.failures} failed attempt${retry.failures === 1 ? "" : "s"}`;
+      } else {
+        retryStatus.textContent = "";
+      }
+
       log.textContent = data.log_tail && data.log_tail.length ? data.log_tail.join("\n") : "No runtime log yet.";
     } catch (e) {
       errorBox.textContent = `Runtime refresh failed: ${e.message}`;

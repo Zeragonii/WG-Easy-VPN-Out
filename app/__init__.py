@@ -80,6 +80,12 @@ def create_app():
     routing_reconciler.start()
     app.extensions["routing_reconciler"] = routing_reconciler
 
+    from .services.vpn_resilience import VPNResilienceManager
+
+    vpn_resilience = VPNResilienceManager(app, db, VPNProfile)
+    vpn_resilience.start()
+    app.extensions["vpn_resilience"] = vpn_resilience
+
     return app
 
 

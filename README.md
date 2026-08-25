@@ -229,3 +229,34 @@ while OpenVPN was still connecting and remain blocked until a manual rebuild.
 Configure the interval with:
 
     ROUTING_RECONCILE_INTERVAL=3
+
+
+## v0.6.0 - VPN retry and recovery
+
+Adds automatic retry/recovery for enabled OpenVPN profiles.
+
+Default exponential backoff is 5s, 10s, 20s, 40s, 80s, 160s, then capped at
+300s. A successful connection resets the backoff immediately.
+
+If an established VPN later dies, the resilience manager notices the
+disconnected state and automatically enters the same retry process.
+
+Routing Groups continue to obey their configured behaviour while a VPN is
+unavailable:
+
+- `Block` keeps the kill-switch active
+- `WAN` continues to fail open through the normal WAN
+
+Retry state is shown live on the VPN profile Runtime card.
+
+Configuration:
+
+    VPN_RETRY_CHECK_INTERVAL=2
+    VPN_RETRY_BASE_SECONDS=5
+    VPN_RETRY_MAX_SECONDS=300
+    VPN_RETRY_MAX_FAILURES=0
+
+`VPN_RETRY_MAX_FAILURES=0` means retry indefinitely at the maximum backoff.
+Set a positive value to stop after that many failures.
+
+Retry state persists at `/data/runtime/retry-state.json`.
