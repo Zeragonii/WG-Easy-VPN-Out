@@ -48,6 +48,11 @@ def create_app():
         db.create_all()
         _bootstrap_admin()
 
+    from .models import VPNProfile
+    from .services.vpn_startup import restore_enabled_profiles
+
+    restore_enabled_profiles(app, db, VPNProfile)
+
     return app
 
 

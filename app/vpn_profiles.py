@@ -116,7 +116,9 @@ def connect(profile_id):
     except VPNRuntimeError as exc:
         flash(str(exc), "error")
     else:
-        flash(f"Connecting '{profile.name}'…", "success")
+        profile.enabled = True
+        db.session.commit()
+        flash(f"Connecting '{profile.name}'… Auto-connect enabled.", "success")
     return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
 @bp.post("/<int:profile_id>/disconnect")
@@ -124,7 +126,9 @@ def connect(profile_id):
 def disconnect(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
     VPNRuntimeService().stop(profile)
-    flash(f"Disconnected '{profile.name}'.", "success")
+    profile.enabled = False
+    db.session.commit()
+    flash(f"Disconnected '{profile.name}'. Auto-connect disabled.", "success")
     return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
 @bp.get("/<int:profile_id>/runtime")
@@ -133,6 +137,21 @@ def runtime(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
     status = VPNRuntimeService().status(profile, include_probe=True)
     return jsonify({"ok": True, **status.to_dict()})
+
+
+@bp.post("/<int:profile_id>/autoconnect")
+@login_required
+def autoconnect(profile_id):
+    profile = db.get_or_404(VPNProfile, profile_id)
+    enabled = request.form.get("enabled") == "1"
+    profile.enabled = enabled
+    db.session.commit()
+    flash(
+        f"Auto-connect {'enabled' if enabled else 'disabled'} for '{profile.name}'.",
+        "success",
+    )
+    return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
+
 
 @bp.route("/<int:profile_id>/edit", methods=["GET", "POST"])
 @login_required

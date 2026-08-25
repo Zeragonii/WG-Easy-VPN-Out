@@ -120,3 +120,17 @@ with subnet topology, including PIA.
 - keeps fatal authentication/TLS/startup errors visible
 
 WG-Easy client policy routing is still disabled in this release.
+
+
+## v0.3.3 - Auto-connect persistence
+
+Adds persistent tunnel intent across container restarts.
+
+- successful manual Connect enables Auto-connect
+- manual Disconnect disables Auto-connect
+- profile page has explicit Enable/Disable Auto-connect controls
+- enabled OpenVPN profiles reconnect automatically at app startup
+- failed startup attempts are logged without an aggressive retry loop
+
+This makes VPN profiles survive Portainer/container restarts while keeping
+failure behaviour predictable.

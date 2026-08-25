@@ -18,6 +18,13 @@
 <p>Config: <code>{{ profile.config_filename }}</code></p>
 <p>Username: {{ profile.username or "—" }}</p>
 <p>Password: {% if profile.password %}••••••••{% else %}—{% endif %}</p>
+<p>Auto-connect:
+{% if profile.enabled %}
+  <span class="status-good">● Enabled</span>
+{% else %}
+  <span class="muted">○ Disabled</span>
+{% endif %}
+</p>
 </section>
 
 <section class="card">
@@ -37,6 +44,17 @@
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
 <form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><button type="submit" style="width:auto;">Connect</button></form>
 <form method="post" action="{{ url_for('vpn_profiles.disconnect', profile_id=profile.id) }}"><button class="button-link secondary" type="submit">Disconnect</button></form>
+{% if profile.enabled %}
+<form method="post" action="{{ url_for('vpn_profiles.autoconnect', profile_id=profile.id) }}">
+  <input type="hidden" name="enabled" value="0">
+  <button class="button-link secondary" type="submit">Disable Auto-connect</button>
+</form>
+{% else %}
+<form method="post" action="{{ url_for('vpn_profiles.autoconnect', profile_id=profile.id) }}">
+  <input type="hidden" name="enabled" value="1">
+  <button class="button-link secondary" type="submit">Enable Auto-connect</button>
+</form>
+{% endif %}
 </div>
 {% else %}
 <p class="status-warn">WireGuard runtime activation follows after OpenVPN is proven stable.</p>
