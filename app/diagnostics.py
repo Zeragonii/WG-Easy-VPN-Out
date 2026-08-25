@@ -10,6 +10,7 @@ from . import db
 from .main import application_version
 from .models import ClientAssignment, RoutingGroup, VPNProfile
 from .services.diagnostics import build_diagnostics, render_text
+from .services.preflight import run_preflight
 
 
 bp = Blueprint("diagnostics", __name__, url_prefix="/diagnostics")
@@ -36,6 +37,18 @@ def index():
 @login_required
 def json_export():
     return jsonify(_snapshot())
+
+
+@bp.get("/preflight")
+@login_required
+def preflight():
+    return jsonify(run_preflight(
+        current_app,
+        db,
+        VPNProfile,
+        RoutingGroup,
+        ClientAssignment,
+    ))
 
 
 @bp.get("/download")

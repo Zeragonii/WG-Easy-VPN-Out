@@ -622,3 +622,29 @@ VPN configuration files are now written and verified in a temporary staging
 directory before the live configuration is replaced. If the database/file
 replacement fails, the SQL transaction is rolled back and the previous config
 files are restored.
+
+
+## v0.9.3 - Release Candidate Readiness
+
+v0.9.3 is intentionally feature-frozen. Its purpose is to verify that the
+existing OpenVPN/WG-Easy policy-routing feature set is ready to be called 1.0.
+
+Diagnostics now includes a **Release readiness** preflight. It performs
+read-only checks against the live instance and reports Pass / Warning / Fail for:
+
+- database schema compatibility
+- persistent `/data` writability
+- required networking tools
+- background service health
+- VPN configuration-file presence
+- deterministic routing mark/table allocations
+- live IPv4 policy rules
+- nftables `inet vpn_router`
+- enabled OpenVPN tunnel health
+- client-assignment integrity
+- basic SECRET_KEY hygiene
+
+Warnings do not block readiness; failed checks do.
+
+See `RELEASE_CHECKLIST.md` for the manual tests to perform before tagging
+`v1.0.0`, and `CHANGELOG.md` for the consolidated project history.
