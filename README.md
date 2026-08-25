@@ -348,3 +348,21 @@ Result:
 - kill-switch / WAN fallback behaviour still applies to internet traffic
 - Docker bridge/private-network destinations are no longer accidentally sent
   toward outbound VPN routing tables
+
+
+## v0.7.2 - Image-owned application version
+
+The application version is now stored in the repository's root `VERSION` file
+and baked into the GHCR image at build time.
+
+Normal deployments no longer need an `APP_VERSION` environment variable in
+Portainer. When `ghcr.io/...:latest` is pulled and redeployed, the dashboard
+automatically reports the version contained in that image.
+
+Version resolution order:
+
+1. optional `APP_VERSION` environment override, useful for development
+2. `/app/VERSION` baked into the container image
+3. `unknown` if neither is available
+
+For each release, update the repository `VERSION` file before building/pushing.

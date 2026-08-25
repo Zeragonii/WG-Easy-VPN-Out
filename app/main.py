@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template
 from flask_login import login_required
@@ -12,6 +13,28 @@ from .services.vpn_runtime import VPNRuntimeService
 from .services.wg_easy import WGEasyError, WGEasyService
 
 bp = Blueprint("main", __name__)
+
+
+def application_version():
+    """
+    Return the version baked into the container image.
+
+    APP_VERSION remains an optional override for local development, but normal
+    GHCR deployments no longer need to set it in Portainer.
+    """
+    override = os.getenv("APP_VERSION", "").strip()
+    if override:
+        return override
+
+    for path in (Path("/app/VERSION"), Path(__file__).resolve().parents[1] / "VERSION"):
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if value:
+            return value
+
+    return "unknown"
 
 
 def command_exists(name):
@@ -227,7 +250,7 @@ def operational_status():
 
 def system_status():
     return {
-        "version": os.getenv("APP_VERSION", "0.7.1"),
+        "version": application_version(),
         "wg_easy_url": os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
         "wg0_present": wg0_present(),
         "routing_reconcile_interval": os.getenv(
