@@ -1,1 +1,120 @@
-{% extends "base.html" %}{% block title %}{{ profile.name }} · VPN Router{% endblock %}{% block content %}<div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;"><div><h1 style="margin-bottom:.3rem;">{{ profile.name }}</h1><p class="muted" style="margin-top:0;">{{ profile.provider or "Unknown provider" }} · {{ profile.type_label }}</p></div><div style="display:flex;gap:.6rem;flex-wrap:wrap;"><a class="button-link secondary" href="{{ url_for('vpn_profiles.edit', profile_id=profile.id) }}">Edit</a><form method="post" action="{{ url_for('vpn_profiles.delete', profile_id=profile.id) }}" onsubmit="return confirm('Delete this VPN profile?');"><button class="danger-button" type="submit">Delete</button></form></div></div><div class="grid"><section class="card"><h2>Profile</h2><p>Type: <span class="pill">{{ profile.type_label }}</span></p><p>Provider: {{ profile.provider or "—" }}</p><p>Config: <code>{{ profile.config_filename }}</code></p><p>Username: {{ profile.username or "—" }}</p><p>Password: {% if profile.password %}••••••••{% else %}—{% endif %}</p></section><section class="card"><h2>Runtime</h2><p><span class="status-warn">● Configured only</span></p><p class="muted">Tunnel start/stop and exit-IP checks arrive in v0.3.1.</p></section></div><section class="card" style="margin-top:1rem;"><h2>Configuration validation</h2>{% if config_error %}<div class="error-box">{{ config_error }}</div>{% elif validation %}<p class="status-good">● Configuration parsed successfully</p>{% if validation.summary %}<ul>{% for item in validation.summary %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}{% if validation.warnings %}<h3>Warnings</h3><ul>{% for item in validation.warnings %}<li class="status-warn">{{ item }}</li>{% endfor %}</ul>{% endif %}{% endif %}</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}{{ profile.name }} · VPN Router{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+<div><h1 style="margin-bottom:.3rem;">{{ profile.name }}</h1>
+<p class="muted" style="margin-top:0;">{{ profile.provider or "Unknown provider" }} · {{ profile.type_label }}</p></div>
+<div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+<a class="button-link secondary" href="{{ url_for('vpn_profiles.edit', profile_id=profile.id) }}">Edit</a>
+<form method="post" action="{{ url_for('vpn_profiles.delete', profile_id=profile.id) }}" onsubmit="return confirm('Delete this VPN profile?');">
+<button class="danger-button" type="submit">Delete</button></form>
+</div></div>
+
+<div class="grid">
+<section class="card">
+<h2>Profile</h2>
+<p>Type: <span class="pill">{{ profile.type_label }}</span></p>
+<p>Provider: {{ profile.provider or "—" }}</p>
+<p>Config: <code>{{ profile.config_filename }}</code></p>
+<p>Username: {{ profile.username or "—" }}</p>
+<p>Password: {% if profile.password %}••••••••{% else %}—{% endif %}</p>
+</section>
+
+<section class="card">
+<h2>Runtime</h2>
+<p id="runtime-state">
+{% if runtime.state == "connected" %}<span class="status-good">● Connected</span>
+{% elif runtime.state == "connecting" %}<span class="status-warn">◐ Connecting</span>
+{% elif runtime.state == "failed" %}<span class="status-bad">● Failed</span>
+{% else %}<span class="muted">○ Disconnected</span>{% endif %}
+</p>
+<p>Interface: <code id="runtime-interface">{{ runtime.interface_name }}</code></p>
+<p>Tunnel IP: <code id="runtime-ip">{{ runtime.tunnel_ipv4 or "—" }}</code></p>
+<p>Uptime: <span id="runtime-uptime">—</span></p>
+<p>Exit IP: <code id="runtime-exit">—</code></p>
+<div id="runtime-error" class="error-box" style="{% if not runtime.last_error %}display:none;{% endif %}">{{ runtime.last_error or "" }}</div>
+{% if profile.vpn_type == "openvpn" %}
+<div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+<form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><button type="submit" style="width:auto;">Connect</button></form>
+<form method="post" action="{{ url_for('vpn_profiles.disconnect', profile_id=profile.id) }}"><button class="button-link secondary" type="submit">Disconnect</button></form>
+</div>
+{% else %}
+<p class="status-warn">WireGuard runtime activation follows after OpenVPN is proven stable.</p>
+{% endif %}
+</section>
+</div>
+
+<section class="card" style="margin-top:1rem;">
+<h2>OpenVPN log</h2>
+<pre id="runtime-log" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:var(--panel2);padding:.8rem;border-radius:8px;">{% if runtime.log_tail %}{{ runtime.log_tail|join('\n') }}{% else %}No runtime log yet.{% endif %}</pre>
+</section>
+
+<section class="card" style="margin-top:1rem;">
+<h2>Configuration validation</h2>
+{% if config_error %}<div class="error-box">{{ config_error }}</div>
+{% elif validation %}
+<p class="status-good">● Configuration parsed successfully</p>
+{% if validation.summary %}<ul>{% for item in validation.summary %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+{% if validation.warnings %}<h3>Warnings</h3><ul>{% for item in validation.warnings %}<li class="status-warn">{{ item }}</li>{% endfor %}</ul>{% endif %}
+{% endif %}
+</section>
+
+{% if profile.vpn_type == "openvpn" %}
+<script>
+(() => {
+  const endpoint = "{{ url_for('vpn_profiles.runtime', profile_id=profile.id) }}";
+  const state = document.getElementById("runtime-state");
+  const iface = document.getElementById("runtime-interface");
+  const ip = document.getElementById("runtime-ip");
+  const uptime = document.getElementById("runtime-uptime");
+  const exitIp = document.getElementById("runtime-exit");
+  const errorBox = document.getElementById("runtime-error");
+  const log = document.getElementById("runtime-log");
+
+  function fmt(seconds) {
+    if (seconds === null || seconds === undefined) return "—";
+    seconds = Math.max(0, Math.floor(seconds));
+    const d = Math.floor(seconds/86400), h = Math.floor((seconds%86400)/3600);
+    const m = Math.floor((seconds%3600)/60), s = seconds%60;
+    if (d) return `${d}d ${h}h ${m}m`;
+    if (h) return `${h}h ${m}m ${s}s`;
+    if (m) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  function stateHtml(value) {
+    if (value === "connected") return '<span class="status-good">● Connected</span>';
+    if (value === "connecting") return '<span class="status-warn">◐ Connecting</span>';
+    if (value === "failed") return '<span class="status-bad">● Failed</span>';
+    if (value === "stale") return '<span class="status-warn">◐ Stale interface</span>';
+    return '<span class="muted">○ Disconnected</span>';
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch(endpoint, {headers: {"Accept":"application/json"}, cache:"no-store"});
+      const data = await response.json();
+      state.innerHTML = stateHtml(data.state);
+      iface.textContent = data.interface_name || "—";
+      ip.textContent = data.tunnel_ipv4 || "—";
+      uptime.textContent = fmt(data.uptime_seconds);
+      exitIp.textContent = data.exit_ip || "—";
+      if (data.last_error) {
+        errorBox.textContent = data.last_error;
+        errorBox.style.display = "";
+      } else {
+        errorBox.textContent = "";
+        errorBox.style.display = "none";
+      }
+      log.textContent = data.log_tail && data.log_tail.length ? data.log_tail.join("\n") : "No runtime log yet.";
+    } catch (e) {
+      errorBox.textContent = `Runtime refresh failed: ${e.message}`;
+      errorBox.style.display = "";
+    }
+  }
+  refresh();
+  setInterval(refresh, 3000);
+})();
+</script>
+{% endif %}
+{% endblock %}

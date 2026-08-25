@@ -94,6 +94,14 @@ The WG-Easy Clients page now:
 
 No routing or firewall changes are performed in this release.
 
-## v0.3.0 - VPN client profiles
 
-Adds friendly names, provider labels, OpenVPN/WireGuard config upload, optional credentials, validation, edit/delete, and persistent storage. This release does not start tunnels or modify routing/firewall state. Treat /data as secret-bearing storage.
+## v0.3.1 - OpenVPN runtime management
+
+Adds Connect/Disconnect, stable `tun-vpn<ID>` interface names, live tunnel
+status, tunnel IPv4, uptime, exit-IP validation, and a runtime log tail.
+
+OpenVPN is started with `--route-noexec` so provider configs cannot replace
+the host's normal routing table. A narrowly scoped source rule is installed
+only for the tunnel's own IP to support the exit-IP health probe.
+
+WG-Easy client policy routing remains disabled in this release.

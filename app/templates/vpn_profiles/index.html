@@ -1,1 +1,36 @@
-{% extends "base.html" %}{% block title %}VPN Clients · VPN Router{% endblock %}{% block content %}<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;"><div><h1 style="margin-bottom:.35rem;">VPN Clients</h1><p class="muted" style="margin-top:0;">Stored outbound VPN profiles. v0.3.0 does not start tunnels yet.</p></div><a class="button-link" href="{{ url_for('vpn_profiles.new') }}">+ Add VPN Client</a></div><div class="card">{% if profiles %}<div class="table-wrap"><table><thead><tr><th>Friendly name</th><th>Provider</th><th>Type</th><th>Config</th><th>Status</th></tr></thead><tbody>{% for profile in profiles %}<tr><td><a href="{{ url_for('vpn_profiles.detail', profile_id=profile.id) }}">{{ profile.name }}</a></td><td>{{ profile.provider or "—" }}</td><td><span class="pill">{{ profile.type_label }}</span></td><td><code>{{ profile.config_filename }}</code></td><td><span class="status-warn">● Configured</span></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="muted" style="margin:0;">No VPN client profiles have been created yet.</p>{% endif %}</div>{% endblock %}
+{% extends "base.html" %}
+{% block title %}VPN Clients · VPN Router{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+  <div>
+    <h1 style="margin-bottom:.35rem;">VPN Clients</h1>
+    <p class="muted" style="margin-top:0;">Outbound VPN profiles and runtime state.</p>
+  </div>
+  <a class="button-link" href="{{ url_for('vpn_profiles.new') }}">+ Add VPN Client</a>
+</div>
+<div class="card">
+{% if profiles %}
+<div class="table-wrap"><table>
+<thead><tr><th>Friendly name</th><th>Provider</th><th>Type</th><th>Interface</th><th>Status</th></tr></thead>
+<tbody>
+{% for profile in profiles %}
+{% set rt = runtime[profile.id] %}
+<tr>
+<td><a href="{{ url_for('vpn_profiles.detail', profile_id=profile.id) }}">{{ profile.name }}</a></td>
+<td>{{ profile.provider or "—" }}</td>
+<td><span class="pill">{{ profile.type_label }}</span></td>
+<td><code>{{ rt.interface_name }}</code></td>
+<td>
+{% if rt.state == "connected" %}<span class="status-good">● Connected</span>
+{% elif rt.state == "connecting" %}<span class="status-warn">◐ Connecting</span>
+{% elif rt.state == "failed" %}<span class="status-bad">● Failed</span>
+{% else %}<span class="muted">○ Disconnected</span>{% endif %}
+</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% else %}
+<p class="muted" style="margin:0;">No VPN client profiles have been created yet.</p>
+{% endif %}
+</div>
+{% endblock %}
