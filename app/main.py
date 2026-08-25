@@ -28,7 +28,7 @@ def wg0_present():
 
 def system_status():
     return {
-        "version": os.getenv("APP_VERSION", "0.4.0"),
+        "version": os.getenv("APP_VERSION", "0.5.0"),
         "wg_easy_url": os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
         "wg0_present": wg0_present(),
         "tools": {

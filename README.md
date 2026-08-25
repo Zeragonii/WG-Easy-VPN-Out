@@ -170,3 +170,34 @@ automatically at startup.
 **Important:** keep the same `SECRET_KEY` across upgrades/redeployments.
 Changing it after credentials have been encrypted will make those stored
 passwords undecryptable.
+
+
+## v0.5.0 - WG-Easy client routing assignments
+
+Adds the policy-routing UI that connects WG-Easy clients to Routing Groups.
+
+- `Route via` dropdown on every discovered WG-Easy client
+- assignments persist in SQLite by WG-Easy client ID
+- assigned IPv4 addresses populate `inet vpn_router` source sets immediately
+- assignments are restored automatically after container/app restart
+- existing assignments survive clients going offline
+- if WG-Easy later changes an assigned client's IPv4 address, VPN Router
+  updates the stored address and nftables set membership automatically
+- selecting `Unassigned / normal routing` removes the explicit policy
+- routing groups with assigned clients cannot be deleted accidentally
+- CSRF protection applies to assignment API changes via `X-CSRFToken`
+
+Example:
+
+    Laptop  192.168.3.2  → PIA Manchester
+    Phone   192.168.3.3  → Default WAN
+    Tablet  192.168.3.4  → PIA London
+
+The routing path is:
+
+    WG-Easy source IP
+      → nftables routing-group set
+      → fwmark
+      → ip rule
+      → dedicated routing table
+      → WAN or selected VPN tunnel

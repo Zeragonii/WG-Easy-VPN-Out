@@ -6,7 +6,7 @@
     <h1 style="margin-bottom:.35rem;">Routing Groups</h1>
     <p class="muted" style="margin-top:0;">
       nftables source sets → fwmarks → dedicated Linux routing tables.
-      Client assignment arrives in v0.5.0.
+      WG-Easy client assignments populate these sets in v0.5.0.
     </p>
   </div>
   <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
@@ -73,10 +73,10 @@
 </div>
 
 <div class="card" style="margin-top:1rem;">
-  <h2>v0.4.0 boundary</h2>
+  <h2>Assignment engine</h2>
   <p class="muted">
-    The nftables sets are intentionally empty in this release. Nothing from WG-Easy
-    is assigned to a routing group until the v0.5.0 client-assignment UI.
+    WG-Easy client assignments are persisted in SQLite and restored into the
+    nftables source sets whenever the routing engine rebuilds.
   </p>
 </div>
 {% endblock %}

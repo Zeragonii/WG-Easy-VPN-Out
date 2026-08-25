@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import ipaddress
 import subprocess
 
 from .vpn_runtime import VPNRuntimeService
@@ -148,16 +149,24 @@ class RoutingEngine:
 
         return iface, gateway, "vpn"
 
-    def _nft_script(self, groups, effective_ifaces):
+    def _nft_script(self, groups, effective_ifaces, assignments_by_group):
         lines = [
             f"delete table {self.NFT_FAMILY} {self.NFT_TABLE}",
             f"table {self.NFT_FAMILY} {self.NFT_TABLE} {{",
         ]
 
         for group in groups:
-            lines.append(
-                f"  set group_{group.id}_v4 {{ type ipv4_addr; flags interval; }}"
-            )
+            addresses = assignments_by_group.get(group.id, [])
+            if addresses:
+                elements = ", ".join(addresses)
+                lines.append(
+                    f"  set group_{group.id}_v4 {{ "
+                    f"type ipv4_addr; flags interval; elements = {{ {elements} }}; }}"
+                )
+            else:
+                lines.append(
+                    f"  set group_{group.id}_v4 {{ type ipv4_addr; flags interval; }}"
+                )
 
         lines.extend([
             "  chain prerouting {",
@@ -185,11 +194,33 @@ class RoutingEngine:
         return "\n".join(lines) + "\n"
 
     def rebuild(self, db, RoutingGroup) -> None:
+        from ..models import ClientAssignment
+
         groups = db.session.execute(
             db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
         ).scalars().all()
 
         self.ensure_allocations(db, groups)
+
+        assignments = db.session.execute(
+            db.select(ClientAssignment)
+            .order_by(ClientAssignment.routing_group_id.asc(), ClientAssignment.id.asc())
+        ).scalars().all()
+
+        assignments_by_group = {}
+        valid_group_ids = {group.id for group in groups}
+
+        for assignment in assignments:
+            if assignment.routing_group_id not in valid_group_ids:
+                continue
+            try:
+                address = str(ipaddress.IPv4Address(assignment.ipv4_address))
+            except ipaddress.AddressValueError:
+                continue
+            assignments_by_group.setdefault(
+                assignment.routing_group_id,
+                [],
+            ).append(address)
 
         # Clean our ip rules/tables first.
         for group in groups:
@@ -219,11 +250,74 @@ class RoutingEngine:
         # nft "delete table" fails if the table does not exist. Remove it
         # separately, ignoring that error, then atomically load a fresh table.
         self._run(["nft", "delete", "table", self.NFT_FAMILY, self.NFT_TABLE])
-        script = self._nft_script(groups, effective_ifaces)
+        script = self._nft_script(
+            groups,
+            effective_ifaces,
+            assignments_by_group,
+        )
         # Strip the leading delete from the generated transaction because the
         # best-effort delete above has already run.
         script = "\n".join(script.splitlines()[1:]) + "\n"
         self._must(["nft", "-f", "-"], input_text=script)
+
+    def apply_assignment_sets(self, db, RoutingGroup) -> None:
+        """
+        Refresh only nftables set membership without rebuilding route tables.
+        Used for client dropdown changes and WG-Easy IP changes.
+        """
+        from ..models import ClientAssignment
+
+        groups = db.session.execute(
+            db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
+        ).scalars().all()
+
+        assignments = db.session.execute(
+            db.select(ClientAssignment)
+        ).scalars().all()
+
+        by_group = {group.id: [] for group in groups}
+
+        for assignment in assignments:
+            if assignment.routing_group_id not in by_group:
+                continue
+            try:
+                address = str(ipaddress.IPv4Address(assignment.ipv4_address))
+            except ipaddress.AddressValueError:
+                continue
+            by_group[assignment.routing_group_id].append(address)
+
+        for group in groups:
+            set_name = f"group_{group.id}_v4"
+
+            # The set should already exist after normal engine rebuild. If it
+            # doesn't, fall back to a complete rebuild.
+            result = self._run([
+                "nft", "list", "set",
+                self.NFT_FAMILY,
+                self.NFT_TABLE,
+                set_name,
+            ])
+            if result.returncode != 0:
+                self.rebuild(db, RoutingGroup)
+                return
+
+            self._must([
+                "nft", "flush", "set",
+                self.NFT_FAMILY,
+                self.NFT_TABLE,
+                set_name,
+            ])
+
+            addresses = sorted(set(by_group[group.id]))
+            if addresses:
+                element_text = ", ".join(addresses)
+                self._must([
+                    "nft", "add", "element",
+                    self.NFT_FAMILY,
+                    self.NFT_TABLE,
+                    set_name,
+                    "{", element_text, "}",
+                ])
 
     def inspect_group(self, group) -> GroupRuntime:
         if group.vpn_profile is None:

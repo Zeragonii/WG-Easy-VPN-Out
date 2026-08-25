@@ -186,6 +186,21 @@ def edit(group_id):
 @login_required
 def delete(group_id):
     group = db.get_or_404(RoutingGroup, group_id)
+
+    from .models import ClientAssignment
+    assignment = db.session.execute(
+        db.select(ClientAssignment).where(
+            ClientAssignment.routing_group_id == group.id
+        )
+    ).scalar_one_or_none()
+
+    if assignment is not None:
+        flash(
+            f"Cannot delete '{group.name}' while WG-Easy clients are assigned to it.",
+            "error",
+        )
+        return redirect(url_for("routing_groups.index"))
+
     name = group.name
     db.session.delete(group)
     db.session.commit()

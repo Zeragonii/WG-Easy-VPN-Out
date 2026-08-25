@@ -64,3 +64,27 @@ class RoutingGroup(db.Model):
     @property
     def mark_hex(self):
         return f"0x{self.fwmark:x}" if self.fwmark is not None else "—"
+
+
+class ClientAssignment(db.Model):
+    __tablename__ = "client_assignments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    external_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    client_name = db.Column(db.String(255), nullable=False)
+    ipv4_address = db.Column(db.String(64), nullable=False)
+    routing_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("routing_groups.id"),
+        nullable=False,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        onupdate=db.func.now(),
+        nullable=False,
+    )
+
+    routing_group = db.relationship("RoutingGroup")
