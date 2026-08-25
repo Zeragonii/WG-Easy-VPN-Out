@@ -171,6 +171,11 @@ class RoutingEngine:
         lines.extend([
             "  chain prerouting {",
             "    type filter hook prerouting priority mangle; policy accept;",
+            "    ip daddr 127.0.0.0/8 return",
+            "    ip daddr 10.0.0.0/8 return",
+            "    ip daddr 172.16.0.0/12 return",
+            "    ip daddr 192.168.0.0/16 return",
+            "    ip daddr 169.254.0.0/16 return",
         ])
         for group in groups:
             lines.append(

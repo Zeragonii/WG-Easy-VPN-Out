@@ -323,3 +323,28 @@ Routing group health table:
 
 The release is intentionally observability-only: it does not change packet
 marking, route construction, VPN startup, retry, or reconciliation behaviour.
+
+
+## v0.7.1 - Local-network routing bypass
+
+Fixes policy-routed WG-Easy clients losing access to local services such as
+Portainer, UniFi, or Docker-hosted applications.
+
+Routing-group marks now apply only after local/private IPv4 destinations are
+excluded from the nftables prerouting chain.
+
+Bypassed destinations:
+
+- `127.0.0.0/8`
+- `10.0.0.0/8`
+- `172.16.0.0/12`
+- `192.168.0.0/16`
+- `169.254.0.0/16`
+
+Result:
+
+- LAN/private traffic uses normal local routing
+- internet-bound traffic still uses the selected routing group
+- kill-switch / WAN fallback behaviour still applies to internet traffic
+- Docker bridge/private-network destinations are no longer accidentally sent
+  toward outbound VPN routing tables
