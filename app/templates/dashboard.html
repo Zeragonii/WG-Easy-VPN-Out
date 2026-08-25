@@ -6,6 +6,14 @@
   policy-routing groups, and automatic recovery.
 </p>
 
+<div id="update-banner" class="card" style="margin-bottom:1rem;display:none;">
+  <strong id="update-title">Update available</strong>
+  <div id="update-detail" class="muted" style="margin-top:.25rem;"></div>
+  <div id="update-link-wrap" style="margin-top:.6rem;display:none;">
+    <a id="update-link" class="button-link" href="#" target="_blank" rel="noopener">View repository</a>
+  </div>
+</div>
+
 <div class="grid">
   <section class="card">
     <h2>Application</h2>
@@ -130,12 +138,12 @@
       </thead>
       <tbody>
         {% for vpn in status.operational.vpn_rows %}
-        <tr>
+        <tr data-vpn-profile-id="{{ vpn.id }}">
           <td>
             <strong>{{ vpn.name }}</strong>
             <div class="muted" style="font-size:.8rem;">{{ vpn.provider }} · {{ vpn.type }}</div>
           </td>
-          <td>
+          <td class="vpn-state">
             {% if vpn.state == "connected" %}
               <span class="status-good">● Connected</span>
             {% elif vpn.state == "connecting" %}
@@ -149,7 +157,7 @@
               <div class="muted" style="font-size:.8rem;">Auto-connect enabled</div>
             {% endif %}
           </td>
-          <td>
+          <td class="vpn-tunnel">
             {% if vpn.tunnel_ipv4 %}
               <code>{{ vpn.interface }}</code>
               <div><code>{{ vpn.tunnel_ipv4 }}</code></div>
@@ -157,23 +165,28 @@
               <span class="muted">—</span>
             {% endif %}
           </td>
-          <td>
+          <td class="vpn-gateway">
             {% if vpn.gateway %}
               <code>{{ vpn.gateway }}</code>
             {% else %}
               <span class="muted">—</span>
             {% endif %}
           </td>
-          <td>
+          <td class="vpn-exit-ip">
             {% if vpn.exit_ip %}
               <code>{{ vpn.exit_ip }}</code>
+              {% if vpn.exit_ip_cache and vpn.exit_ip_cache.checking %}
+                <div class="muted" style="font-size:.8rem;">◐ refreshing…</div>
+              {% elif vpn.exit_ip_cache and vpn.exit_ip_cache.probe_ok == false %}
+                <div class="status-warn" style="font-size:.8rem;">last refresh failed</div>
+              {% endif %}
             {% elif vpn.state == "connected" %}
-              <span class="status-warn">◐ probe unavailable</span>
+              <span class="status-warn">◐ Checking…</span>
             {% else %}
               <span class="muted">—</span>
             {% endif %}
           </td>
-          <td>{{ vpn.uptime }}</td>
+          <td class="vpn-uptime">{{ vpn.uptime }}</td>
         </tr>
         {% else %}
         <tr>
@@ -259,4 +272,123 @@
     hardening phase.
   </p>
 </div>
+
+<script>
+(() => {
+  const LIVE_POLL_MS = 10000;
+  const liveUrl = "{{ url_for('main.dashboard_live') }}";
+
+  function stateHtml(vpn) {
+    let value = "";
+    if (vpn.state === "connected") {
+      value = '<span class="status-good">● Connected</span>';
+    } else if (vpn.state === "connecting") {
+      value = '<span class="status-warn">◐ Connecting</span>';
+    } else if (vpn.state === "stored") {
+      value = '<span class="muted">○ Stored only</span>';
+    } else {
+      const label = String(vpn.state || "unknown");
+      value = `<span class="status-bad">● ${label.charAt(0).toUpperCase() + label.slice(1)}</span>`;
+    }
+
+    if (vpn.enabled) {
+      value += '<div class="muted" style="font-size:.8rem;">Auto-connect enabled</div>';
+    }
+    return value;
+  }
+
+  function tunnelHtml(vpn) {
+    if (!vpn.tunnel_ipv4) return '<span class="muted">—</span>';
+    return `<code>${vpn.interface}</code><div><code>${vpn.tunnel_ipv4}</code></div>`;
+  }
+
+  function gatewayHtml(vpn) {
+    return vpn.gateway
+      ? `<code>${vpn.gateway}</code>`
+      : '<span class="muted">—</span>';
+  }
+
+  function exitIpHtml(vpn) {
+    const cache = vpn.exit_ip_cache || {};
+
+    if (vpn.exit_ip) {
+      let value = `<code>${vpn.exit_ip}</code>`;
+      if (cache.checking) {
+        value += '<div class="muted" style="font-size:.8rem;">◐ refreshing…</div>';
+      } else if (cache.probe_ok === false) {
+        value += '<div class="status-warn" style="font-size:.8rem;">last refresh failed</div>';
+      }
+      return value;
+    }
+
+    if (vpn.state === "connected") {
+      return '<span class="status-warn">◐ Checking…</span>';
+    }
+
+    return '<span class="muted">—</span>';
+  }
+
+  function renderVpn(vpn) {
+    const row = document.querySelector(
+      `tr[data-vpn-profile-id="${vpn.id}"]`
+    );
+    if (!row) return;
+
+    row.querySelector(".vpn-state").innerHTML = stateHtml(vpn);
+    row.querySelector(".vpn-tunnel").innerHTML = tunnelHtml(vpn);
+    row.querySelector(".vpn-gateway").innerHTML = gatewayHtml(vpn);
+    row.querySelector(".vpn-exit-ip").innerHTML = exitIpHtml(vpn);
+    row.querySelector(".vpn-uptime").textContent = vpn.uptime || "—";
+  }
+
+  function renderUpdate(update) {
+    const banner = document.getElementById("update-banner");
+    const title = document.getElementById("update-title");
+    const detail = document.getElementById("update-detail");
+    const linkWrap = document.getElementById("update-link-wrap");
+    const link = document.getElementById("update-link");
+
+    if (!update || !update.available) {
+      banner.style.display = "none";
+      return;
+    }
+
+    title.textContent = `Update available: v${update.latest}`;
+    detail.textContent =
+      `You're running v${update.installed}. A newer repository version is available.`;
+
+    if (update.repository_url) {
+      link.href = update.repository_url;
+      linkWrap.style.display = "";
+    } else {
+      linkWrap.style.display = "none";
+    }
+
+    banner.style.display = "";
+  }
+
+  async function refreshLive() {
+    try {
+      const response = await fetch(liveUrl, {
+        headers: { "Accept": "application/json" },
+        cache: "no-store"
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) return;
+
+      for (const vpn of data.vpns || []) {
+        renderVpn(vpn);
+      }
+      renderUpdate(data.update);
+    } catch (_) {
+      // Dashboard remains useful from its last rendered/cached state.
+    }
+  }
+
+  refreshLive();
+  setInterval(refreshLive, LIVE_POLL_MS);
+})();
+</script>
+
 {% endblock %}

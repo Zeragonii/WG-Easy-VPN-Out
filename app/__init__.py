@@ -86,6 +86,12 @@ def create_app():
     vpn_resilience.start()
     app.extensions["vpn_resilience"] = vpn_resilience
 
+    from .services.observability import ObservabilityService
+
+    observability = ObservabilityService(app, db, VPNProfile)
+    observability.start()
+    app.extensions["observability"] = observability
+
     return app
 
 

@@ -366,3 +366,46 @@ Version resolution order:
 3. `unknown` if neither is available
 
 For each release, update the repository `VERSION` file before building/pushing.
+
+
+## v0.7.3 - Async observability and update awareness
+
+Removes external network probes from the normal dashboard request path.
+
+### Faster dashboard loading
+
+The dashboard no longer performs `api.ipify.org` exit-IP probes while the page
+is rendering. A background observability service probes connected outbound VPNs
+every 60 seconds by default and caches the last successful public exit IP.
+
+The browser polls a lightweight local JSON endpoint every 10 seconds to update:
+
+- tunnel state
+- tunnel IPv4
+- pushed gateway
+- uptime
+- cached public exit IP
+
+A transient exit-IP probe failure no longer erases the last successful result;
+the dashboard keeps the known address and marks the refresh as failed.
+
+### Update awareness
+
+The same background service checks the repository's public `VERSION` file every
+6 hours by default:
+
+    https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION
+
+When the repository version is newer than the installed image version, the
+dashboard shows an `Update available` banner with the installed/latest versions
+and a repository link.
+
+No Docker socket, Portainer credentials, GitHub token, or self-update privilege
+is required.
+
+Configuration:
+
+    EXIT_IP_PROBE_INTERVAL=60
+    UPDATE_CHECK_INTERVAL=21600
+    UPDATE_VERSION_URL=https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION
+    UPDATE_REPOSITORY_URL=https://github.com/Zeragonii/WG-Easy-VPN-Out

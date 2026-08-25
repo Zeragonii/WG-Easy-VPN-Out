@@ -3,7 +3,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, current_app, jsonify, render_template
 from flask_login import login_required
 
 from . import db
@@ -136,7 +136,7 @@ def _vpn_snapshot(profiles):
 
     for profile in profiles:
         if profile.vpn_type == "openvpn":
-            status = runtime.status(profile, include_probe=True)
+            status = runtime.status(profile, include_probe=False)
             gateway = None
             if status.state == "connected":
                 gateway = runtime._route_gateway_from_logs(
@@ -153,7 +153,16 @@ def _vpn_snapshot(profiles):
                 "interface": status.interface_name,
                 "tunnel_ipv4": status.tunnel_ipv4,
                 "gateway": gateway,
-                "exit_ip": status.exit_ip,
+                "exit_ip": (
+                    (current_app.extensions.get("observability").exit_ip_state(profile.id) or {}).get("exit_ip")
+                    if current_app.extensions.get("observability")
+                    else None
+                ),
+                "exit_ip_cache": (
+                    current_app.extensions.get("observability").exit_ip_state(profile.id)
+                    if current_app.extensions.get("observability")
+                    else None
+                ),
                 "uptime": _format_uptime(status.uptime_seconds),
                 "last_error": status.last_error,
             })
@@ -169,6 +178,7 @@ def _vpn_snapshot(profiles):
                 "tunnel_ipv4": None,
                 "gateway": None,
                 "exit_ip": None,
+                "exit_ip_cache": None,
                 "uptime": "—",
                 "last_error": None,
             })
@@ -265,6 +275,18 @@ def system_status():
             "nft": command_exists("nft"),
             "ip": command_exists("ip"),
         },
+        "update": (
+            current_app.extensions.get("observability").update_state()
+            if current_app.extensions.get("observability")
+            else {
+                "installed": application_version(),
+                "latest": None,
+                "available": False,
+                "checked_at": None,
+                "error": None,
+                "repository_url": None,
+            }
+        ),
         "operational": operational_status(),
     }
 
@@ -273,6 +295,33 @@ def system_status():
 @login_required
 def dashboard():
     return render_template("dashboard.html", status=system_status())
+
+
+@bp.get("/api/dashboard/live")
+@login_required
+def dashboard_live():
+    profiles = db.session.execute(
+        db.select(VPNProfile).order_by(VPNProfile.id.asc())
+    ).scalars().all()
+
+    observability = current_app.extensions.get("observability")
+
+    return jsonify({
+        "ok": True,
+        "vpns": _vpn_snapshot(profiles),
+        "update": (
+            observability.update_state()
+            if observability
+            else {
+                "installed": application_version(),
+                "latest": None,
+                "available": False,
+                "checked_at": None,
+                "error": None,
+                "repository_url": None,
+            }
+        ),
+    })
 
 
 @bp.get("/health")
