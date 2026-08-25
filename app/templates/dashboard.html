@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Foundation status</h1>
+<p class="muted">
+  This build deliberately reports networking state but does not modify it.
+</p>
+
+<div class="grid">
+  <section class="card">
+    <h2>Application</h2>
+    <p>Version <code>{{ status.version }}</code></p>
+    <p>Persistent DB <span class="status-good">● configured</span></p>
+  </section>
+
+  <section class="card">
+    <h2>WG-Easy</h2>
+    <p><code>{{ status.wg_easy_url }}</code></p>
+    <p>
+      wg0:
+      {% if status.wg0_present %}
+        <span class="status-good">● visible</span>
+      {% else %}
+        <span class="status-bad">● not visible</span>
+      {% endif %}
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Networking tools</h2>
+    {% for tool, available in status.tools.items() %}
+      <p>
+        {{ tool }}:
+        {% if available %}
+          <span class="status-good">● installed</span>
+        {% else %}
+          <span class="status-bad">● missing</span>
+        {% endif %}
+      </p>
+    {% endfor %}
+  </section>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2>Next milestone</h2>
+  <p>
+    Add VPN Client models and read-only WG-Easy client discovery before enabling
+    any nftables or policy-routing writes.
+  </p>
+</div>
+{% endblock %}

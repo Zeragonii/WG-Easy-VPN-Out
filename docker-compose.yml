@@ -1,0 +1,36 @@
+services:
+  vpn-router:
+    build: .
+    # Replace with your GHCR image after the first successful GitHub build:
+    # image: ghcr.io/YOUR_GITHUB_USER/vpn-router:latest
+    container_name: vpn-router
+
+    network_mode: host
+
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    environment:
+      TZ: Europe/London
+      VPN_ROUTER_PORT: "8085"
+      VPN_ROUTER_BIND: "0.0.0.0"
+
+      # CHANGE THESE BEFORE DEPLOYING.
+      SECRET_KEY: "CHANGE-ME-TO-A-LONG-RANDOM-STRING"
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "CHANGE-ME-NOW"
+
+      # WG-Easy integration will use this later.
+      WG_EASY_URL: "http://127.0.0.1:51821"
+
+    volumes:
+      - vpn-router-data:/data
+
+    restart: unless-stopped
+
+volumes:
+  vpn-router-data:
