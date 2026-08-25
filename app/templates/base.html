@@ -15,6 +15,7 @@
       --border: #30363d;
       --accent: #5da9ff;
       --good: #43c17a;
+      --warn: #f1b44c;
       --bad: #ef6b73;
     }
     * { box-sizing: border-box; }
@@ -27,17 +28,27 @@
     header {
       border-bottom: 1px solid var(--border);
       background: var(--panel);
-      padding: 0.9rem 1.25rem;
+      padding: .8rem 1.25rem;
       display: flex;
+      gap: 1rem;
       align-items: center;
       justify-content: space-between;
     }
-    header strong { font-size: 1.05rem; }
-    main {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 1.5rem;
+    .brand-row, nav {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      min-width: 0;
     }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      padding: .4rem .55rem;
+      border-radius: 7px;
+    }
+    nav a:hover { background: var(--panel2); color: var(--text); }
+    header strong { font-size: 1.05rem; white-space: nowrap; }
+    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
     .grid {
       display: grid;
       gap: 1rem;
@@ -51,6 +62,7 @@
     }
     .muted { color: var(--muted); }
     .status-good { color: var(--good); }
+    .status-warn { color: var(--warn); }
     .status-bad { color: var(--bad); }
     input, button {
       width: 100%;
@@ -69,28 +81,50 @@
       border: 0;
       font-weight: 700;
     }
-    .inline-button {
-      width: auto;
-      padding: .45rem .75rem;
-      margin: 0;
-    }
-    .flash {
+    .inline-button { width: auto; padding: .45rem .75rem; margin: 0; }
+    .flash, .error-box {
       border: 1px solid var(--bad);
       background: color-mix(in srgb, var(--bad) 12%, var(--panel));
-      padding: .75rem;
+      padding: .85rem;
       border-radius: 8px;
       margin-bottom: 1rem;
     }
-    code {
+    code { background: var(--panel2); padding: .15rem .35rem; border-radius: 5px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      text-align: left;
+      padding: .8rem .65rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    th { color: var(--muted); font-size: .85rem; font-weight: 600; }
+    .table-wrap { overflow-x: auto; }
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: .22rem .55rem;
+      font-size: .82rem;
       background: var(--panel2);
-      padding: .15rem .35rem;
-      border-radius: 5px;
+    }
+    @media (max-width: 700px) {
+      header { align-items: flex-start; }
+      .brand-row { align-items: flex-start; flex-direction: column; }
+      nav { flex-wrap: wrap; }
+      main { padding: 1rem; }
     }
   </style>
 </head>
 <body>
 <header>
-  <strong>VPN Router</strong>
+  <div class="brand-row">
+    <strong>VPN Router</strong>
+    {% if current_user.is_authenticated %}
+    <nav aria-label="Main navigation">
+      <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+      <a href="{{ url_for('clients.index') }}">WG-Easy Clients</a>
+    </nav>
+    {% endif %}
+  </div>
   {% if current_user.is_authenticated %}
   <form method="post" action="{{ url_for('auth.logout') }}">
     <button class="inline-button" type="submit">Log out</button>

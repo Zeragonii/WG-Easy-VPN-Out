@@ -26,6 +26,10 @@ services:
 
       # WG-Easy integration will use this later.
       WG_EASY_URL: "http://127.0.0.1:51821"
+      WG_EASY_USERNAME: "CHANGE-ME"
+      WG_EASY_PASSWORD: "CHANGE-ME"
+      WG_EASY_VERIFY_TLS: "true"
+      APP_VERSION: "0.2.0"
 
     volumes:
       - vpn-router-data:/data

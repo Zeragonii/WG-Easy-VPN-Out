@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Foundation status</h1>
+<h1>System status</h1>
 <p class="muted">
-  This build deliberately reports networking state but does not modify it.
+  v0.2 adds read-only WG-Easy client discovery. Routing changes are still disabled.
 </p>
 
 <div class="grid">
@@ -43,8 +43,7 @@
 <div class="card" style="margin-top:1rem;">
   <h2>Next milestone</h2>
   <p>
-    Add VPN Client models and read-only WG-Easy client discovery before enabling
-    any nftables or policy-routing writes.
+    Verify WG-Easy discovery, then add outbound VPN-client management. No nftables or policy-routing writes are enabled yet.
   </p>
 </div>
 {% endblock %}

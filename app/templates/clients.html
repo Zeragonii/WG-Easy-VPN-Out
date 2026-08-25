@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}WG-Easy Clients · VPN Router{% endblock %}
+{% block content %}
+<h1>WG-Easy Clients</h1>
+<p class="muted">
+  Read-only discovery from the WG-Easy API. No routing state is changed on this page.
+</p>
+
+{% if error %}
+  <div class="error-box">
+    <strong>WG-Easy API unavailable</strong>
+    <div style="margin-top:.35rem;">{{ error }}</div>
+  </div>
+{% else %}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+      <div>
+        <strong>{{ clients|length }} client{% if clients|length != 1 %}s{% endif %} discovered</strong>
+        <div class="muted" style="margin-top:.2rem;">Source: WG-Easy <code>/api/client</code></div>
+      </div>
+      <a href="{{ url_for('clients.index') }}" style="color:var(--accent);">Refresh</a>
+    </div>
+
+    {% if clients %}
+    <div class="table-wrap" style="margin-top:.8rem;">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>IPv4</th>
+            <th>Enabled</th>
+            <th>Connection</th>
+            <th>Latest handshake</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for client in clients %}
+          <tr>
+            <td>
+              <strong>{{ client.name }}</strong>
+              <div class="muted" style="font-size:.8rem;">ID {{ client.external_id }}</div>
+            </td>
+            <td><code>{{ client.ipv4_address }}</code></td>
+            <td>
+              {% if client.enabled %}
+                <span class="status-good">● Enabled</span>
+              {% else %}
+                <span class="status-bad">● Disabled</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if client.online is sameas true %}
+                <span class="status-good">● Online</span>
+              {% elif client.online is sameas false %}
+                <span class="muted">○ Offline</span>
+              {% else %}
+                <span class="status-warn">● Unknown</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if client.latest_handshake_at %}
+                {{ client.latest_handshake_at }}
+              {% else %}
+                <span class="muted">Not reported</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="muted" style="margin-bottom:0;">WG-Easy returned no clients.</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}
