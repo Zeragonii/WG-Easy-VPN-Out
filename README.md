@@ -652,3 +652,7 @@ See `RELEASE_CHECKLIST.md` for the manual tests to perform before tagging
 ## v0.9.3a - Preflight UI hotfix
 
 Fixes the Diagnostics **Run preflight** button. The preflight JavaScript is now rendered after the Diagnostics content rather than inside the document title/head block, so the DOM elements exist before event listeners are attached.
+
+## v0.9.3b - Resilience accounting hotfix
+
+A retry process successfully starting is no longer counted as a successful VPN connection. Retry failures and exponential backoff remain intact until the tunnel is actually observed as connected.

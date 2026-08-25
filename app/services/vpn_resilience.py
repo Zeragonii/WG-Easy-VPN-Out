@@ -170,9 +170,19 @@ class VPNResilienceManager:
             )
             return False
 
-        self.reset(profile.id, success=True)
+        # Starting an OpenVPN process is not the same as establishing a
+        # working tunnel. Preserve the existing failure count until a later
+        # resilience tick observes status == "connected". This also keeps
+        # last_success_at meaningful and allows repeated connecting timeouts
+        # to accumulate exponential backoff correctly.
+        state = self._state_for(profile.id)
+        state.next_retry_at = None
+        state.gave_up = False
+        self._save_state()
+
         self.app.logger.info(
-            "Retry start succeeded for profile %s (%s)",
+            "Retry process started for profile %s (%s); "
+            "awaiting confirmed tunnel connection.",
             profile.id,
             profile.name,
         )

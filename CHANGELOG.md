@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.3b
+
+- Fixed VPN resilience retry accounting: successfully spawning an OpenVPN
+  process is no longer treated as a successful VPN connection.
+- Failure counts now survive subsequent retry starts and accumulate across
+  repeated connecting timeouts, allowing exponential backoff to work as
+  intended.
+- `last_success_at` is now updated only after the resilience manager actually
+  observes a connected tunnel.
+
 ## 0.9.3a
 
 - Fixed Diagnostics release-readiness JavaScript being emitted inside the
