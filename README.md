@@ -451,3 +451,38 @@ Examples that compare correctly:
 
 The project's convention intentionally treats an added suffix as a later
 micro-patch, so `0.7.5a` is considered newer than `0.7.5`.
+
+
+## v0.8.0 - Backup and Restore
+
+Adds authenticated backup and restore under **Backup & Restore**.
+
+Backups are structured ZIP archives containing:
+
+- `manifest.json`
+- `data.json`
+- VPN configuration files under `configs/openvpn/` and `configs/wireguard/`
+- optionally `secret-key.txt`
+
+Persistent data includes VPN profiles, encrypted credentials, routing groups,
+fallback settings, policy allocations and WG-Easy client assignments.
+
+Runtime logs, PID/auth files, retry state, live tunnel state and transient route
+probe data are intentionally excluded.
+
+### SECRET_KEY choice
+
+By default the application secret is not included. The UI allows the operator
+to reveal/copy the current key for separate secure storage.
+
+An operator can instead explicitly include `SECRET_KEY` in the archive after
+acknowledging that compromise of such a backup may expose encrypted VPN
+credentials and application session integrity.
+
+If a restored archive includes a different key, the application does not try
+to mutate Portainer/container environment variables. It restores the data and
+prominently instructs the operator to set the included key as `SECRET_KEY` and
+redeploy before encrypted VPN credentials can be used.
+
+Restore validates archive structure, paths, entity references and required
+configuration files before replacing current persistent configuration.

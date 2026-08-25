@@ -230,7 +230,7 @@ def delete(profile_id):
     from .models import RoutingGroup
     in_use = db.session.execute(
         db.select(RoutingGroup).where(RoutingGroup.vpn_profile_id == profile.id)
-    ).scalar_one_or_none()
+    ).scalars().first()
     if in_use is not None:
         flash(
             f"Cannot delete '{profile.name}' while routing group "

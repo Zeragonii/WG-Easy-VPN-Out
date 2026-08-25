@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Backup & Restore · VPN Router{% endblock %}
+{% block content %}
+<h1>Backup & Restore</h1>
+<p class="muted">
+  Export portable VPN Router configuration or replace this instance from a
+  previously created backup. Runtime logs, PIDs, retry state and transient
+  routing state are intentionally excluded.
+</p>
+
+<div class="grid">
+  <section class="card">
+    <h2>Create backup</h2>
+    <p>
+      Includes VPN profiles and configuration files, routing groups, and
+      WG-Easy client assignments.
+    </p>
+
+    <form method="post" action="{{ url_for('backups.export') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label style="display:flex;gap:.6rem;align-items:flex-start;">
+        <input id="include-secret" type="checkbox" name="include_secret" value="1"
+               style="width:auto;margin-top:.2rem;">
+        <span>
+          Include <code>SECRET_KEY</code> in the backup
+          <div class="muted" style="font-size:.85rem;margin-top:.2rem;">
+            Makes encrypted VPN credentials fully portable.
+          </div>
+        </span>
+      </label>
+
+      <div id="secret-warning" class="error-box" style="display:none;margin-top:1rem;">
+        <strong>Security warning</strong>
+        <p style="margin-bottom:.5rem;">
+          Anyone who obtains a backup containing <code>SECRET_KEY</code> may be
+          able to decrypt stored VPN credentials and forge application sessions.
+          Protect the archive like a password vault.
+        </p>
+        <label style="display:flex;gap:.6rem;align-items:flex-start;">
+          <input id="ack-secret" type="checkbox" name="acknowledge_secret" value="1"
+                 style="width:auto;margin-top:.2rem;">
+          <span>I understand the additional risk.</span>
+        </label>
+      </div>
+
+      <button type="submit" style="margin-top:1rem;">Download backup</button>
+    </form>
+
+    <hr style="border:0;border-top:1px solid var(--border);margin:1rem 0;">
+
+    <h3>Store the key separately instead</h3>
+    <p class="muted">
+      Recommended if you want the backup archive itself to contain no application secret.
+    </p>
+    <button id="reveal-secret" type="button" class="inline-button">
+      Reveal current SECRET_KEY
+    </button>
+    <div id="secret-output" style="display:none;margin-top:.8rem;">
+      <label>Current SECRET_KEY</label>
+      <input id="secret-value" type="text" readonly autocomplete="off">
+      <button id="copy-secret" type="button" class="inline-button" style="margin-top:.5rem;">
+        Copy key
+      </button>
+      <span id="copy-result" class="muted" style="margin-left:.5rem;"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Restore backup</h2>
+    <p class="status-warn">
+      Restore replaces current VPN profiles, routing groups, assignments and
+      stored VPN configuration files.
+    </p>
+
+    <form id="restore-form" method="post" enctype="multipart/form-data"
+          action="{{ url_for('backups.restore') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label for="backup-file">Backup ZIP</label>
+      <input id="backup-file" type="file" name="backup" accept=".zip,application/zip" required>
+
+      <div id="inspection" class="card" style="display:none;margin-top:1rem;background:var(--panel2);">
+        <strong>Backup summary</strong>
+        <div id="inspection-body" class="muted" style="margin-top:.5rem;"></div>
+      </div>
+
+      <label style="display:flex;gap:.6rem;align-items:flex-start;">
+        <input type="checkbox" name="confirm_replace" value="1"
+               style="width:auto;margin-top:.2rem;" required>
+        <span>
+          I understand this will replace the current persistent VPN Router configuration.
+        </span>
+      </label>
+
+      <button type="submit" class="danger-button" style="margin-top:1rem;">
+        Restore and replace configuration
+      </button>
+    </form>
+  </section>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2>What is backed up?</h2>
+  <div class="grid">
+    <div>
+      <strong>Included</strong>
+      <p class="muted">
+        VPN profiles, encrypted credentials, OpenVPN/WireGuard config files,
+        routing groups, fallback settings, policy marks/tables and WG-Easy
+        client assignments.
+      </p>
+    </div>
+    <div>
+      <strong>Excluded</strong>
+      <p class="muted">
+        Runtime logs, PID/auth files, retry state, probe tables, live tunnel
+        state and other disposable runtime data.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const includeSecret = document.getElementById("include-secret");
+  const warning = document.getElementById("secret-warning");
+  const ack = document.getElementById("ack-secret");
+
+  function syncSecretWarning() {
+    warning.style.display = includeSecret.checked ? "" : "none";
+    if (!includeSecret.checked) ack.checked = false;
+  }
+  includeSecret.addEventListener("change", syncSecretWarning);
+  syncSecretWarning();
+
+  const reveal = document.getElementById("reveal-secret");
+  const output = document.getElementById("secret-output");
+  const value = document.getElementById("secret-value");
+  const copy = document.getElementById("copy-secret");
+  const copyResult = document.getElementById("copy-result");
+
+  reveal.addEventListener("click", async () => {
+    reveal.disabled = true;
+    try {
+      const response = await fetch("{{ url_for('backups.secret') }}", {
+        headers: {"Accept": "application/json"},
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error("Could not read key");
+      value.value = data.secret_key || "";
+      output.style.display = "";
+    } catch (_) {
+      copyResult.textContent = "Could not retrieve key.";
+    } finally {
+      reveal.disabled = false;
+    }
+  });
+
+  copy.addEventListener("click", async () => {
+    copyResult.textContent = "";
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value.value);
+      } else {
+        value.focus();
+        value.select();
+        document.execCommand("copy");
+      }
+      copyResult.textContent = "Copied.";
+    } catch (_) {
+      copyResult.textContent = "Select and copy the key manually.";
+    }
+  });
+
+  const backupFile = document.getElementById("backup-file");
+  const inspection = document.getElementById("inspection");
+  const inspectionBody = document.getElementById("inspection-body");
+
+  backupFile.addEventListener("change", async () => {
+    inspection.style.display = "none";
+    if (!backupFile.files.length) return;
+
+    const data = new FormData();
+    data.append("backup", backupFile.files[0]);
+    data.append("csrf_token", "{{ csrf_token() }}");
+
+    try {
+      const response = await fetch("{{ url_for('backups.inspect') }}", {
+        method: "POST",
+        body: data,
+        headers: {"Accept": "application/json"}
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        inspectionBody.innerHTML =
+          `<span class="status-bad">${result.error || "Backup could not be inspected."}</span>`;
+        inspection.style.display = "";
+        return;
+      }
+
+      const m = result.manifest;
+      const c = result.counts;
+      let secretText = "SECRET_KEY not included";
+      if (result.secret.included && result.secret.matches_current) {
+        secretText = "SECRET_KEY included and matches this instance";
+      } else if (result.secret.included) {
+        secretText = "SECRET_KEY included but differs from this instance";
+      }
+
+      inspectionBody.innerHTML = `
+        <div>Created: <strong>${m.created_at || "unknown"}</strong></div>
+        <div>App version: <strong>${m.application_version || "unknown"}</strong></div>
+        <div>VPN profiles: <strong>${c.vpn_profiles}</strong></div>
+        <div>Routing groups: <strong>${c.routing_groups}</strong></div>
+        <div>Client assignments: <strong>${c.client_assignments}</strong></div>
+        <div style="margin-top:.4rem;">${secretText}</div>
+      `;
+      inspection.style.display = "";
+    } catch (_) {
+      inspectionBody.innerHTML =
+        '<span class="status-bad">Backup inspection failed.</span>';
+      inspection.style.display = "";
+    }
+  });
+})();
+</script>
+{% endblock %}

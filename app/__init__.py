@@ -42,12 +42,14 @@ def create_app():
     from .main import bp as main_bp
     from .vpn_profiles import bp as vpn_profiles_bp
     from .routing_groups import bp as routing_groups_bp
+    from .backups import bp as backups_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(clients_bp)
     app.register_blueprint(vpn_profiles_bp)
     app.register_blueprint(routing_groups_bp)
+    app.register_blueprint(backups_bp)
 
     with app.app_context():
         db.create_all()
