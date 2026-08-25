@@ -281,3 +281,14 @@ Dashboard now shows:
 - configured reconcile and retry timings
 - networking tool availability
 - current feature-set summary and next milestone
+
+
+## v0.6.2 - WG-Easy dashboard client totals
+
+Adds a live `Total clients` metric to the WG-Easy dashboard card.
+
+- `Total clients` = number currently returned by WG-Easy `/api/client`
+- `Assigned clients` = number with a saved VPN Router routing-group assignment
+
+If the WG-Easy API is temporarily unavailable, the dashboard shows the total
+as unavailable while retaining the persisted assigned-client count.

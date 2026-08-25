@@ -28,6 +28,14 @@
       {% endif %}
     </p>
     <p>
+      Total clients:
+      {% if status.operational.wg_easy_total_clients is not none %}
+        <strong>{{ status.operational.wg_easy_total_clients }}</strong>
+      {% else %}
+        <span class="status-warn">◐ unavailable</span>
+      {% endif %}
+    </p>
+    <p>
       Assigned clients:
       <strong>{{ status.operational.client_assignments }}</strong>
     </p>

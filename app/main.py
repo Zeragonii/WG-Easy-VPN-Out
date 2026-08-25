@@ -8,6 +8,7 @@ from flask_login import login_required
 from . import db
 from .models import ClientAssignment, RoutingGroup, VPNProfile
 from .services.vpn_runtime import VPNRuntimeService
+from .services.wg_easy import WGEasyError, WGEasyService
 
 bp = Blueprint("main", __name__)
 
@@ -36,10 +37,35 @@ def _count_model(model):
     ).scalar_one()
 
 
+def _wg_easy_service():
+    verify_tls = os.getenv("WG_EASY_VERIFY_TLS", "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+    return WGEasyService(
+        base_url=os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
+        username=os.getenv("WG_EASY_USERNAME", ""),
+        password=os.getenv("WG_EASY_PASSWORD", ""),
+        verify_tls=verify_tls,
+    )
+
+
+def _wg_easy_client_count():
+    try:
+        return len(_wg_easy_service().get_clients()), None
+    except WGEasyError as exc:
+        return None, str(exc)
+
+
 def operational_status():
     profiles = db.session.execute(
         db.select(VPNProfile).order_by(VPNProfile.id.asc())
     ).scalars().all()
+
+    wg_easy_total_clients, wg_easy_error = _wg_easy_client_count()
 
     runtime = VPNRuntimeService()
     connected = 0
@@ -66,12 +92,14 @@ def operational_status():
         "vpn_connecting": connecting,
         "routing_groups": _count_model(RoutingGroup),
         "client_assignments": _count_model(ClientAssignment),
+        "wg_easy_total_clients": wg_easy_total_clients,
+        "wg_easy_error": wg_easy_error,
     }
 
 
 def system_status():
     return {
-        "version": os.getenv("APP_VERSION", "0.6.1"),
+        "version": os.getenv("APP_VERSION", "0.6.2"),
         "wg_easy_url": os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
         "wg0_present": wg0_present(),
         "routing_reconcile_interval": os.getenv(
