@@ -213,6 +213,7 @@
       inspectionBody.innerHTML = `
         <div>Created: <strong>${m.created_at || "unknown"}</strong></div>
         <div>App version: <strong>${m.application_version || "unknown"}</strong></div>
+        <div>Schema: <strong>v${result.schema.backup}</strong></div>
         <div>VPN profiles: <strong>${c.vpn_profiles}</strong></div>
         <div>Routing groups: <strong>${c.routing_groups}</strong></div>
         <div>Client assignments: <strong>${c.client_assignments}</strong></div>

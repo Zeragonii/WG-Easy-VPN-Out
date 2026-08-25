@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import io
+import ipaddress
 import json
 import os
+import re
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 import zipfile
 
+from .migrations import CURRENT_SCHEMA_VERSION
 from .vpn_runtime import VPNRuntimeService
 
 
 BACKUP_FORMAT = 1
 MAX_BACKUP_BYTES = 16 * 1024 * 1024
+MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 256
+MAX_ENTITY_ROWS = 10000
+SAFE_CONFIG_NAME = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
 
 class BackupError(RuntimeError):
@@ -81,6 +90,7 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
         "format": BACKUP_FORMAT,
         "application": "WG-Easy-VPN-Out",
         "application_version": version,
+        "schema_version": CURRENT_SCHEMA_VERSION,
         "created_at": _now().isoformat(),
         "secret_key_included": bool(include_secret),
         "contents": {
@@ -125,6 +135,232 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
     return buffer, f"vpn-router-backup-{stamp}.zip", manifest
 
 
+
+def _require_int(value, label, minimum=1):
+    if isinstance(value, bool):
+        raise BackupError(f"{label} must be an integer.")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise BackupError(f"{label} must be an integer.") from exc
+    if parsed < minimum:
+        raise BackupError(f"{label} must be at least {minimum}.")
+    return parsed
+
+
+def _require_text(value, label, max_length, allow_empty=False):
+    if value is None:
+        if allow_empty:
+            return None
+        raise BackupError(f"{label} is required.")
+    if not isinstance(value, str):
+        raise BackupError(f"{label} must be text.")
+    value = value.strip()
+    if not value and not allow_empty:
+        raise BackupError(f"{label} cannot be empty.")
+    if len(value) > max_length:
+        raise BackupError(f"{label} exceeds {max_length} characters.")
+    return value or None
+
+
+def _validate_backup_data(data, configs):
+    for key in ("vpn_profiles", "routing_groups", "client_assignments"):
+        rows = data.get(key)
+        if not isinstance(rows, list):
+            raise BackupError(f"Backup data is missing '{key}'.")
+        if len(rows) > MAX_ENTITY_ROWS:
+            raise BackupError(f"Backup contains too many {key} rows.")
+
+    profiles = data["vpn_profiles"]
+    groups = data["routing_groups"]
+    assignments = data["client_assignments"]
+
+    profile_ids = set()
+    profile_names = set()
+    config_keys = set()
+
+    for index, row in enumerate(profiles, 1):
+        if not isinstance(row, dict):
+            raise BackupError(f"VPN profile row {index} is invalid.")
+
+        profile_id = _require_int(row.get("id"), f"VPN profile {index} ID")
+        name = _require_text(row.get("name"), f"VPN profile {index} name", 120)
+        vpn_type = row.get("vpn_type")
+        if vpn_type not in ("openvpn", "wireguard"):
+            raise BackupError(
+                f"VPN profile '{name}' has unsupported type {vpn_type!r}."
+            )
+
+        filename = _require_text(
+            row.get("config_filename"),
+            f"VPN profile '{name}' config filename",
+            255,
+        )
+        if (
+            not SAFE_CONFIG_NAME.fullmatch(filename)
+            or filename in (".", "..")
+            or "/" in filename
+            or "\\" in filename
+        ):
+            raise BackupError(
+                f"VPN profile '{name}' has an unsafe config filename."
+            )
+
+        provider = row.get("provider")
+        if provider is not None:
+            _require_text(provider, f"VPN profile '{name}' provider", 120, True)
+        username = row.get("username")
+        if username is not None:
+            _require_text(username, f"VPN profile '{name}' username", 255, True)
+        password = row.get("password")
+        if password is not None and not isinstance(password, str):
+            raise BackupError(
+                f"VPN profile '{name}' encrypted password is invalid."
+            )
+        if len(password or "") > 4096:
+            raise BackupError(
+                f"VPN profile '{name}' encrypted password is unexpectedly long."
+            )
+        if not isinstance(row.get("enabled", False), bool):
+            raise BackupError(
+                f"VPN profile '{name}' enabled flag must be boolean."
+            )
+
+        folded = name.casefold()
+        if profile_id in profile_ids:
+            raise BackupError("Backup contains duplicate VPN profile IDs.")
+        if folded in profile_names:
+            raise BackupError("Backup contains duplicate VPN profile names.")
+        profile_ids.add(profile_id)
+        profile_names.add(folded)
+
+        folder = "openvpn" if vpn_type == "openvpn" else "wireguard"
+        key = (folder, filename)
+        if key in config_keys:
+            raise BackupError(
+                f"Multiple VPN profiles reference the same config file: {filename}"
+            )
+        config_keys.add(key)
+        if key not in configs:
+            raise BackupError(
+                f"Backup is missing config for VPN profile '{name}'."
+            )
+
+    group_ids = set()
+    group_names = set()
+    fwmarks = set()
+    table_ids = set()
+
+    for index, row in enumerate(groups, 1):
+        if not isinstance(row, dict):
+            raise BackupError(f"Routing group row {index} is invalid.")
+
+        group_id = _require_int(row.get("id"), f"Routing group {index} ID")
+        name = _require_text(row.get("name"), f"Routing group {index} name", 120)
+        fallback = row.get("fallback_mode", "block")
+        if fallback not in ("block", "wan"):
+            raise BackupError(
+                f"Routing group '{name}' has invalid fallback mode."
+            )
+
+        target = row.get("vpn_profile_id")
+        if target is not None:
+            target = _require_int(
+                target,
+                f"Routing group '{name}' VPN profile ID",
+            )
+            if target not in profile_ids:
+                raise BackupError(
+                    f"Routing group '{name}' references a missing VPN profile."
+                )
+
+        fwmark = _require_int(row.get("fwmark"), f"Routing group '{name}' fwmark")
+        table_id = _require_int(
+            row.get("table_id"),
+            f"Routing group '{name}' table ID",
+        )
+        expected_mark = 0x100 + group_id
+        expected_table = 10000 + group_id
+        if fwmark != expected_mark or table_id != expected_table:
+            raise BackupError(
+                f"Routing group '{name}' has inconsistent policy allocation."
+            )
+
+        folded = name.casefold()
+        if group_id in group_ids:
+            raise BackupError("Backup contains duplicate routing group IDs.")
+        if folded in group_names:
+            raise BackupError("Backup contains duplicate routing group names.")
+        if fwmark in fwmarks or table_id in table_ids:
+            raise BackupError("Backup contains duplicate routing allocations.")
+
+        group_ids.add(group_id)
+        group_names.add(folded)
+        fwmarks.add(fwmark)
+        table_ids.add(table_id)
+
+    assignment_ids = set()
+    external_ids = set()
+    ipv4_addresses = set()
+
+    for index, row in enumerate(assignments, 1):
+        if not isinstance(row, dict):
+            raise BackupError(f"Client assignment row {index} is invalid.")
+
+        assignment_id = _require_int(
+            row.get("id"),
+            f"Client assignment {index} ID",
+        )
+        external_id = _require_text(
+            row.get("external_id"),
+            f"Client assignment {index} external ID",
+            255,
+        )
+        client_name = _require_text(
+            row.get("client_name"),
+            f"Client assignment {index} name",
+            255,
+        )
+        ipv4 = _require_text(
+            row.get("ipv4_address"),
+            f"Client assignment '{client_name}' IPv4 address",
+            64,
+        )
+        try:
+            parsed_ip = ipaddress.IPv4Address(ipv4)
+        except ipaddress.AddressValueError as exc:
+            raise BackupError(
+                f"Client assignment '{client_name}' has invalid IPv4 address."
+            ) from exc
+
+        group_id = _require_int(
+            row.get("routing_group_id"),
+            f"Client assignment '{client_name}' routing group ID",
+        )
+        if group_id not in group_ids:
+            raise BackupError(
+                f"Client '{client_name}' references a missing routing group."
+            )
+
+        if assignment_id in assignment_ids:
+            raise BackupError("Backup contains duplicate assignment IDs.")
+        if external_id in external_ids:
+            raise BackupError("Backup contains duplicate WG-Easy client IDs.")
+        if str(parsed_ip) in ipv4_addresses:
+            raise BackupError("Backup contains duplicate assigned IPv4 addresses.")
+
+        assignment_ids.add(assignment_id)
+        external_ids.add(external_id)
+        ipv4_addresses.add(str(parsed_ip))
+
+    unexpected_configs = set(configs) - config_keys
+    if unexpected_configs:
+        raise BackupError(
+            "Backup contains VPN configuration files that are not referenced "
+            "by any profile."
+        )
+
+
 def inspect_backup(raw):
     if not raw:
         raise BackupError("The uploaded backup is empty.")
@@ -137,21 +373,52 @@ def inspect_backup(raw):
         raise BackupError("The uploaded file is not a valid ZIP backup.") from exc
 
     with archive:
-        names = archive.namelist()
+        infos = archive.infolist()
+        if len(infos) > MAX_ARCHIVE_MEMBERS:
+            raise BackupError("Backup contains too many archive members.")
+
+        names = [info.filename for info in infos]
+        if len(names) != len(set(names)):
+            raise BackupError("Backup contains duplicate archive filenames.")
+
+        uncompressed = sum(info.file_size for info in infos)
+        if uncompressed > MAX_UNCOMPRESSED_BYTES:
+            raise BackupError(
+                "Backup expands beyond the 32 MiB safety limit."
+            )
+
         if "manifest.json" not in names or "data.json" not in names:
             raise BackupError("Backup is missing manifest.json or data.json.")
 
-        # Reject path traversal and unexpected absolute paths.
+        allowed_root = {"manifest.json", "data.json", "secret-key.txt"}
         for name in names:
             path = Path(name)
-            if path.is_absolute() or ".." in path.parts:
+            if (
+                path.is_absolute()
+                or ".." in path.parts
+                or "\\" in name
+                or "\x00" in name
+            ):
                 raise BackupError("Backup contains an unsafe file path.")
+
+            if name in allowed_root or name.startswith("configs/"):
+                continue
+            if name.endswith("/") and name.rstrip("/") in (
+                "configs",
+                "configs/openvpn",
+                "configs/wireguard",
+            ):
+                continue
+            raise BackupError(f"Backup contains unexpected file: {name}")
 
         try:
             manifest = json.loads(archive.read("manifest.json"))
             data = json.loads(archive.read("data.json"))
         except (json.JSONDecodeError, KeyError, UnicodeDecodeError) as exc:
             raise BackupError("Backup metadata is invalid.") from exc
+
+        if not isinstance(manifest, dict) or not isinstance(data, dict):
+            raise BackupError("Backup metadata has an invalid structure.")
 
         if manifest.get("application") != "WG-Easy-VPN-Out":
             raise BackupError("This backup belongs to a different application.")
@@ -160,9 +427,18 @@ def inspect_backup(raw):
                 f"Unsupported backup format: {manifest.get('format')!r}."
             )
 
-        for key in ("vpn_profiles", "routing_groups", "client_assignments"):
-            if not isinstance(data.get(key), list):
-                raise BackupError(f"Backup data is missing '{key}'.")
+        backup_schema = manifest.get("schema_version", 1)
+        backup_schema = _require_int(
+            backup_schema,
+            "Backup schema version",
+            minimum=1,
+        )
+        if backup_schema > CURRENT_SCHEMA_VERSION:
+            raise BackupError(
+                f"Backup schema v{backup_schema} is newer than this "
+                f"application supports (v{CURRENT_SCHEMA_VERSION}). "
+                "Upgrade VPN Router before restoring this backup."
+            )
 
         secret = None
         if manifest.get("secret_key_included"):
@@ -170,22 +446,49 @@ def inspect_backup(raw):
                 raise BackupError(
                     "Manifest says SECRET_KEY is included, but it is missing."
                 )
-            secret = archive.read("secret-key.txt").decode("utf-8").strip()
+            try:
+                secret = archive.read("secret-key.txt").decode("utf-8").strip()
+            except UnicodeDecodeError as exc:
+                raise BackupError("Included SECRET_KEY is not valid text.") from exc
             if not secret:
                 raise BackupError("Included SECRET_KEY is empty.")
+            if len(secret) > 4096:
+                raise BackupError("Included SECRET_KEY is unexpectedly long.")
+        elif "secret-key.txt" in names:
+            raise BackupError(
+                "Backup contains secret-key.txt but the manifest does not "
+                "declare SECRET_KEY inclusion."
+            )
 
         configs = {}
-        for name in names:
+        for info in infos:
+            name = info.filename
             if not name.startswith("configs/") or name.endswith("/"):
                 continue
+
             parts = Path(name).parts
             if len(parts) != 3 or parts[1] not in ("openvpn", "wireguard"):
                 raise BackupError(f"Unexpected configuration path: {name}")
-            content = archive.read(name)
-            if len(content) > 1024 * 1024:
+            filename = parts[2]
+            if (
+                not SAFE_CONFIG_NAME.fullmatch(filename)
+                or filename in (".", "..")
+            ):
+                raise BackupError(f"Unsafe configuration filename: {filename}")
+            if info.file_size > 1024 * 1024:
                 raise BackupError(f"Configuration file is too large: {name}")
-            configs[(parts[1], parts[2])] = content
 
+            content = archive.read(info)
+            try:
+                content.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise BackupError(
+                    f"VPN configuration is not valid UTF-8 text: {name}"
+                ) from exc
+
+            configs[(parts[1], filename)] = content
+
+    _validate_backup_data(data, configs)
     return manifest, data, secret, configs
 
 
@@ -200,131 +503,162 @@ def restore_backup(
     current_secret = os.getenv("SECRET_KEY", "")
     secret_matches = included_secret is None or included_secret == current_secret
 
-    # Validate all references before touching current state.
-    profile_ids = {int(p["id"]) for p in data["vpn_profiles"]}
-    group_ids = {int(g["id"]) for g in data["routing_groups"]}
-
-    if len(profile_ids) != len(data["vpn_profiles"]):
-        raise BackupError("Backup contains duplicate VPN profile IDs.")
-    if len(group_ids) != len(data["routing_groups"]):
-        raise BackupError("Backup contains duplicate routing group IDs.")
-
-    for group in data["routing_groups"]:
-        target = group.get("vpn_profile_id")
-        if target is not None and int(target) not in profile_ids:
-            raise BackupError(
-                f"Routing group '{group.get('name')}' references a missing VPN profile."
-            )
-
-    for assignment in data["client_assignments"]:
-        if int(assignment["routing_group_id"]) not in group_ids:
-            raise BackupError(
-                f"Client '{assignment.get('client_name')}' references a missing routing group."
-            )
-
-    # Ensure every referenced config exists in the archive.
-    for profile in data["vpn_profiles"]:
-        folder = "openvpn" if profile["vpn_type"] == "openvpn" else "wireguard"
-        key = (folder, profile["config_filename"])
-        if key not in configs:
-            raise BackupError(
-                f"Backup is missing config for VPN profile '{profile['name']}'."
-            )
-
-    runtime = VPNRuntimeService()
-    current_profiles = db.session.execute(
-        db.select(VPNProfile)
-    ).scalars().all()
-
-    # Stop current tunnels before replacing policy/database state.
-    for profile in current_profiles:
-        try:
-            runtime.stop(profile)
-        except Exception:
-            pass
+    # inspect_backup() performs complete structural/reference validation
+    # before any tunnel or persistent state is touched.
 
     root = _data_root()
     openvpn_dir = root / "openvpn"
     wireguard_dir = root / "wireguard"
+    backups_dir = root / "backups"
     openvpn_dir.mkdir(parents=True, exist_ok=True)
     wireguard_dir.mkdir(parents=True, exist_ok=True)
+    backups_dir.mkdir(parents=True, exist_ok=True)
 
-    # Snapshot config files in memory for rollback. These are intentionally
-    # limited to the app's small text config directories.
-    old_files = {}
-    for folder in (openvpn_dir, wireguard_dir):
-        for path in folder.iterdir():
-            if path.is_file():
-                old_files[(folder.name, path.name)] = path.read_bytes()
+    # Stage and verify all restored config files before stopping live tunnels.
+    stage_root = Path(
+        tempfile.mkdtemp(prefix="restore-stage-", dir=backups_dir)
+    )
+    stage_openvpn = stage_root / "openvpn"
+    stage_wireguard = stage_root / "wireguard"
+    stage_openvpn.mkdir(parents=True)
+    stage_wireguard.mkdir(parents=True)
 
     try:
-        # Replace ORM-managed persistent configuration as one DB transaction.
-        db.session.query(ClientAssignment).delete()
-        db.session.query(RoutingGroup).delete()
-        db.session.query(VPNProfile).delete()
-        db.session.flush()
-
-        for row in data["vpn_profiles"]:
-            db.session.add(VPNProfile(
-                id=int(row["id"]),
-                name=row["name"],
-                provider=row.get("provider"),
-                vpn_type=row["vpn_type"],
-                config_filename=row["config_filename"],
-                username=row.get("username"),
-                password=row.get("password"),
-                enabled=bool(row.get("enabled")),
-            ))
-        db.session.flush()
-
-        for row in data["routing_groups"]:
-            db.session.add(RoutingGroup(
-                id=int(row["id"]),
-                name=row["name"],
-                vpn_profile_id=(
-                    int(row["vpn_profile_id"])
-                    if row.get("vpn_profile_id") is not None
-                    else None
-                ),
-                fallback_mode=row.get("fallback_mode", "block"),
-                fwmark=row.get("fwmark"),
-                table_id=row.get("table_id"),
-            ))
-        db.session.flush()
-
-        for row in data["client_assignments"]:
-            db.session.add(ClientAssignment(
-                id=int(row["id"]),
-                external_id=row["external_id"],
-                client_name=row["client_name"],
-                ipv4_address=row["ipv4_address"],
-                routing_group_id=int(row["routing_group_id"]),
-            ))
-
-        # Replace config directories only after DB validation has succeeded.
-        for folder in (openvpn_dir, wireguard_dir):
-            for path in folder.iterdir():
-                if path.is_file():
-                    path.unlink()
-
         for (folder_name, filename), content in configs.items():
-            target_dir = openvpn_dir if folder_name == "openvpn" else wireguard_dir
-            (target_dir / filename).write_bytes(content)
+            target_dir = (
+                stage_openvpn
+                if folder_name == "openvpn"
+                else stage_wireguard
+            )
+            target = target_dir / filename
+            target.write_bytes(content)
+            if target.read_bytes() != content:
+                raise BackupError(
+                    f"Could not verify staged VPN config: {filename}"
+                )
 
-        db.session.commit()
-
-    except Exception:
-        db.session.rollback()
-
-        # Restore original config files if replacement failed.
+        # Snapshot current files before any replacement.
+        old_files = {}
         for folder in (openvpn_dir, wireguard_dir):
             for path in folder.iterdir():
                 if path.is_file():
-                    path.unlink()
-        for (folder_name, filename), content in old_files.items():
-            target_dir = openvpn_dir if folder_name == "openvpn" else wireguard_dir
-            (target_dir / filename).write_bytes(content)
-        raise
+                    old_files[(folder.name, path.name)] = path.read_bytes()
+
+        runtime = VPNRuntimeService()
+        current_profiles = db.session.execute(
+            db.select(VPNProfile)
+        ).scalars().all()
+        previously_enabled = [
+            profile.id for profile in current_profiles if profile.enabled
+        ]
+
+        # Only after validation + staging succeeds do we disturb live tunnels.
+        for profile in current_profiles:
+            try:
+                runtime.stop(profile)
+            except Exception:
+                # Restore is replacing runtime state anyway; failures here
+                # should not corrupt the persistent rollback path.
+                pass
+
+        try:
+            # Replace ORM-managed persistent configuration as one transaction.
+            db.session.query(ClientAssignment).delete()
+            db.session.query(RoutingGroup).delete()
+            db.session.query(VPNProfile).delete()
+            db.session.flush()
+
+            for row in data["vpn_profiles"]:
+                db.session.add(VPNProfile(
+                    id=int(row["id"]),
+                    name=row["name"].strip(),
+                    provider=(row.get("provider") or None),
+                    vpn_type=row["vpn_type"],
+                    config_filename=row["config_filename"],
+                    username=(row.get("username") or None),
+                    password=row.get("password"),
+                    enabled=bool(row.get("enabled")),
+                ))
+            db.session.flush()
+
+            for row in data["routing_groups"]:
+                db.session.add(RoutingGroup(
+                    id=int(row["id"]),
+                    name=row["name"].strip(),
+                    vpn_profile_id=(
+                        int(row["vpn_profile_id"])
+                        if row.get("vpn_profile_id") is not None
+                        else None
+                    ),
+                    fallback_mode=row.get("fallback_mode", "block"),
+                    fwmark=int(row["fwmark"]),
+                    table_id=int(row["table_id"]),
+                ))
+            db.session.flush()
+
+            for row in data["client_assignments"]:
+                db.session.add(ClientAssignment(
+                    id=int(row["id"]),
+                    external_id=row["external_id"].strip(),
+                    client_name=row["client_name"].strip(),
+                    ipv4_address=str(
+                        ipaddress.IPv4Address(row["ipv4_address"])
+                    ),
+                    routing_group_id=int(row["routing_group_id"]),
+                ))
+            db.session.flush()
+
+            # Swap in verified staged files.
+            for folder in (openvpn_dir, wireguard_dir):
+                for path in folder.iterdir():
+                    if path.is_file():
+                        path.unlink()
+
+            for staged_dir, live_dir in (
+                (stage_openvpn, openvpn_dir),
+                (stage_wireguard, wireguard_dir),
+            ):
+                for path in staged_dir.iterdir():
+                    if path.is_file():
+                        (live_dir / path.name).write_bytes(
+                            path.read_bytes()
+                        )
+
+            db.session.commit()
+
+        except Exception:
+            db.session.rollback()
+
+            # Restore prior files.
+            for folder in (openvpn_dir, wireguard_dir):
+                for path in folder.iterdir():
+                    if path.is_file():
+                        path.unlink()
+
+            for (folder_name, filename), content in old_files.items():
+                target_dir = (
+                    openvpn_dir
+                    if folder_name == "openvpn"
+                    else wireguard_dir
+                )
+                (target_dir / filename).write_bytes(content)
+
+            # Best-effort recovery of tunnels that were enabled before the
+            # failed restore.
+            db.session.expire_all()
+            for profile_id in previously_enabled:
+                profile = db.session.get(VPNProfile, profile_id)
+                if profile is None or profile.vpn_type != "openvpn":
+                    continue
+                try:
+                    runtime.start(profile)
+                except Exception:
+                    pass
+
+            raise
+
+    finally:
+        shutil.rmtree(stage_root, ignore_errors=True)
 
     return {
         "manifest": manifest,
@@ -333,4 +667,5 @@ def restore_backup(
         "profiles": len(data["vpn_profiles"]),
         "groups": len(data["routing_groups"]),
         "assignments": len(data["client_assignments"]),
+        "schema_version": manifest.get("schema_version", 1),
     }

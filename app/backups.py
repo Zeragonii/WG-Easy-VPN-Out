@@ -94,6 +94,13 @@ def inspect():
     return jsonify({
         "ok": True,
         "manifest": manifest,
+        "schema": {
+            "backup": manifest.get("schema_version", 1),
+            "supported": __import__(
+                "app.services.migrations",
+                fromlist=["CURRENT_SCHEMA_VERSION"],
+            ).CURRENT_SCHEMA_VERSION,
+        },
         "counts": {
             "vpn_profiles": len(data["vpn_profiles"]),
             "routing_groups": len(data["routing_groups"]),

@@ -54,7 +54,14 @@ def create_app():
     app.register_blueprint(diagnostics_bp)
 
     with app.app_context():
+        # Fresh-install bootstrap only. Existing/future schema evolution is
+        # handled by the ordered migration framework below.
         db.create_all()
+
+        from .services.migrations import run_migrations
+        migration_result = run_migrations(db, app.logger)
+        app.extensions["schema_migrations"] = migration_result
+
         _bootstrap_admin()
 
         from .models import VPNProfile

@@ -5,6 +5,11 @@ import os
 import platform
 import subprocess
 
+from .migrations import (
+    CURRENT_SCHEMA_VERSION,
+    current_schema_version,
+    migration_history,
+)
 from .routing import RoutingEngine
 from .vpn_runtime import VPNRuntimeService
 
@@ -137,6 +142,11 @@ def build_diagnostics(
             "routing_groups": len(groups),
             "client_assignments": len(assignments),
         },
+        "schema": {
+            "current": current_schema_version(db),
+            "supported": CURRENT_SCHEMA_VERSION,
+            "history": migration_history(db),
+        },
         "services": (
             __import__(
                 "app.services.lifecycle",
@@ -173,6 +183,15 @@ def render_text(data):
         f"VPN profiles: {data['counts']['vpn_profiles']}",
         f"Routing groups: {data['counts']['routing_groups']}",
         f"Client assignments: {data['counts']['client_assignments']}",
+        "",
+        "Database schema",
+        "-" * 72,
+        f"Current: v{data['schema']['current']}",
+        f"Supported: v{data['schema']['supported']}",
+        *[
+            f"Applied v{row['version']} ({row['name']}) at {row['applied_at']}"
+            for row in data['schema']['history']
+        ],
         "",
         "Safe environment (secrets intentionally excluded)",
         "-" * 72,

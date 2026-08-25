@@ -23,6 +23,11 @@
     <p>VPN profiles: <strong>{{ diagnostics.counts.vpn_profiles }}</strong></p>
     <p>Routing groups: <strong>{{ diagnostics.counts.routing_groups }}</strong></p>
     <p>Assignments: <strong>{{ diagnostics.counts.client_assignments }}</strong></p>
+    <p>
+      DB schema:
+      <strong>v{{ diagnostics.schema.current }}</strong>
+      <span class="muted">/ supported v{{ diagnostics.schema.supported }}</span>
+    </p>
   </section>
 
   <section class="card">

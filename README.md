@@ -574,3 +574,51 @@ successful recovery timestamp.
 
 The observability service now uses a public `VPNRuntimeService.exit_ip()` API
 instead of directly calling the private `_exit_ip()` helper.
+
+
+## v0.9.2 - Migration and restore hardening
+
+### Versioned database migrations
+
+VPN Router now has an ordered schema-migration framework and a persistent
+`schema_migrations` table.
+
+Schema v1 is the baseline schema used through v0.9.1. Existing installations
+are validated and recorded as v1; fresh installs are bootstrapped from the
+SQLAlchemy metadata and then recorded through the same migration path.
+
+Future schema changes should be implemented as ordered migrations instead of
+relying on `db.create_all()` to evolve existing databases.
+
+Startup refuses a database whose recorded schema is newer than the running
+application supports.
+
+Diagnostics and new backups report the current schema version/history.
+
+### Restore validation
+
+Restore inspection now happens completely before live tunnels or persistent
+state are touched and validates:
+
+- backup application/format/schema compatibility
+- duplicate ZIP member names
+- path traversal and unexpected archive files
+- archive member count and total uncompressed size
+- UTF-8 VPN configuration files and safe filenames
+- required fields, types and length limits
+- duplicate profile/group/assignment IDs and names
+- duplicate WG-Easy external IDs and assigned IPv4 addresses
+- valid IPv4 client addresses
+- VPN profile and routing-group references
+- routing-group fwmark/table allocations against the expected deterministic IDs
+- unreferenced or missing VPN configuration files
+
+Backups created by a newer unsupported database schema are rejected with an
+explicit instruction to upgrade the application before restoring.
+
+### Staged restore writes
+
+VPN configuration files are now written and verified in a temporary staging
+directory before the live configuration is replaced. If the database/file
+replacement fails, the SQL transaction is rolled back and the previous config
+files are restored.
