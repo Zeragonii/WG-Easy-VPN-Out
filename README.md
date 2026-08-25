@@ -434,3 +434,20 @@ Examples:
 - `0` = check GitHub on every dashboard live-status request
 
 The exit-IP background polling behaviour is unchanged.
+
+
+## v0.7.5 - Flexible version comparison
+
+Update awareness now supports arbitrary numeric depth and alphabetic suffixes.
+
+Examples that compare correctly:
+
+- `0.7.5` < `0.7.5.1`
+- `0.7.5` < `0.7.5a`
+- `0.7.5a` < `0.7.5b`
+- `0.7.5.3` < `0.7.5.3a`
+- `0.7.5.9` < `0.7.5.10`
+- optional leading `v` is accepted
+
+The project's convention intentionally treats an added suffix as a later
+micro-patch, so `0.7.5a` is considered newer than `0.7.5`.

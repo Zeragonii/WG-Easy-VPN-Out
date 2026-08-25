@@ -35,20 +35,76 @@ def _installed_version():
     return "unknown"
 
 
-def _version_key(value):
+def _version_tokens(value):
     """
-    Compare ordinary semantic-ish versions such as 0.7.3 or v1.2.0.
+    Parse flexible human-friendly version strings.
 
-    Non-numeric suffixes are ignored for update-awareness purposes.
+    Supported examples:
+      0.7.5
+      0.7.5.1
+      0.7.5a
+      0.7.5.3a
+      v1.2.0-beta
+
+    Numeric runs compare numerically, alphabetic runs compare
+    case-insensitively, and an additional suffix/component sorts after an
+    otherwise identical shorter version. This intentionally treats 0.7.5a as
+    newer than 0.7.5, matching the project's micro-patch convention.
     """
     if not value:
         return None
 
-    match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", str(value).strip())
-    if not match:
+    text = str(value).strip()
+    if text[:1].lower() == "v":
+        text = text[1:]
+
+    if not text or not re.fullmatch(r"[0-9A-Za-z._+\-]+", text):
         return None
 
-    return tuple(int(part) for part in match.groups())
+    raw_tokens = re.findall(r"\d+|[A-Za-z]+", text)
+    if not raw_tokens:
+        return None
+
+    tokens = []
+    for token in raw_tokens:
+        if token.isdigit():
+            tokens.append(("n", int(token)))
+        else:
+            tokens.append(("a", token.lower()))
+
+    return tuple(tokens)
+
+
+def _compare_versions(left, right):
+    """
+    Return -1, 0, or 1 using the project's flexible version convention.
+    """
+    left_tokens = _version_tokens(left)
+    right_tokens = _version_tokens(right)
+
+    if left_tokens is None or right_tokens is None:
+        return None
+
+    for left_token, right_token in zip(left_tokens, right_tokens):
+        if left_token == right_token:
+            continue
+
+        left_type, left_value = left_token
+        right_type, right_value = right_token
+
+        if left_type == right_type:
+            return 1 if left_value > right_value else -1
+
+        # Numeric components sort after alphabetic components at the same
+        # position, e.g. 1.0.1 > 1.0a.
+        return 1 if left_type == "n" else -1
+
+    if len(left_tokens) == len(right_tokens):
+        return 0
+
+    # A longer otherwise-identical version is considered newer:
+    # 0.7.5a > 0.7.5 and 0.7.5.1 > 0.7.5.
+    return 1 if len(left_tokens) > len(right_tokens) else -1
 
 
 class ObservabilityService:
@@ -243,14 +299,8 @@ class ObservabilityService:
         except (requests.RequestException, ValueError, IndexError) as exc:
             error = str(exc)[-300:]
 
-        installed_key = _version_key(installed)
-        latest_key = _version_key(latest)
-
-        available = bool(
-            installed_key
-            and latest_key
-            and latest_key > installed_key
-        )
+        comparison = _compare_versions(latest, installed)
+        available = comparison == 1
 
         with self._lock:
             self._update = {
