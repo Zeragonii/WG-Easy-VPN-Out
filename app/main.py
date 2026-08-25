@@ -310,7 +310,7 @@ def dashboard_live():
         "ok": True,
         "vpns": _vpn_snapshot(profiles),
         "update": (
-            observability.update_state()
+            observability.update_state(refresh_if_stale=True)
             if observability
             else {
                 "installed": application_version(),

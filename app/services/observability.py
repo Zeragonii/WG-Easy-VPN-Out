@@ -70,8 +70,8 @@ class ObservabilityService:
         self.exit_ip_interval = float(
             os.getenv("EXIT_IP_PROBE_INTERVAL", "60")
         )
-        self.update_interval = float(
-            os.getenv("UPDATE_CHECK_INTERVAL", "21600")
+        self.update_cache_seconds = float(
+            os.getenv("UPDATE_CHECK_CACHE_SECONDS", "900")
         )
         self.update_url = os.getenv(
             "UPDATE_VERSION_URL",
@@ -97,15 +97,19 @@ class ObservabilityService:
             "repository_url": self.repository_url,
         }
 
+        self._update_checked_monotonic = None
+
         self._next_exit_refresh = 0.0
-        self._next_update_refresh = 0.0
 
     def exit_ip_state(self, profile_id):
         with self._lock:
             value = self._exit_ips.get(int(profile_id))
             return dict(value) if value else None
 
-    def update_state(self):
+    def update_state(self, refresh_if_stale=False):
+        if refresh_if_stale:
+            self.refresh_update_if_stale()
+
         with self._lock:
             return dict(self._update)
 
@@ -203,6 +207,21 @@ class ObservabilityService:
 
             self.db.session.remove()
 
+    def refresh_update_if_stale(self):
+        now = time.monotonic()
+
+        with self._lock:
+            checked = self._update_checked_monotonic
+
+        if (
+            checked is not None
+            and self.update_cache_seconds > 0
+            and (now - checked) < self.update_cache_seconds
+        ):
+            return
+
+        self._refresh_update()
+
     def _refresh_update(self):
         installed = _installed_version()
         latest = None
@@ -242,6 +261,7 @@ class ObservabilityService:
                 "error": error,
                 "repository_url": self.repository_url,
             }
+            self._update_checked_monotonic = time.monotonic()
 
     def _loop(self):
         # The initial refreshes happen immediately after startup, but entirely
@@ -258,14 +278,6 @@ class ObservabilityService:
                         "Unhandled exit-IP observability refresh error."
                     )
 
-            if now >= self._next_update_refresh:
-                self._next_update_refresh = now + self.update_interval
-                try:
-                    self._refresh_update()
-                except Exception:
-                    self.app.logger.exception(
-                        "Unhandled update-awareness refresh error."
-                    )
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -280,9 +292,9 @@ class ObservabilityService:
 
         self.app.logger.info(
             "Observability service started "
-            "(exit IP %.0fs, update check %.0fs).",
+            "(exit IP %.0fs, update cache %.0fs).",
             self.exit_ip_interval,
-            self.update_interval,
+            self.update_cache_seconds,
         )
 
     def stop(self):

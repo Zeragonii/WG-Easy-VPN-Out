@@ -409,3 +409,28 @@ Configuration:
     UPDATE_CHECK_INTERVAL=21600
     UPDATE_VERSION_URL=https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION
     UPDATE_REPOSITORY_URL=https://github.com/Zeragonii/WG-Easy-VPN-Out
+
+
+## v0.7.4 - Dashboard-triggered update checks
+
+GitHub update awareness is now demand-driven instead of timer-driven.
+
+When the dashboard opens, its asynchronous live-status request asks the server
+for update state. The server checks the repository `VERSION` file only when its
+cached result is stale, so the dashboard remains fast while still getting a
+fresh-enough answer whenever it is actually viewed.
+
+Configuration:
+
+    UPDATE_CHECK_CACHE_SECONDS=900
+
+Default: 900 seconds (15 minutes).
+
+Examples:
+
+- `60` = at most one GitHub check per minute
+- `900` = at most one check every 15 minutes
+- `3600` = at most one check per hour
+- `0` = check GitHub on every dashboard live-status request
+
+The exit-IP background polling behaviour is unchanged.
