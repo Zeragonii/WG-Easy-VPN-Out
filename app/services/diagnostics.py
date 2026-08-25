@@ -1,0 +1,209 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import os
+import platform
+import subprocess
+
+from .routing import RoutingEngine
+from .vpn_runtime import VPNRuntimeService
+
+
+def _run(args, timeout=5):
+    try:
+        result = subprocess.run(
+            args,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+        return (result.stdout or result.stderr or "").strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"<error: {exc}>"
+
+
+def _safe_env():
+    names = (
+        "TZ",
+        "VPN_ROUTER_PORT",
+        "VPN_ROUTER_BIND",
+        "WG_EASY_URL",
+        "WG_EASY_VERIFY_TLS",
+        "ROUTING_RECONCILE_INTERVAL",
+        "VPN_RETRY_CHECK_INTERVAL",
+        "VPN_RETRY_BASE_SECONDS",
+        "VPN_RETRY_MAX_SECONDS",
+        "VPN_RETRY_MAX_FAILURES",
+        "VPN_CONNECT_TIMEOUT_SECONDS",
+        "EXIT_IP_PROBE_INTERVAL",
+        "UPDATE_CHECK_CACHE_SECONDS",
+        "UPDATE_VERSION_URL",
+        "UPDATE_REPOSITORY_URL",
+    )
+    return {name: os.getenv(name) for name in names if os.getenv(name) is not None}
+
+
+def build_diagnostics(db, VPNProfile, RoutingGroup, ClientAssignment, version):
+    runtime = VPNRuntimeService()
+    engine = RoutingEngine()
+
+    profiles = db.session.execute(
+        db.select(VPNProfile).order_by(VPNProfile.id.asc())
+    ).scalars().all()
+    groups = db.session.execute(
+        db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
+    ).scalars().all()
+    assignments = db.session.execute(
+        db.select(ClientAssignment).order_by(ClientAssignment.id.asc())
+    ).scalars().all()
+
+    vpn_rows = []
+    for profile in profiles:
+        status = runtime.status(profile, include_probe=False)
+        vpn_rows.append({
+            "id": profile.id,
+            "name": profile.name,
+            "provider": profile.provider,
+            "type": profile.vpn_type,
+            "enabled": bool(profile.enabled),
+            "state": status.state,
+            "interface": status.interface_name,
+            "tunnel_ipv4": status.tunnel_ipv4,
+            "uptime_seconds": status.uptime_seconds,
+            "gateway": (
+                runtime.route_gateway(profile)
+                if profile.vpn_type == "openvpn"
+                else None
+            ),
+            "last_error": status.last_error,
+        })
+
+    group_rows = []
+    for group in groups:
+        state = engine.inspect_group(group)
+        group_rows.append({
+            "id": group.id,
+            "name": group.name,
+            "target": group.target_label,
+            "fallback_mode": group.fallback_mode,
+            "fwmark": group.mark_hex,
+            "table_id": group.table_id,
+            "state": state.state,
+            "effective_exit": state.effective_exit,
+            "detail": state.detail,
+            "assigned_clients": sum(
+                1 for a in assignments if a.routing_group_id == group.id
+            ),
+        })
+
+    route_tables = {}
+    for group in groups:
+        if group.table_id:
+            route_tables[str(group.table_id)] = _run([
+                "ip", "-4", "route", "show",
+                "table", str(group.table_id),
+            ])
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "application_version": version,
+        "system": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "safe_environment": _safe_env(),
+        },
+        "counts": {
+            "vpn_profiles": len(profiles),
+            "routing_groups": len(groups),
+            "client_assignments": len(assignments),
+        },
+        "vpns": vpn_rows,
+        "routing_groups": group_rows,
+        "network": {
+            "ip_rules": _run(["ip", "-4", "rule", "show"]),
+            "managed_route_tables": route_tables,
+            "nft_vpn_router": _run([
+                "nft", "list", "table",
+                RoutingEngine.NFT_FAMILY,
+                RoutingEngine.NFT_TABLE,
+            ]),
+            "wg0": _run(["ip", "-details", "link", "show", "wg0"]),
+            "main_default": _run(["ip", "-4", "route", "show", "default"]),
+        },
+    }
+
+
+def render_text(data):
+    lines = [
+        "VPN Router diagnostics",
+        "=" * 72,
+        f"Generated: {data['generated_at']}",
+        f"Version: {data['application_version']}",
+        "",
+        "Counts",
+        "-" * 72,
+        f"VPN profiles: {data['counts']['vpn_profiles']}",
+        f"Routing groups: {data['counts']['routing_groups']}",
+        f"Client assignments: {data['counts']['client_assignments']}",
+        "",
+        "Safe environment (secrets intentionally excluded)",
+        "-" * 72,
+    ]
+
+    for key, value in sorted(data["system"]["safe_environment"].items()):
+        lines.append(f"{key}={value}")
+
+    lines.extend(["", "VPN profiles", "-" * 72])
+    for vpn in data["vpns"]:
+        lines.append(
+            f"[{vpn['id']}] {vpn['name']} | {vpn['state']} | "
+            f"enabled={vpn['enabled']} | iface={vpn['interface']} | "
+            f"ip={vpn['tunnel_ipv4']} | gateway={vpn['gateway']} | "
+            f"uptime={vpn['uptime_seconds']}"
+        )
+        if vpn["last_error"]:
+            lines.append(f"  last_error={vpn['last_error']}")
+
+    lines.extend(["", "Routing groups", "-" * 72])
+    for group in data["routing_groups"]:
+        lines.append(
+            f"[{group['id']}] {group['name']} | target={group['target']} | "
+            f"effective={group['effective_exit']} | state={group['state']} | "
+            f"fallback={group['fallback_mode']} | mark={group['fwmark']} | "
+            f"table={group['table_id']} | clients={group['assigned_clients']}"
+        )
+        lines.append(f"  {group['detail']}")
+
+    lines.extend([
+        "",
+        "IPv4 policy rules",
+        "-" * 72,
+        data["network"]["ip_rules"] or "<none>",
+        "",
+        "Managed routing tables",
+        "-" * 72,
+    ])
+    for table, content in data["network"]["managed_route_tables"].items():
+        lines.append(f"table {table}:")
+        lines.append(content or "<empty>")
+
+    lines.extend([
+        "",
+        "nftables inet vpn_router",
+        "-" * 72,
+        data["network"]["nft_vpn_router"] or "<not present>",
+        "",
+        "wg0",
+        "-" * 72,
+        data["network"]["wg0"] or "<not present>",
+        "",
+        "Main IPv4 default",
+        "-" * 72,
+        data["network"]["main_default"] or "<none>",
+        "",
+        "NOTE: SECRET_KEY, admin credentials, WG-Easy credentials, VPN usernames/",
+        "passwords and VPN configuration file contents are intentionally omitted.",
+    ])
+
+    return "\n".join(lines) + "\n"

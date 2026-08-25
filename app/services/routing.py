@@ -98,6 +98,78 @@ class RoutingEngine:
                 break
         self._run(["ip", "route", "flush", "table", str(table_id)])
 
+    @classmethod
+    def _managed_rule_matches(cls, rule) -> bool:
+        """
+        Recognise only rules created by this application.
+
+        A VPN Router group rule has:
+          priority/table = 10000 + group_id
+          fwmark         = 0x100 + group_id
+
+        Requiring all three relationships avoids deleting unrelated host rules
+        that merely happen to use a nearby priority.
+        """
+        try:
+            priority = int(rule.get("priority"))
+            table = int(rule.get("table"))
+            fwmark_raw = rule.get("fwmark")
+            fwmark = (
+                int(fwmark_raw, 0)
+                if isinstance(fwmark_raw, str)
+                else int(fwmark_raw)
+            )
+        except (TypeError, ValueError):
+            return False
+
+        group_id = priority - 10000
+        if group_id <= 0:
+            return False
+
+        expected_mark, expected_table, expected_priority = cls.allocation(group_id)
+        return (
+            priority == expected_priority
+            and table == expected_table
+            and fwmark == expected_mark
+        )
+
+    def cleanup_stale_policy_state(self, active_group_ids) -> list[int]:
+        """
+        Remove VPN Router policy rules/tables belonging to groups that no
+        longer exist in the database. Returns the cleaned group IDs.
+        """
+        active = {int(group_id) for group_id in active_group_ids}
+        result = self._run(["ip", "-j", "-4", "rule", "show"], timeout=4)
+
+        if result.returncode != 0:
+            return []
+
+        try:
+            rules = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError:
+            return []
+
+        cleaned = []
+        for rule in rules:
+            if not self._managed_rule_matches(rule):
+                continue
+
+            priority = int(rule["priority"])
+            group_id = priority - 10000
+            if group_id in active:
+                continue
+
+            _, table_id, _ = self.allocation(group_id)
+            self._flush_group_rule(priority, table_id)
+            cleaned.append(group_id)
+
+        return sorted(set(cleaned))
+
+    def remove_group_state(self, group_id: int) -> None:
+        """Explicitly remove the policy rule/table allocated to one group."""
+        _, table_id, priority = self.allocation(group_id)
+        self._flush_group_rule(priority, table_id)
+
     def _mirror_connected(self, iface: str, table_id: int) -> None:
         for route in self._connected_routes(iface):
             dst = route["dst"]
@@ -137,9 +209,7 @@ class RoutingEngine:
         iface = status.interface_name
         self._mirror_connected(iface, group.table_id)
 
-        gateway = self.vpn_runtime._route_gateway_from_logs(
-            self.vpn_runtime._log_tail(profile, 80)
-        )
+        gateway = self.vpn_runtime.route_gateway(profile)
 
         args = ["ip", "route", "replace", "default"]
         if gateway:
@@ -214,6 +284,10 @@ class RoutingEngine:
 
         assignments_by_group = {}
         valid_group_ids = {group.id for group in groups}
+
+        # Clean policy rules/tables left behind by deleted groups before
+        # rebuilding the currently configured set.
+        self.cleanup_stale_policy_state(valid_group_ids)
 
         for assignment in assignments:
             if assignment.routing_group_id not in valid_group_ids:

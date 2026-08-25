@@ -34,6 +34,7 @@ services:
       VPN_RETRY_BASE_SECONDS: "5"
       VPN_RETRY_MAX_SECONDS: "300"
       VPN_RETRY_MAX_FAILURES: "0"
+      VPN_CONNECT_TIMEOUT_SECONDS: "45"
       EXIT_IP_PROBE_INTERVAL: "60"
       UPDATE_CHECK_CACHE_SECONDS: "900"
       UPDATE_VERSION_URL: "https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION"

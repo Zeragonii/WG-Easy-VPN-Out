@@ -42,6 +42,9 @@ class VPNResilienceManager:
         self.base_delay = float(os.getenv("VPN_RETRY_BASE_SECONDS", "5"))
         self.max_delay = float(os.getenv("VPN_RETRY_MAX_SECONDS", "300"))
         self.max_failures = int(os.getenv("VPN_RETRY_MAX_FAILURES", "0"))
+        self.connect_timeout = float(
+            os.getenv("VPN_CONNECT_TIMEOUT_SECONDS", "45")
+        )
 
         self.state_dir = Path(os.getenv("VPN_ROUTER_DATA_DIR", "/data")) / "runtime"
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -175,11 +178,36 @@ class VPNResilienceManager:
 
         status = self.runtime.status(profile, include_probe=False)
 
-        if status.state in ("connected", "connecting"):
+        if status.state == "connected":
             if state.failures or state.next_retry_at or state.last_error or state.gave_up:
-                self.reset(
+                self.reset(profile.id, success=True)
+            return
+
+        if status.state == "connecting":
+            # A live OpenVPN PID is not enough to call an attempt healthy.
+            # If it never acquires a tunnel address, recycle it and enter the
+            # normal exponential retry path.
+            if (
+                self.connect_timeout > 0
+                and status.uptime_seconds is not None
+                and status.uptime_seconds >= self.connect_timeout
+            ):
+                error = (
+                    f"OpenVPN remained in connecting state for "
+                    f"{status.uptime_seconds}s "
+                    f"(timeout {int(self.connect_timeout)}s)."
+                )
+                try:
+                    self.runtime.stop(profile)
+                except Exception as exc:
+                    error += f" Stop also reported: {exc}"
+
+                self.record_failure(profile.id, error)
+                self.app.logger.warning(
+                    "Connecting timeout for profile %s (%s): %s",
                     profile.id,
-                    success=(status.state == "connected"),
+                    profile.name,
+                    error,
                 )
             return
 
@@ -235,10 +263,12 @@ class VPNResilienceManager:
         self._thread.start()
 
         self.app.logger.info(
-            "VPN resilience manager started (check %.1fs, base %.1fs, max %.1fs).",
+            "VPN resilience manager started "
+            "(check %.1fs, base %.1fs, max %.1fs, connect timeout %.1fs).",
             self.interval,
             self.base_delay,
             self.max_delay,
+            self.connect_timeout,
         )
 
     def stop(self):

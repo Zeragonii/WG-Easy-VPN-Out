@@ -139,9 +139,7 @@ def _vpn_snapshot(profiles):
             status = runtime.status(profile, include_probe=False)
             gateway = None
             if status.state == "connected":
-                gateway = runtime._route_gateway_from_logs(
-                    runtime._log_tail(profile, 80)
-                )
+                gateway = runtime.route_gateway(profile)
 
             rows.append({
                 "id": profile.id,
@@ -269,6 +267,7 @@ def system_status():
         ),
         "retry_base_seconds": os.getenv("VPN_RETRY_BASE_SECONDS", "5"),
         "retry_max_seconds": os.getenv("VPN_RETRY_MAX_SECONDS", "300"),
+        "connect_timeout_seconds": os.getenv("VPN_CONNECT_TIMEOUT_SECONDS", "45"),
         "tools": {
             "openvpn": command_exists("openvpn"),
             "wg": command_exists("wg"),

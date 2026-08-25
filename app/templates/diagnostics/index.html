@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics · VPN Router{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+  <div>
+    <h1 style="margin-bottom:.25rem;">Diagnostics</h1>
+    <p class="muted" style="margin-top:0;">
+      Read-only operational state for troubleshooting. Secrets and VPN config
+      contents are deliberately excluded.
+    </p>
+  </div>
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+    <a class="button-link secondary" href="{{ url_for('diagnostics.json_export') }}">View JSON</a>
+    <a class="button-link" href="{{ url_for('diagnostics.download') }}">Download diagnostics</a>
+  </div>
+</div>
+
+<div class="grid">
+  <section class="card">
+    <h2>Application</h2>
+    <p>Version: <strong>{{ diagnostics.application_version }}</strong></p>
+    <p>Generated: <span class="muted">{{ diagnostics.generated_at }}</span></p>
+    <p>VPN profiles: <strong>{{ diagnostics.counts.vpn_profiles }}</strong></p>
+    <p>Routing groups: <strong>{{ diagnostics.counts.routing_groups }}</strong></p>
+    <p>Assignments: <strong>{{ diagnostics.counts.client_assignments }}</strong></p>
+  </section>
+
+  <section class="card">
+    <h2>Host routing</h2>
+    <p><strong>Main default</strong></p>
+    <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.main_default or "—" }}</pre>
+  </section>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2>VPN profiles</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Profile</th><th>State</th><th>Interface</th><th>Tunnel IP</th><th>Gateway</th><th>Uptime</th></tr>
+      </thead>
+      <tbody>
+        {% for vpn in diagnostics.vpns %}
+        <tr>
+          <td><strong>{{ vpn.name }}</strong><div class="muted">{{ vpn.provider or "—" }}</div></td>
+          <td>{{ vpn.state }}</td>
+          <td><code>{{ vpn.interface }}</code></td>
+          <td>{{ vpn.tunnel_ipv4 or "—" }}</td>
+          <td>{{ vpn.gateway or "—" }}</td>
+          <td>{{ vpn.uptime_seconds if vpn.uptime_seconds is not none else "—" }}{% if vpn.uptime_seconds is not none %}s{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">No VPN profiles.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2>Routing groups</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Group</th><th>Clients</th><th>Target</th><th>Effective</th><th>Fallback</th><th>Policy</th></tr>
+      </thead>
+      <tbody>
+        {% for group in diagnostics.routing_groups %}
+        <tr>
+          <td><strong>{{ group.name }}</strong><div class="muted">{{ group.state }} · {{ group.detail }}</div></td>
+          <td>{{ group.assigned_clients }}</td>
+          <td>{{ group.target }}</td>
+          <td>{{ group.effective_exit }}</td>
+          <td>{{ group.fallback_mode }}</td>
+          <td><code>{{ group.fwmark }}</code> · table {{ group.table_id }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">No routing groups.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<details class="card" style="margin-top:1rem;">
+  <summary><strong>IPv4 policy rules</strong></summary>
+  <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.ip_rules or "—" }}</pre>
+</details>
+
+<details class="card" style="margin-top:1rem;">
+  <summary><strong>nftables vpn_router table</strong></summary>
+  <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.nft_vpn_router or "—" }}</pre>
+</details>
+
+<details class="card" style="margin-top:1rem;">
+  <summary><strong>wg0 link state</strong></summary>
+  <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.wg0 or "—" }}</pre>
+</details>
+{% endblock %}

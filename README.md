@@ -486,3 +486,54 @@ redeploy before encrypted VPN credentials can be used.
 
 Restore validates archive structure, paths, entity references and required
 configuration files before replacing current persistent configuration.
+
+
+## v0.9.0 - Core hardening and diagnostics
+
+The 0.9 line begins the pre-1.0 hardening phase.
+
+### Routing lifecycle cleanup
+
+Policy routing reconciliation now identifies stale rules/tables created by
+deleted routing groups using the application's exact allocation relationship:
+
+- priority/table = `10000 + group_id`
+- fwmark = `0x100 + group_id`
+
+A group deletion explicitly removes its allocated rule/table before deleting
+the database row, and every full rebuild performs a second stale-state sweep.
+Unrelated host policy rules are not deliberately matched by this cleanup.
+
+### OpenVPN connecting timeout
+
+An enabled OpenVPN profile can no longer remain in `connecting` forever merely
+because the OpenVPN process is alive. If it has not acquired a tunnel IPv4
+address within the configured timeout, the resilience manager stops that
+attempt and enters the existing exponential retry path.
+
+Configuration:
+
+    VPN_CONNECT_TIMEOUT_SECONDS=45
+
+Set to `0` to disable the timeout.
+
+### Diagnostics
+
+A new authenticated **Diagnostics** page provides read-only troubleshooting
+state and a downloadable text report containing:
+
+- application version and non-secret runtime settings
+- VPN tunnel state, interfaces, tunnel IPs and pushed gateways
+- routing-group state and policy allocations
+- IPv4 policy rules
+- application-managed route tables
+- nftables `inet vpn_router` state
+- `wg0` link state and host default route
+
+The report intentionally excludes `SECRET_KEY`, admin credentials, WG-Easy
+credentials, VPN usernames/passwords, and VPN configuration file contents.
+
+### Internal API cleanup
+
+Cross-service users now call public VPN runtime helpers for log-tail/gateway
+inspection rather than depending directly on private helper methods.

@@ -103,6 +103,14 @@ class VPNRuntimeService:
         except OSError:
             return []
 
+    def log_tail(self, profile, lines=20):
+        """Return the most recent OpenVPN log lines for diagnostics/consumers."""
+        return self._log_tail(profile, lines)
+
+    def route_gateway(self, profile):
+        """Return the latest pushed route-gateway for a running profile."""
+        return self._route_gateway_from_logs(self._log_tail(profile, 80))
+
     @staticmethod
     def _detect_last_error(lines, connected=False):
         fatal_tokens = (

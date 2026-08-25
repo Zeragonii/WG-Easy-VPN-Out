@@ -43,6 +43,7 @@ def create_app():
     from .vpn_profiles import bp as vpn_profiles_bp
     from .routing_groups import bp as routing_groups_bp
     from .backups import bp as backups_bp
+    from .diagnostics import bp as diagnostics_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -50,6 +51,7 @@ def create_app():
     app.register_blueprint(vpn_profiles_bp)
     app.register_blueprint(routing_groups_bp)
     app.register_blueprint(backups_bp)
+    app.register_blueprint(diagnostics_bp)
 
     with app.app_context():
         db.create_all()

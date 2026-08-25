@@ -202,6 +202,13 @@ def delete(group_id):
         return redirect(url_for("routing_groups.index"))
 
     name = group.name
+    group_id = group.id
+
+    # Remove the group's allocated ip rule/table explicitly. The following
+    # rebuild also performs stale-state reconciliation as a second line of
+    # defence.
+    RoutingEngine().remove_group_state(group_id)
+
     db.session.delete(group)
     db.session.commit()
     _rebuild_with_flash(f"Routing group '{name}' deleted.")

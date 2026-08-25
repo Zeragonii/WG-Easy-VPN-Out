@@ -36,9 +36,7 @@ class RoutingReconciler:
 
             gateway = None
             if status.state == "connected":
-                gateway = engine.vpn_runtime._route_gateway_from_logs(
-                    engine.vpn_runtime._log_tail(profile, 80)
-                )
+                gateway = engine.vpn_runtime.route_gateway(profile)
 
             snapshot.append((
                 group.id,
