@@ -2,7 +2,9 @@
 {% block content %}
 <h1>System status</h1>
 <p class="muted">
-  v0.3 adds outbound VPN client profile storage and validation. Tunnel activation and routing changes are still disabled.
+  VPN Router is actively managing WG-Easy client policy routing, outbound
+  OpenVPN tunnels, routing groups, kill-switch/fallback behaviour, automatic
+  route reconciliation, and VPN retry recovery.
 </p>
 
 <div class="grid">
@@ -10,6 +12,8 @@
     <h2>Application</h2>
     <p>Version <code>{{ status.version }}</code></p>
     <p>Persistent DB <span class="status-good">● configured</span></p>
+    <p>Routing reconciler <span class="status-good">● active</span></p>
+    <p>VPN resilience manager <span class="status-good">● active</span></p>
   </section>
 
   <section class="card">
@@ -23,6 +27,52 @@
         <span class="status-bad">● not visible</span>
       {% endif %}
     </p>
+    <p>
+      Assigned clients:
+      <strong>{{ status.operational.client_assignments }}</strong>
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>Outbound VPNs</h2>
+    <p>Profiles: <strong>{{ status.operational.vpn_profiles }}</strong></p>
+    <p>Auto-connect enabled: <strong>{{ status.operational.vpn_enabled }}</strong></p>
+    <p>
+      Connected:
+      {% if status.operational.vpn_connected > 0 %}
+        <span class="status-good">● {{ status.operational.vpn_connected }}</span>
+      {% else %}
+        <span class="muted">○ 0</span>
+      {% endif %}
+    </p>
+    {% if status.operational.vpn_connecting > 0 %}
+      <p>
+        Connecting:
+        <span class="status-warn">◐ {{ status.operational.vpn_connecting }}</span>
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Policy routing</h2>
+    <p>Routing groups: <strong>{{ status.operational.routing_groups }}</strong></p>
+    <p>nftables marking <span class="status-good">● enabled</span></p>
+    <p>Per-group route tables <span class="status-good">● enabled</span></p>
+    <p>Kill-switch / WAN fallback <span class="status-good">● enabled</span></p>
+  </section>
+
+  <section class="card">
+    <h2>Recovery</h2>
+    <p>
+      Route reconciliation:
+      every <strong>{{ status.routing_reconcile_interval }}s</strong>
+    </p>
+    <p>
+      VPN retry backoff:
+      <strong>{{ status.retry_base_seconds }}s</strong>
+      → max <strong>{{ status.retry_max_seconds }}s</strong>
+    </p>
+    <p>Reconnect recovery <span class="status-good">● enabled</span></p>
   </section>
 
   <section class="card">
@@ -41,9 +91,20 @@
 </div>
 
 <div class="card" style="margin-top:1rem;">
+  <h2>Current feature set</h2>
+  <p>
+    WG-Easy clients can be persistently assigned to routing groups targeting
+    Default WAN or an outbound OpenVPN profile. VPN-backed groups support
+    block-on-failure or WAN fallback, and routing automatically follows tunnel
+    connect/disconnect/reconnect events.
+  </p>
+</div>
+
+<div class="card" style="margin-top:1rem;">
   <h2>Next milestone</h2>
   <p>
-    Create and validate outbound VPN profiles. Tunnel activation arrives next; nftables and policy-routing writes remain disabled.
+    Observability and dashboard polish: richer per-group health, effective
+    exit-IP visibility, assignment summaries, and route-test tooling.
   </p>
 </div>
 {% endblock %}

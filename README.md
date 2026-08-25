@@ -260,3 +260,24 @@ Configuration:
 Set a positive value to stop after that many failures.
 
 Retry state persists at `/data/runtime/retry-state.json`.
+
+
+## v0.6.1 - Dashboard refresh
+
+Replaces the stale early-development dashboard copy with a live operational
+overview.
+
+Dashboard now shows:
+
+- current application version
+- routing reconciler / VPN resilience status
+- WG-Easy visibility
+- assigned WG-Easy client count
+- outbound VPN profile count
+- auto-connect enabled profile count
+- connected / connecting tunnel counts
+- routing group count
+- policy-routing / kill-switch capabilities
+- configured reconcile and retry timings
+- networking tool availability
+- current feature-set summary and next milestone
