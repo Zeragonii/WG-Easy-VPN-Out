@@ -201,3 +201,10 @@ The routing path is:
       → ip rule
       → dedicated routing table
       → WAN or selected VPN tunnel
+
+## v0.5.1 - Clients page template hotfix
+
+Fixes a Jinja template compilation error on the WG-Easy Clients page caused
+by using Python list-comprehension syntax inside a Jinja expression.
+
+Routing/assignment behaviour is unchanged from v0.5.0.

@@ -101,10 +101,14 @@
 (() => {
   const POLL_MS = 5000;
   const csrfToken = "{{ csrf_token() }}";
-  const groups = {{ [
-    {"id": group.id, "name": group.name}
-    for group in groups
-  ] | tojson }};
+  const groups = [
+    {% for group in groups %}
+    {
+      id: {{ group.id }},
+      name: {{ group.name | tojson }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
 
   const body = document.getElementById("clients-body");
   const count = document.getElementById("client-count");
