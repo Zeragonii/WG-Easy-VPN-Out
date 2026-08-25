@@ -292,3 +292,34 @@ Adds a live `Total clients` metric to the WG-Easy dashboard card.
 
 If the WG-Easy API is temporarily unavailable, the dashboard shows the total
 as unavailable while retaining the persisted assigned-client count.
+
+
+## v0.7.0 - Observability and dashboard polish
+
+Expands the dashboard into a live operational overview.
+
+WG-Easy summary:
+- total discovered clients
+- online-now count
+- recently-active count
+- persistent assigned-client count
+
+Outbound VPN health table:
+- profile/provider
+- connected/connecting/failed state
+- tunnel interface and IPv4
+- pushed route gateway
+- observed public exit IP
+- tunnel uptime
+- auto-connect state
+
+Routing group health table:
+- assigned-client count per group
+- configured exit
+- effective exit
+- fallback/kill-switch policy
+- live ready/fallback/blocked state
+- fwmark and routing table ID
+
+The release is intentionally observability-only: it does not change packet
+marking, route construction, VPN startup, retry, or reconciliation behaviour.

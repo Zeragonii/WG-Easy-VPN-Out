@@ -7,6 +7,7 @@ from flask_login import login_required
 
 from . import db
 from .models import ClientAssignment, RoutingGroup, VPNProfile
+from .services.routing import RoutingEngine
 from .services.vpn_runtime import VPNRuntimeService
 from .services.wg_easy import WGEasyError, WGEasyService
 
@@ -53,11 +54,136 @@ def _wg_easy_service():
     )
 
 
-def _wg_easy_client_count():
+def _format_uptime(seconds):
+    if seconds is None:
+        return "—"
+
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m"
+
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h {minutes % 60}m"
+
+    days = hours // 24
+    return f"{days}d {hours % 24}h"
+
+
+def _wg_easy_snapshot():
     try:
-        return len(_wg_easy_service().get_clients()), None
+        clients = _wg_easy_service().get_clients()
     except WGEasyError as exc:
-        return None, str(exc)
+        return {
+            "available": False,
+            "error": str(exc),
+            "total": None,
+            "online": None,
+            "recent": None,
+            "offline": None,
+            "never": None,
+        }
+
+    states = {
+        "online": 0,
+        "recent": 0,
+        "offline": 0,
+        "never": 0,
+    }
+
+    for client in clients:
+        state = client.connection_state
+        states[state] = states.get(state, 0) + 1
+
+    return {
+        "available": True,
+        "error": None,
+        "total": len(clients),
+        **states,
+    }
+
+
+def _vpn_snapshot(profiles):
+    runtime = VPNRuntimeService()
+    rows = []
+
+    for profile in profiles:
+        if profile.vpn_type == "openvpn":
+            status = runtime.status(profile, include_probe=True)
+            gateway = None
+            if status.state == "connected":
+                gateway = runtime._route_gateway_from_logs(
+                    runtime._log_tail(profile, 80)
+                )
+
+            rows.append({
+                "id": profile.id,
+                "name": profile.name,
+                "provider": profile.provider or "—",
+                "type": profile.type_label,
+                "enabled": bool(profile.enabled),
+                "state": status.state,
+                "interface": status.interface_name,
+                "tunnel_ipv4": status.tunnel_ipv4,
+                "gateway": gateway,
+                "exit_ip": status.exit_ip,
+                "uptime": _format_uptime(status.uptime_seconds),
+                "last_error": status.last_error,
+            })
+        else:
+            rows.append({
+                "id": profile.id,
+                "name": profile.name,
+                "provider": profile.provider or "—",
+                "type": profile.type_label,
+                "enabled": bool(profile.enabled),
+                "state": "stored",
+                "interface": None,
+                "tunnel_ipv4": None,
+                "gateway": None,
+                "exit_ip": None,
+                "uptime": "—",
+                "last_error": None,
+            })
+
+    return rows
+
+
+def _routing_snapshot(groups, assignments):
+    engine = RoutingEngine()
+    counts = {}
+
+    for assignment in assignments:
+        counts[assignment.routing_group_id] = (
+            counts.get(assignment.routing_group_id, 0) + 1
+        )
+
+    rows = []
+    for group in groups:
+        runtime = engine.inspect_group(group)
+
+        rows.append({
+            "id": group.id,
+            "name": group.name,
+            "configured_exit": group.target_label,
+            "effective_exit": runtime.effective_exit,
+            "state": runtime.state,
+            "detail": runtime.detail,
+            "fallback": (
+                "WAN fallback"
+                if group.fallback_mode == "wan"
+                else "Block / kill-switch"
+            ),
+            "assigned_clients": counts.get(group.id, 0),
+            "fwmark": group.mark_hex,
+            "table_id": group.table_id,
+        })
+
+    return rows
 
 
 def operational_status():
@@ -65,41 +191,43 @@ def operational_status():
         db.select(VPNProfile).order_by(VPNProfile.id.asc())
     ).scalars().all()
 
-    wg_easy_total_clients, wg_easy_error = _wg_easy_client_count()
+    groups = db.session.execute(
+        db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
+    ).scalars().all()
 
-    runtime = VPNRuntimeService()
-    connected = 0
-    connecting = 0
-    enabled = 0
+    assignments = db.session.execute(
+        db.select(ClientAssignment).order_by(ClientAssignment.id.asc())
+    ).scalars().all()
 
-    for profile in profiles:
-        if profile.enabled:
-            enabled += 1
-
-        if profile.vpn_type != "openvpn":
-            continue
-
-        status = runtime.status(profile, include_probe=False)
-        if status.state == "connected":
-            connected += 1
-        elif status.state == "connecting":
-            connecting += 1
+    wg_easy = _wg_easy_snapshot()
+    vpn_rows = _vpn_snapshot(profiles)
+    routing_rows = _routing_snapshot(groups, assignments)
 
     return {
         "vpn_profiles": len(profiles),
-        "vpn_enabled": enabled,
-        "vpn_connected": connected,
-        "vpn_connecting": connecting,
-        "routing_groups": _count_model(RoutingGroup),
-        "client_assignments": _count_model(ClientAssignment),
-        "wg_easy_total_clients": wg_easy_total_clients,
-        "wg_easy_error": wg_easy_error,
+        "vpn_enabled": sum(1 for row in vpn_rows if row["enabled"]),
+        "vpn_connected": sum(
+            1 for row in vpn_rows if row["state"] == "connected"
+        ),
+        "vpn_connecting": sum(
+            1 for row in vpn_rows if row["state"] == "connecting"
+        ),
+        "vpn_problem": sum(
+            1 for row in vpn_rows
+            if row["state"] in ("failed", "disconnected", "stale")
+            and row["enabled"]
+        ),
+        "routing_groups": len(groups),
+        "client_assignments": len(assignments),
+        "wg_easy": wg_easy,
+        "vpn_rows": vpn_rows,
+        "routing_rows": routing_rows,
     }
 
 
 def system_status():
     return {
-        "version": os.getenv("APP_VERSION", "0.6.2"),
+        "version": os.getenv("APP_VERSION", "0.7.0"),
         "wg_easy_url": os.getenv("WG_EASY_URL", "http://127.0.0.1:51821"),
         "wg0_present": wg0_present(),
         "routing_reconcile_interval": os.getenv(

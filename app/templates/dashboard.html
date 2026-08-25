@@ -2,9 +2,8 @@
 {% block content %}
 <h1>System status</h1>
 <p class="muted">
-  VPN Router is actively managing WG-Easy client policy routing, outbound
-  OpenVPN tunnels, routing groups, kill-switch/fallback behaviour, automatic
-  route reconciliation, and VPN retry recovery.
+  Live health and routing overview for WG-Easy clients, outbound VPN tunnels,
+  policy-routing groups, and automatic recovery.
 </p>
 
 <div class="grid">
@@ -27,18 +26,28 @@
         <span class="status-bad">● not visible</span>
       {% endif %}
     </p>
-    <p>
-      Total clients:
-      {% if status.operational.wg_easy_total_clients is not none %}
-        <strong>{{ status.operational.wg_easy_total_clients }}</strong>
-      {% else %}
-        <span class="status-warn">◐ unavailable</span>
+
+    {% if status.operational.wg_easy.available %}
+      <p>Total clients: <strong>{{ status.operational.wg_easy.total }}</strong></p>
+      <p>
+        Online now:
+        {% if status.operational.wg_easy.online > 0 %}
+          <span class="status-good">● {{ status.operational.wg_easy.online }}</span>
+        {% else %}
+          <span class="muted">○ 0</span>
+        {% endif %}
+      </p>
+      {% if status.operational.wg_easy.recent > 0 %}
+        <p>
+          Recently active:
+          <span class="status-warn">◐ {{ status.operational.wg_easy.recent }}</span>
+        </p>
       {% endif %}
-    </p>
-    <p>
-      Assigned clients:
-      <strong>{{ status.operational.client_assignments }}</strong>
-    </p>
+    {% else %}
+      <p>Total clients: <span class="status-warn">◐ unavailable</span></p>
+    {% endif %}
+
+    <p>Assigned clients: <strong>{{ status.operational.client_assignments }}</strong></p>
   </section>
 
   <section class="card">
@@ -54,10 +63,10 @@
       {% endif %}
     </p>
     {% if status.operational.vpn_connecting > 0 %}
-      <p>
-        Connecting:
-        <span class="status-warn">◐ {{ status.operational.vpn_connecting }}</span>
-      </p>
+      <p>Connecting: <span class="status-warn">◐ {{ status.operational.vpn_connecting }}</span></p>
+    {% endif %}
+    {% if status.operational.vpn_problem > 0 %}
+      <p>Needs attention: <span class="status-bad">● {{ status.operational.vpn_problem }}</span></p>
     {% endif %}
   </section>
 
@@ -99,20 +108,154 @@
 </div>
 
 <div class="card" style="margin-top:1rem;">
+  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin-bottom:.25rem;">Outbound VPN health</h2>
+      <div class="muted">Current tunnel state, addressing, uptime, and observed public exit.</div>
+    </div>
+    <a href="{{ url_for('vpn_profiles.index') }}" class="button-link">Manage VPN profiles</a>
+  </div>
+
+  <div class="table-wrap" style="margin-top:.8rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Profile</th>
+          <th>State</th>
+          <th>Tunnel</th>
+          <th>Gateway</th>
+          <th>Exit IP</th>
+          <th>Uptime</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vpn in status.operational.vpn_rows %}
+        <tr>
+          <td>
+            <strong>{{ vpn.name }}</strong>
+            <div class="muted" style="font-size:.8rem;">{{ vpn.provider }} · {{ vpn.type }}</div>
+          </td>
+          <td>
+            {% if vpn.state == "connected" %}
+              <span class="status-good">● Connected</span>
+            {% elif vpn.state == "connecting" %}
+              <span class="status-warn">◐ Connecting</span>
+            {% elif vpn.state == "stored" %}
+              <span class="muted">○ Stored only</span>
+            {% else %}
+              <span class="status-bad">● {{ vpn.state|capitalize }}</span>
+            {% endif %}
+            {% if vpn.enabled %}
+              <div class="muted" style="font-size:.8rem;">Auto-connect enabled</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if vpn.tunnel_ipv4 %}
+              <code>{{ vpn.interface }}</code>
+              <div><code>{{ vpn.tunnel_ipv4 }}</code></div>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if vpn.gateway %}
+              <code>{{ vpn.gateway }}</code>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if vpn.exit_ip %}
+              <code>{{ vpn.exit_ip }}</code>
+            {% elif vpn.state == "connected" %}
+              <span class="status-warn">◐ probe unavailable</span>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ vpn.uptime }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="muted">No outbound VPN profiles configured.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin-bottom:.25rem;">Routing group health</h2>
+      <div class="muted">Configured policy versus the exit currently in effect.</div>
+    </div>
+    <a href="{{ url_for('routing_groups.index') }}" class="button-link">Manage routing groups</a>
+  </div>
+
+  <div class="table-wrap" style="margin-top:.8rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Group</th>
+          <th>Clients</th>
+          <th>Configured exit</th>
+          <th>Effective exit</th>
+          <th>Fallback</th>
+          <th>State</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for group in status.operational.routing_rows %}
+        <tr>
+          <td>
+            <strong>{{ group.name }}</strong>
+            <div class="muted" style="font-size:.8rem;">
+              {{ group.fwmark }} · table {{ group.table_id or "—" }}
+            </div>
+          </td>
+          <td><strong>{{ group.assigned_clients }}</strong></td>
+          <td>{{ group.configured_exit }}</td>
+          <td>{{ group.effective_exit }}</td>
+          <td>{{ group.fallback }}</td>
+          <td>
+            {% if group.state == "ready" %}
+              <span class="status-good">● Ready</span>
+            {% elif group.state == "fallback" %}
+              <span class="status-warn">◐ Fallback</span>
+            {% else %}
+              <span class="status-bad">● Blocked</span>
+            {% endif %}
+            <div class="muted" style="font-size:.8rem;">{{ group.detail }}</div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="muted">No routing groups configured.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
   <h2>Current feature set</h2>
   <p>
     WG-Easy clients can be persistently assigned to routing groups targeting
     Default WAN or an outbound OpenVPN profile. VPN-backed groups support
     block-on-failure or WAN fallback, and routing automatically follows tunnel
-    connect/disconnect/reconnect events.
+    connect/disconnect/reconnect events with retry recovery.
   </p>
 </div>
 
 <div class="card" style="margin-top:1rem;">
   <h2>Next milestone</h2>
   <p>
-    Observability and dashboard polish: richer per-group health, effective
-    exit-IP visibility, assignment summaries, and route-test tooling.
+    Backup and restore: portable application configuration, VPN profile files,
+    routing groups, assignments, and safe recovery before the pre-1.0
+    hardening phase.
   </p>
 </div>
 {% endblock %}
