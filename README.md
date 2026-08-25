@@ -105,3 +105,18 @@ the host's normal routing table. A narrowly scoped source rule is installed
 only for the tunnel's own IP to support the exit-IP health probe.
 
 WG-Easy client policy routing remains disabled in this release.
+
+## v0.3.2 - Gateway-aware probe routing
+
+Fixes exit-IP probing for OpenVPN providers that advertise a route gateway
+with subnet topology, including PIA.
+
+- parses `route-gateway` from OpenVPN `PUSH_REPLY`
+- mirrors the tunnel's connected IPv4 route into the private probe table
+- installs the probe default via the provider gateway when advertised
+- falls back to `default dev <tun>` when no gateway is provided
+- suppresses stale `sitnl_send` / `Network is unreachable` warnings while a
+  tunnel is otherwise healthy
+- keeps fatal authentication/TLS/startup errors visible
+
+WG-Easy client policy routing is still disabled in this release.

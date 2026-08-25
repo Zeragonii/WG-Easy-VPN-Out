@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import re
 import subprocess
 import time
 
@@ -101,11 +102,36 @@ class VPNRuntimeService:
             return []
 
     @staticmethod
-    def _detect_last_error(lines):
-        tokens = ("AUTH_FAILED", "ERROR", "Options error", "TLS Error", "Connection refused", "Cannot resolve", "fatal error")
+    def _detect_last_error(lines, connected=False):
+        fatal_tokens = (
+            "AUTH_FAILED",
+            "Options error",
+            "TLS Error",
+            "Connection refused",
+            "Cannot resolve",
+            "fatal error",
+        )
+        nonfatal_tokens = (
+            "Network is unreachable",
+            "sitnl_send",
+        )
         for line in reversed(lines):
-            if any(token.lower() in line.lower() for token in tokens):
+            lowered = line.lower()
+            if any(token.lower() in lowered for token in fatal_tokens):
                 return line[-500:]
+            if not connected and any(token.lower() in lowered for token in nonfatal_tokens):
+                return line[-500:]
+        return None
+
+    @staticmethod
+    def _route_gateway_from_logs(lines):
+        pattern = re.compile(r"(?:^|,)route-gateway\s+([^,\s]+)", re.IGNORECASE)
+        for line in reversed(lines):
+            if "PUSH_REPLY" not in line:
+                continue
+            match = pattern.search(line)
+            if match:
+                return match.group(1)
         return None
 
     def _probe_ids(self, profile):
@@ -114,10 +140,48 @@ class VPNRuntimeService:
 
     def _ensure_probe_route(self, profile, iface, tunnel_ip):
         table, priority = self._probe_ids(profile)
-        self._run(["ip", "route", "replace", "default", "dev", iface, "table", str(table)])
+
+        route_result = self._run(["ip", "-j", "-4", "route", "show", "dev", iface], 2)
+        if route_result.returncode == 0:
+            try:
+                routes = json.loads(route_result.stdout)
+            except json.JSONDecodeError:
+                routes = []
+
+            for route in routes:
+                dst = route.get("dst")
+                prefsrc = route.get("prefsrc")
+                if dst and dst != "default":
+                    args = ["ip", "route", "replace", dst, "dev", iface]
+                    if prefsrc:
+                        args.extend(["src", prefsrc])
+                    args.extend(["table", str(table)])
+                    self._run(args)
+                    break
+
+        gateway = self._route_gateway_from_logs(self._log_tail(profile, 80))
+        if gateway:
+            self._run([
+                "ip", "route", "replace",
+                "default", "via", gateway,
+                "dev", iface,
+                "table", str(table),
+            ])
+        else:
+            self._run([
+                "ip", "route", "replace",
+                "default", "dev", iface,
+                "table", str(table),
+            ])
+
         rules = self._run(["ip", "-4", "rule", "show"], 2).stdout
         if f"from {tunnel_ip} lookup {table}" not in rules:
-            self._run(["ip", "-4", "rule", "add", "priority", str(priority), "from", f"{tunnel_ip}/32", "lookup", str(table)])
+            self._run([
+                "ip", "-4", "rule", "add",
+                "priority", str(priority),
+                "from", f"{tunnel_ip}/32",
+                "lookup", str(table),
+            ])
 
     def _remove_probe_route(self, profile):
         table, priority = self._probe_ids(profile)
@@ -195,7 +259,7 @@ class VPNRuntimeService:
         if process.poll() is not None:
             self._pid_path(profile).unlink(missing_ok=True)
             logs = self._log_tail(profile)
-            raise VPNRuntimeError(self._detect_last_error(logs) or "OpenVPN exited during startup.")
+            raise VPNRuntimeError(self._detect_last_error(logs, connected=False) or "OpenVPN exited during startup.")
 
     def stop(self, profile):
         pid = self._read_pid(profile)
@@ -231,7 +295,6 @@ class VPNRuntimeService:
         exists = self._interface_exists(iface)
         tunnel_ip = self._interface_ipv4(iface) if exists else None
         logs = self._log_tail(profile)
-        last_error = self._detect_last_error(logs)
 
         if alive and tunnel_ip:
             state = "connected"
@@ -239,10 +302,16 @@ class VPNRuntimeService:
             state = "connecting"
         elif exists:
             state = "stale"
-        elif last_error:
-            state = "failed"
         else:
             state = "disconnected"
+
+        last_error = self._detect_last_error(
+            logs,
+            connected=(state == "connected"),
+        )
+
+        if state == "disconnected" and last_error:
+            state = "failed"
 
         uptime = None
         meta = self._read_meta(profile)
