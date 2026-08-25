@@ -2,7 +2,7 @@
 {% block content %}
 <h1>System status</h1>
 <p class="muted">
-  v0.2 adds read-only WG-Easy client discovery. Routing changes are still disabled.
+  v0.3 adds outbound VPN client profile storage and validation. Tunnel activation and routing changes are still disabled.
 </p>
 
 <div class="grid">
@@ -43,7 +43,7 @@
 <div class="card" style="margin-top:1rem;">
   <h2>Next milestone</h2>
   <p>
-    Verify WG-Easy discovery, then add outbound VPN-client management. No nftables or policy-routing writes are enabled yet.
+    Create and validate outbound VPN profiles. Tunnel activation arrives next; nftables and policy-routing writes remain disabled.
   </p>
 </div>
 {% endblock %}

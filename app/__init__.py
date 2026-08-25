@@ -37,10 +37,12 @@ def create_app():
     from .auth import bp as auth_bp
     from .clients import bp as clients_bp
     from .main import bp as main_bp
+    from .vpn_profiles import bp as vpn_profiles_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(clients_bp)
+    app.register_blueprint(vpn_profiles_bp)
 
     with app.app_context():
         db.create_all()

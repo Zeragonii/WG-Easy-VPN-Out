@@ -82,6 +82,10 @@
       font-weight: 700;
     }
     .inline-button { width: auto; padding: .45rem .75rem; margin: 0; }
+    .button-link { display:inline-block;text-decoration:none;background:var(--accent);color:#07111d;font-weight:700;padding:.65rem .85rem;border-radius:8px; }
+    .button-link.secondary { background:var(--panel2);color:var(--text);border:1px solid var(--border); }
+    .danger-button { width:auto;margin:0;background:var(--bad);color:#1b0709;padding:.65rem .85rem; }
+    label { display:block;margin-top:.9rem;color:var(--muted); }
     .flash, .error-box {
       border: 1px solid var(--bad);
       background: color-mix(in srgb, var(--bad) 12%, var(--panel));
@@ -122,6 +126,7 @@
     <nav aria-label="Main navigation">
       <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
       <a href="{{ url_for('clients.index') }}">WG-Easy Clients</a>
+      <a href="{{ url_for('vpn_profiles.index') }}">VPN Clients</a>
     </nav>
     {% endif %}
   </div>

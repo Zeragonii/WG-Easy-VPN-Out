@@ -29,7 +29,7 @@ services:
       WG_EASY_USERNAME: "CHANGE-ME"
       WG_EASY_PASSWORD: "CHANGE-ME"
       WG_EASY_VERIFY_TLS: "true"
-      APP_VERSION: "0.2.2"
+      APP_VERSION: "0.3.0"
 
     volumes:
       - vpn-router-data:/data

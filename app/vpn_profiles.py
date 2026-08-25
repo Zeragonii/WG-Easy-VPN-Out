@@ -1,0 +1,72 @@
+from __future__ import annotations
+import os
+from pathlib import Path
+from flask import Blueprint,flash,redirect,render_template,request,url_for
+from flask_login import login_required
+from sqlalchemy.exc import IntegrityError
+from . import db
+from .models import VPNProfile
+from .services.vpn_profiles import VPNProfileValidationError,safe_filename,validate_config
+bp=Blueprint('vpn_profiles',__name__,url_prefix='/vpn-profiles')
+def _data_root(): return Path(os.getenv('VPN_ROUTER_DATA_DIR','/data'))
+def _profile_dir(vpn_type):
+    path=_data_root()/('openvpn' if vpn_type=='openvpn' else 'wireguard'); path.mkdir(parents=True,exist_ok=True); return path
+def _read_config(profile): return (_profile_dir(profile.vpn_type)/profile.config_filename).read_text(encoding='utf-8',errors='replace')
+@bp.get('/')
+@login_required
+def index():
+    profiles=db.session.execute(db.select(VPNProfile).order_by(VPNProfile.name.asc())).scalars().all()
+    return render_template('vpn_profiles/index.html',profiles=profiles)
+@bp.route('/new',methods=['GET','POST'])
+@login_required
+def new():
+    supplied={'name':request.form.get('name',''),'provider':request.form.get('provider',''),'username':request.form.get('username','')}
+    if request.method=='POST':
+        upload=request.files.get('config')
+        if not supplied['name'].strip(): flash('Friendly name is required.','error'); return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+        if not upload or not upload.filename: flash('Select a VPN configuration file.','error'); return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+        raw=upload.read()
+        if len(raw)>1024*1024: flash('Configuration files are limited to 1 MiB.','error'); return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+        content=raw.decode('utf-8',errors='replace')
+        try:
+            filename=safe_filename(upload.filename); vpn_type,_=validate_config(filename,content); stored_name=f"{safe_filename(supplied['name'].strip())}-{filename}"
+        except VPNProfileValidationError as exc:
+            flash(str(exc),'error'); return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+        path=_profile_dir(vpn_type)/stored_name
+        if path.exists(): flash('A configuration with this stored filename already exists.','error'); return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+        profile=VPNProfile(name=supplied['name'].strip(),provider=supplied['provider'].strip() or None,vpn_type=vpn_type,config_filename=stored_name,username=supplied['username'].strip() or None,password=request.form.get('password','') or None,enabled=False)
+        try:
+            path.write_text(content,encoding='utf-8'); db.session.add(profile); db.session.commit()
+        except IntegrityError:
+            db.session.rollback(); path.unlink(missing_ok=True); flash('A VPN profile with that friendly name already exists.','error'); return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+        flash(f"VPN profile '{profile.name}' created.",'success'); return redirect(url_for('vpn_profiles.detail',profile_id=profile.id))
+    return render_template('vpn_profiles/form.html',profile=None,supplied=supplied)
+@bp.get('/<int:profile_id>')
+@login_required
+def detail(profile_id):
+    profile=db.get_or_404(VPNProfile,profile_id)
+    try: _,validation=validate_config(profile.config_filename,_read_config(profile),profile.vpn_type); config_error=None
+    except (OSError,VPNProfileValidationError) as exc: validation=None; config_error=str(exc)
+    return render_template('vpn_profiles/detail.html',profile=profile,validation=validation,config_error=config_error)
+@bp.route('/<int:profile_id>/edit',methods=['GET','POST'])
+@login_required
+def edit(profile_id):
+    profile=db.get_or_404(VPNProfile,profile_id)
+    if request.method=='POST':
+        profile.name=request.form.get('name','').strip(); profile.provider=request.form.get('provider','').strip() or None; profile.username=request.form.get('username','').strip() or None
+        password=request.form.get('password','')
+        if password: profile.password=password
+        if not profile.name: flash('Friendly name is required.','error'); return render_template('vpn_profiles/form.html',profile=profile,supplied=None)
+        try: db.session.commit()
+        except IntegrityError: db.session.rollback(); flash('A VPN profile with that friendly name already exists.','error'); return render_template('vpn_profiles/form.html',profile=profile,supplied=None)
+        flash('VPN profile updated.','success'); return redirect(url_for('vpn_profiles.detail',profile_id=profile.id))
+    return render_template('vpn_profiles/form.html',profile=profile,supplied=None)
+@bp.post('/<int:profile_id>/delete')
+@login_required
+def delete(profile_id):
+    profile=db.get_or_404(VPNProfile,profile_id); path=_profile_dir(profile.vpn_type)/profile.config_filename; name=profile.name
+    db.session.delete(profile); db.session.commit()
+    try: path.unlink(missing_ok=True)
+    except OSError: flash('Profile deleted, but the config file could not be removed.','error')
+    else: flash(f"VPN profile '{name}' deleted.",'success')
+    return redirect(url_for('vpn_profiles.index'))

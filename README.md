@@ -93,3 +93,7 @@ The WG-Easy Clients page now:
 - provides a manual "Refresh now" button
 
 No routing or firewall changes are performed in this release.
+
+## v0.3.0 - VPN client profiles
+
+Adds friendly names, provider labels, OpenVPN/WireGuard config upload, optional credentials, validation, edit/delete, and persistent storage. This release does not start tunnels or modify routing/firewall state. Treat /data as secret-bearing storage.
