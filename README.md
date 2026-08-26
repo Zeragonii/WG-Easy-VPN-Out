@@ -776,3 +776,18 @@ path as VPN Router's pinned probe.
 Automatic probes default to every 900 seconds and can be disabled by setting
 the interval to 0 in Settings; a manual test remains available from the Routing
 Group Health page.
+
+
+## v1.2.1 - DNS probe routing fix
+
+v1.2.0 bound `dig` directly to the VPN tunnel address. On hosts whose configured
+DNS resolver is reachable through the normal LAN/default route, that can create
+an unusable source/destination path and cause the DNS probe to time out.
+
+v1.2.1 switches the DNS trigger stage to `ping -I <VPN interface>`, matching the
+upstream bash.ws Linux test model more closely: hostname resolution is left to
+the container's configured resolver, while the generated request and result
+retrieval remain associated with the selected VPN path.
+
+`dig` is no longer required. `ping` is included in the container image and
+networking-tools preflight.

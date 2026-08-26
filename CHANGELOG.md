@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1
+
+### DNS leak probe fix
+
+- Replaced tunnel-address-bound `dig` queries with `ping -I <VPN interface>`
+  hostname triggers.
+- DNS resolution is now left to the container's configured resolver path,
+  avoiding the invalid source-routing pattern seen in v1.2.0.
+- Removed the unnecessary `dig` dependency.
+- Added `ping` to the container image and networking-tools preflight.
+
 ## 1.2.0
 
 ### Routing health

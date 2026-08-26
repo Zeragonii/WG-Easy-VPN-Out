@@ -118,12 +118,11 @@ def run_dns_leak_probe(runtime, profile, iface, tunnel_ip, query_count=6):
         hostname = f"{index}.{leak_id}.bash.ws"
         result = subprocess.run(
             [
-                "dig",
+                "ping",
                 "-4",
-                "-b", tunnel_ip,
-                "+time=2",
-                "+tries=1",
-                "+short",
+                "-I", iface,
+                "-c", "1",
+                "-W", "2",
                 hostname,
             ],
             text=True,
@@ -131,7 +130,15 @@ def run_dns_leak_probe(runtime, profile, iface, tunnel_ip, query_count=6):
             timeout=4,
             check=False,
         )
-        if result.returncode == 0:
+        # ICMP reachability is irrelevant here; the DNS lookup is the signal.
+        # Count the trigger unless name resolution itself clearly failed.
+        combined = (result.stdout or "") + "\n" + (result.stderr or "")
+        lowered = combined.lower()
+        if (
+            "unknown host" not in lowered
+            and "name or service not known" not in lowered
+            and "temporary failure in name resolution" not in lowered
+        ):
             successful_queries += 1
 
     if successful_queries == 0:
