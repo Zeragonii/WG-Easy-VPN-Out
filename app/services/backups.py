@@ -71,6 +71,7 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
             "username": p.username,
             "password": p.password,
             "enabled": bool(p.enabled),
+            "connection_policy": p.connection_policy,
             "created_at": _iso(p.created_at),
             "updated_at": _iso(p.updated_at),
         } for p in profiles],
@@ -237,6 +238,11 @@ def _validate_backup_data(data, configs):
         if not isinstance(row.get("enabled", False), bool):
             raise BackupError(
                 f"VPN profile '{name}' enabled flag must be boolean."
+            )
+        policy = row.get("connection_policy", "always")
+        if policy not in ("always", "on_demand"):
+            raise BackupError(
+                f"VPN profile '{name}' has invalid connection policy."
             )
 
         folded = name.casefold()
@@ -623,6 +629,7 @@ def restore_backup(
                     username=(row.get("username") or None),
                     password=row.get("password"),
                     enabled=bool(row.get("enabled")),
+                    connection_policy=row.get("connection_policy", "always"),
                 ))
             db.session.flush()
 

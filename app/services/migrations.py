@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 
 class MigrationError(RuntimeError):
@@ -100,11 +100,27 @@ def _migration_4_dns_policy(connection):
         )
 
 
+
+def _migration_5_connection_policy(connection):
+    columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(vpn_profiles)"
+        ).fetchall()
+    }
+    if "connection_policy" not in columns:
+        connection.execute(
+            "ALTER TABLE vpn_profiles "
+            "ADD COLUMN connection_policy VARCHAR(16) NOT NULL DEFAULT 'always'"
+        )
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
     Migration(3, "routing-health-history", _migration_3_routing_events),
     Migration(4, "routing-group-dns-policy", _migration_4_dns_policy),
+    Migration(5, "vpn-connection-policy", _migration_5_connection_policy),
 )
 
 

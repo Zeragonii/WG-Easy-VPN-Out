@@ -15,6 +15,11 @@ from .services.wg_easy import WGEasyError, WGEasyService
 
 bp = Blueprint("clients", __name__, url_prefix="/clients")
 
+def _on_demand_manager():
+    from flask import current_app
+    return current_app.extensions.get("on_demand_vpn")
+
+
 
 def _wg_easy_service() -> WGEasyService:
     settings = SettingsService(db, AppSetting)
@@ -187,6 +192,9 @@ def set_routing_group(external_id):
             db.session.commit()
         try:
             RoutingEngine().apply_assignment_sets(db, RoutingGroup)
+            manager = _on_demand_manager()
+            if manager is not None:
+                manager.reconcile_once()
         except RoutingEngineError as exc:
             return jsonify({
                 "ok": False,
@@ -215,6 +223,23 @@ def set_routing_group(external_id):
             "error": "WG-Easy client does not currently have a valid IPv4 address.",
         }), 400
 
+    if (
+        group.vpn_profile is not None
+        and group.vpn_profile.enabled
+        and group.vpn_profile.connection_policy == "on_demand"
+    ):
+        manager = _on_demand_manager()
+        if manager is not None:
+            ready, error = manager.ensure_profile_ready(group.vpn_profile)
+            if not ready:
+                return jsonify({
+                    "ok": False,
+                    "error": (
+                        "Assignment was not changed because the target VPN "
+                        f"could not become ready: {error}"
+                    ),
+                }), 503
+
     if existing is None:
         existing = ClientAssignment(
             external_id=str(client.external_id),
@@ -232,6 +257,9 @@ def set_routing_group(external_id):
 
     try:
         RoutingEngine().apply_assignment_sets(db, RoutingGroup)
+        manager = _on_demand_manager()
+        if manager is not None:
+            manager.reconcile_once()
     except RoutingEngineError as exc:
         return jsonify({
             "ok": False,

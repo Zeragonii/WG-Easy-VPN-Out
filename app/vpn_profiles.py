@@ -97,6 +97,7 @@ def new():
             username=supplied["username"].strip() or None,
             password=encrypt_secret(request.form.get("password", "") or None),
             enabled=False,
+            connection_policy="always",
         )
         try:
             path.write_text(content, encoding="utf-8")
@@ -199,10 +200,15 @@ def runtime(profile_id):
         "last_success_at": None,
     }
 
+    from flask import current_app
+    manager = current_app.extensions.get("on_demand_vpn")
+    on_demand = manager.public_state(profile.id) if manager else None
+
     return jsonify({
         "ok": True,
         **status.to_dict(),
         "retry": retry,
+        "on_demand": on_demand,
     })
 
 
@@ -233,6 +239,10 @@ def edit(profile_id):
         profile.name = request.form.get("name", "").strip()
         profile.provider = request.form.get("provider", "").strip() or None
         profile.username = request.form.get("username", "").strip() or None
+        policy = request.form.get("connection_policy", "always").strip().lower()
+        profile.connection_policy = (
+            policy if policy in ("always", "on_demand") else "always"
+        )
         password = request.form.get("password", "")
         if password:
             profile.password = encrypt_secret(password)

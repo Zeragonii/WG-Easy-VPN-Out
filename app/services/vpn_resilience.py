@@ -204,6 +204,22 @@ class VPNResilienceManager:
         if profile.vpn_type != "openvpn":
             return
 
+        if profile.connection_policy == "on_demand":
+            from ..models import ClientAssignment, RoutingGroup
+            required = self.db.session.execute(
+                self.db.select(ClientAssignment.id)
+                .join(
+                    RoutingGroup,
+                    ClientAssignment.routing_group_id == RoutingGroup.id,
+                )
+                .where(RoutingGroup.vpn_profile_id == profile.id)
+                .limit(1)
+            ).scalar_one_or_none()
+            if required is None:
+                if state.failures or state.next_retry_at or state.last_error or state.gave_up:
+                    self.reset(profile.id)
+                return
+
         status = self.runtime.status(profile, include_probe=False)
 
         if status.state == "connected":

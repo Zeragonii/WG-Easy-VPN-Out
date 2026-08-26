@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.0
+
+### On-demand VPN connections
+
+- Added schema v5 VPN profile `connection_policy`.
+- Added **Always connected** and **On demand** policies.
+- Requirement is assignment-driven rather than handshake-driven.
+- Required on-demand VPNs are reconciled synchronously during app startup.
+- Assignment changes use connect-before-switch handover.
+- Failed target VPN startup leaves the existing assignment unchanged.
+- Unused on-demand profiles disconnect after a 60-second idle grace period.
+- VPN resilience no longer reconnects unused on-demand profiles.
+- Added connection policy to UI, diagnostics and backup/restore.
+- Existing profiles default to **Always connected**.
+
 ## 1.4.2
 
 ### Provider adapter framework

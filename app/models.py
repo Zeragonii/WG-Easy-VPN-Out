@@ -27,6 +27,7 @@ class VPNProfile(db.Model):
     username = db.Column(db.String(255), nullable=True)
     password = db.Column(db.String(255), nullable=True)
     enabled = db.Column(db.Boolean, nullable=False, default=False)
+    connection_policy = db.Column(db.String(16), nullable=False, default="always")
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
     @property

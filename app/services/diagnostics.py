@@ -98,6 +98,7 @@ def build_diagnostics(
             "provider_reason": intelligence.provider_reason,
             "type": profile.vpn_type,
             "enabled": bool(profile.enabled),
+            "connection_policy": profile.connection_policy,
             "state": status.state,
             "interface": status.interface_name,
             "tunnel_ipv4": status.tunnel_ipv4,
@@ -248,7 +249,8 @@ def render_text(data):
     for vpn in data["vpns"]:
         lines.append(
             f"[{vpn['id']}] {vpn['name']} | {vpn['state']} | "
-            f"enabled={vpn['enabled']} | provider={vpn.get('provider')} | "
+            f"enabled={vpn['enabled']} | policy={vpn.get('connection_policy')} | "
+            f"provider={vpn.get('provider')} | "
             f"endpoint={vpn.get('endpoint')} | protocol={vpn.get('protocol')} | "
             f"transport={vpn.get('transport')} | region={vpn.get('region_hint')} | "
             f"provider_key={vpn.get('provider_key')} | "

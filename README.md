@@ -879,3 +879,26 @@ provider-specific interpretation.
   DNS routing behavior.
 
 No database migration or routing/runtime behavior change is included.
+
+
+## v1.5.0 - On-demand VPN connections
+
+VPN profiles now support **Always connected** and **On demand** connection
+policies.
+
+On-demand requirement is assignment-driven: if any WG-Easy client is assigned
+to any routing group targeting a profile, that VPN is required even if the
+WireGuard client is currently offline. This keeps the outbound tunnel ready
+before the WG-Easy client connects.
+
+Assignment changes use connect-before-switch behavior for on-demand targets:
+VPN Router starts the new outbound VPN and waits for a confirmed tunnel before
+persisting the client's new routing-group assignment. If the new VPN cannot
+connect, the assignment is left unchanged.
+
+Once a profile has no consumers it enters a 60-second idle grace period before
+disconnecting. Multiple clients naturally reference-count a shared profile, so
+it remains connected until its final assignment moves away.
+
+Existing profiles migrate to **Always connected**, preserving current behavior
+until the user explicitly opts a profile into On demand.

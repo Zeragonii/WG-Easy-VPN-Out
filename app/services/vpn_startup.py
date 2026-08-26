@@ -8,7 +8,10 @@ def restore_enabled_profiles(app, db, VPNProfile) -> None:
     with app.app_context():
         profiles = db.session.execute(
             db.select(VPNProfile)
-            .where(VPNProfile.enabled.is_(True))
+            .where(
+                VPNProfile.enabled.is_(True),
+                VPNProfile.connection_policy == "always",
+            )
             .order_by(VPNProfile.id.asc())
         ).scalars().all()
 

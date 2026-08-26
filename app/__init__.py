@@ -98,13 +98,26 @@ def create_app():
         if migrated:
             app.logger.info("Encrypted %s legacy VPN password(s).", migrated)
 
-    from .models import VPNProfile
+    from .models import ClientAssignment, RoutingGroup, VPNProfile
     from .services.vpn_startup import restore_enabled_profiles
+    from .services.on_demand import OnDemandVPNManager
 
+    # Existing Always profiles restore exactly as before. Required On-demand
+    # profiles are reconciled synchronously before the first routing rebuild.
     restore_enabled_profiles(app, db, VPNProfile)
 
+    on_demand = OnDemandVPNManager(
+        app,
+        db,
+        VPNProfile,
+        RoutingGroup,
+        ClientAssignment,
+    )
     with app.app_context():
-        from .models import RoutingGroup
+        on_demand.reconcile_once()
+        db.session.remove()
+
+    with app.app_context():
         from .services.routing import RoutingEngine, RoutingEngineError
 
         try:
@@ -117,6 +130,9 @@ def create_app():
     routing_reconciler = RoutingReconciler(app, db, RoutingGroup)
     routing_reconciler.start()
     app.extensions["routing_reconciler"] = routing_reconciler
+
+    on_demand.start()
+    app.extensions["on_demand_vpn"] = on_demand
 
     from .services.vpn_resilience import VPNResilienceManager
 
@@ -132,6 +148,7 @@ def create_app():
 
     app.extensions["background_services"] = [
         routing_reconciler,
+        on_demand,
         vpn_resilience,
         observability,
     ]
