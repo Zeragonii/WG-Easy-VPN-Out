@@ -95,6 +95,39 @@ def run_dns_leak_probe(runtime, profile, iface, tunnel_ip, query_count=6):
     """
     runtime.ensure_probe_route(profile, iface, tunnel_ip)
 
+    # WG-Easy client DNS is routed by an fwmark into the routing group's table.
+    # A locally generated `dig` never traverses nftables prerouting, so mirror
+    # that path explicitly for this probe: source=tunnel IP + destination=DNS
+    # resolver -> the same routing-group table.
+    probe_priority = 18000 + int(profile.id)
+    subprocess.run(
+        [
+            "ip", "-4", "rule", "del",
+            "priority", str(probe_priority),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=3,
+        check=False,
+    )
+    rule_result = subprocess.run(
+        [
+            "ip", "-4", "rule", "add",
+            "priority", str(probe_priority),
+            "from", f"{tunnel_ip}/32",
+            "to", f"{resolver_ip}/32",
+            "lookup", str(int(routing_table_id)),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=3,
+        check=False,
+    )
+    if rule_result.returncode != 0:
+        raise RuntimeError(
+            "Could not prepare the routing-group path for the DNS probe."
+        )
+
     id_result = subprocess.run(
         [
             "curl", "--silent", "--show-error", "--fail",
@@ -170,6 +203,7 @@ def run_explicit_resolver_probe(
     iface,
     tunnel_ip,
     resolver_ip,
+    routing_table_id,
     query_count=6,
 ):
     """
@@ -180,71 +214,83 @@ def run_explicit_resolver_probe(
     """
     runtime.ensure_probe_route(profile, iface, tunnel_ip)
 
-    id_result = subprocess.run(
-        [
-            "curl", "--silent", "--show-error", "--fail",
-            "--max-time", "6",
-            "--interface", tunnel_ip,
-            BASHWS_ID_URL,
-        ],
-        text=True,
-        capture_output=True,
-        timeout=8,
-        check=False,
-    )
-    leak_id = id_result.stdout.strip()
-    if id_result.returncode != 0 or not leak_id or len(leak_id) > 64:
-        raise RuntimeError(
-            "Could not initialise the external DNS leak test through the VPN."
-        )
-
-    queries_attempted = max(1, int(query_count))
-    for index in range(1, queries_attempted + 1):
-        hostname = f"{index}.{leak_id}.bash.ws"
-        result = subprocess.run(
+    try:
+        id_result = subprocess.run(
             [
-                "dig",
-                "-4",
-                "-b", tunnel_ip,
-                f"@{resolver_ip}",
-                "+time=3",
-                "+tries=1",
-                "+short",
-                hostname,
+                "curl", "--silent", "--show-error", "--fail",
+                "--max-time", "6",
+                "--interface", tunnel_ip,
+                BASHWS_ID_URL,
             ],
             text=True,
             capture_output=True,
-            timeout=5,
+            timeout=8,
+            check=False,
+        )
+        leak_id = id_result.stdout.strip()
+        if id_result.returncode != 0 or not leak_id or len(leak_id) > 64:
+            raise RuntimeError(
+                "Could not initialise the external DNS leak test through the VPN."
+            )
+
+        queries_attempted = max(1, int(query_count))
+        for index in range(1, queries_attempted + 1):
+            hostname = f"{index}.{leak_id}.bash.ws"
+            result = subprocess.run(
+                [
+                    "dig",
+                    "-4",
+                    "-b", tunnel_ip,
+                    f"@{resolver_ip}",
+                    "+time=3",
+                    "+tries=1",
+                    "+short",
+                    hostname,
+                ],
+                text=True,
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Configured DNS resolver {resolver_ip} is not reachable "
+                    "through this VPN tunnel."
+                )
+
+        result = subprocess.run(
+            [
+                "curl", "--silent", "--show-error", "--fail",
+                "--max-time", "7",
+                "--interface", tunnel_ip,
+                BASHWS_RESULT_URL.format(leak_id=leak_id),
+            ],
+            text=True,
+            capture_output=True,
+            timeout=9,
             check=False,
         )
         if result.returncode != 0:
-            raise RuntimeError(
-                f"Configured DNS resolver {resolver_ip} is not reachable "
-                "through this VPN tunnel."
-            )
+            raise RuntimeError("Could not retrieve DNS leak test results.")
 
-    result = subprocess.run(
-        [
-            "curl", "--silent", "--show-error", "--fail",
-            "--max-time", "7",
-            "--interface", tunnel_ip,
-            BASHWS_RESULT_URL.format(leak_id=leak_id),
-        ],
-        text=True,
-        capture_output=True,
-        timeout=9,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError("Could not retrieve DNS leak test results.")
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("DNS leak service returned invalid JSON.") from exc
 
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("DNS leak service returned invalid JSON.") from exc
-
-    parsed = parse_bashws_results(payload)
-    parsed["queries_attempted"] = queries_attempted
-    parsed["queries_completed"] = queries_attempted
-    parsed["configured_resolver"] = resolver_ip
-    return parsed
+        parsed = parse_bashws_results(payload)
+        parsed["queries_attempted"] = queries_attempted
+        parsed["queries_completed"] = queries_attempted
+        parsed["configured_resolver"] = resolver_ip
+        return parsed
+    finally:
+        subprocess.run(
+            [
+                "ip", "-4", "rule", "del",
+                "priority", str(probe_priority),
+            ],
+            text=True,
+            capture_output=True,
+            timeout=3,
+            check=False,
+        )

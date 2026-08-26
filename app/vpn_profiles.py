@@ -52,6 +52,8 @@ def index():
         "vpn_profiles/index.html",
         profiles=profiles,
         runtime=runtime,
+        runtime_display_state=runtime_display_state,
+        on_demand=on_demand,
         intelligence=intelligence,
     )
 
@@ -125,6 +127,19 @@ def detail(profile_id):
         validation, config_error = None, str(exc)
 
     runtime = VPNRuntimeService().status(profile, include_probe=False)
+    from flask import current_app
+    manager = current_app.extensions.get("on_demand_vpn")
+    on_demand = manager.public_state(profile.id) if manager else None
+    runtime_display_state = runtime.state
+    if (
+        profile.enabled
+        and profile.connection_policy == "on_demand"
+        and on_demand
+        and on_demand.get("standby")
+        and runtime.state in ("disconnected", "failed")
+    ):
+        runtime_display_state = "standby"
+
     try:
         intelligence_raw = inspect_profile(profile, _read_config(profile))
     except OSError:
@@ -204,9 +219,22 @@ def runtime(profile_id):
     manager = current_app.extensions.get("on_demand_vpn")
     on_demand = manager.public_state(profile.id) if manager else None
 
+    payload = status.to_dict()
+    if (
+        profile.enabled
+        and profile.connection_policy == "on_demand"
+        and on_demand
+        and on_demand.get("standby")
+        and payload.get("state") in ("disconnected", "failed")
+    ):
+        payload["state"] = "standby"
+        # Historical OpenVPN log errors are not current failures when the
+        # profile was intentionally stopped because it has no consumers.
+        payload["last_error"] = None
+
     return jsonify({
         "ok": True,
-        **status.to_dict(),
+        **payload,
         "retry": retry,
         "on_demand": on_demand,
     })

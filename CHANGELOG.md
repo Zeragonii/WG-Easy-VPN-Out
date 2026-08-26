@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.5.1
+
+### On-demand standby state
+
+- Intentional disconnects of unused enabled on-demand profiles display
+  **Standby** instead of Failed.
+- Historical OpenVPN log errors are suppressed while a profile is intentionally
+  in standby.
+- Genuine connection failures while a profile is required remain failures.
+- Diagnostics report standby consistently.
+
+### DNS validation fix
+
+- Fixed forced-DNS manual probes using a different routing path from WG-Easy
+  client traffic.
+- Explicit resolver probes now temporarily mirror the routing group's policy
+  table with a narrow source+destination `ip rule`.
+- Temporary probe rules are removed in `finally` cleanup.
+- Client DNS interception/routing behavior itself is unchanged.
+
 ## 1.5.0
 
 ### On-demand VPN connections

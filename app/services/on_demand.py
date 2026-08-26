@@ -83,6 +83,10 @@ class OnDemandVPNManager:
 
     def public_state(self, profile_id):
         profile_id = int(profile_id)
+        with self.app.app_context():
+            required = profile_id in self._required_ids()
+            self.db.session.remove()
+
         with self._lock:
             started = self._idle_since.get(profile_id)
             remaining = None
@@ -92,6 +96,8 @@ class OnDemandVPNManager:
                     int(self.idle_grace_seconds - (time.monotonic() - started)),
                 )
             return {
+                "required": required,
+                "standby": not required,
                 "idle_remaining_seconds": remaining,
                 "last_error": self._last_error.get(profile_id),
                 "last_action": self._last_action.get(profile_id),

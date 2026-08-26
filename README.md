@@ -902,3 +902,18 @@ it remains connected until its final assignment moves away.
 
 Existing profiles migrate to **Always connected**, preserving current behavior
 until the user explicitly opts a profile into On demand.
+
+
+## v1.5.1 - Standby state and DNS probe routing fixes
+
+Unused enabled on-demand profiles now display **Standby** rather than inheriting
+a historical OpenVPN error from their log and appearing as Failed. Runtime API
+and diagnostics use the same distinction; genuine failures while a profile is
+required continue to report as Failed.
+
+The forced-DNS manual validator now mirrors the routing-group policy table for
+its locally generated resolver query. WG-Easy client traffic is policy-routed
+from nftables prerouting, but local container probes do not traverse that hook.
+v1.5.1 temporarily installs a narrow source+destination rule for the selected
+resolver and removes it after the probe, making the validation path match the
+routing group's actual VPN egress without changing client routing behavior.

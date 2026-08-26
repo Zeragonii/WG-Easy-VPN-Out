@@ -83,6 +83,20 @@ def build_diagnostics(
         )
 
         intelligence = inspect_profile(profile, _profile_config_text(profile))
+        display_state = status.state
+        if (
+            app is not None
+            and profile.enabled
+            and profile.connection_policy == "on_demand"
+        ):
+            manager = app.extensions.get("on_demand_vpn")
+            demand = manager.public_state(profile.id) if manager else None
+            if (
+                demand
+                and demand.get("standby")
+                and status.state in ("disconnected", "failed")
+            ):
+                display_state = "standby"
 
         vpn_rows.append({
             "id": profile.id,
@@ -99,7 +113,7 @@ def build_diagnostics(
             "type": profile.vpn_type,
             "enabled": bool(profile.enabled),
             "connection_policy": profile.connection_policy,
-            "state": status.state,
+            "state": display_state,
             "interface": status.interface_name,
             "tunnel_ipv4": status.tunnel_ipv4,
             "uptime_seconds": status.uptime_seconds,

@@ -30,16 +30,17 @@
 <section class="card">
 <h2>Runtime</h2>
 <p id="runtime-state">
-{% if runtime.state == "connected" %}<span class="status-good">● Connected</span>
-{% elif runtime.state == "connecting" %}<span class="status-warn">◐ Connecting</span>
-{% elif runtime.state == "failed" %}<span class="status-bad">● Failed</span>
+{% if runtime_display_state == "connected" %}<span class="status-good">● Connected</span>
+{% elif runtime_display_state == "connecting" %}<span class="status-warn">◐ Connecting</span>
+{% elif runtime_display_state == "standby" %}<span class="muted">○ Standby · no assigned clients</span>
+{% elif runtime_display_state == "failed" %}<span class="status-bad">● Failed</span>
 {% else %}<span class="muted">○ Disconnected</span>{% endif %}
 </p>
 <p>Interface: <code id="runtime-interface">{{ runtime.interface_name }}</code></p>
 <p>Tunnel IP: <code id="runtime-ip">{{ runtime.tunnel_ipv4 or "—" }}</code></p>
 <p>Uptime: <span id="runtime-uptime">—</span></p>
 <p>Exit IP: <code id="runtime-exit">—</code></p>
-<div id="runtime-error" class="error-box" style="{% if not runtime.last_error %}display:none;{% endif %}">{{ runtime.last_error or "" }}</div>
+<div id="runtime-error" class="error-box" style="{% if not runtime.last_error or runtime_display_state == "standby" %}display:none;{% endif %}">{% if runtime_display_state != "standby" %}{{ runtime.last_error or "" }}{% endif %}</div>
 <div id="retry-status" class="muted" style="margin:.65rem 0;"></div>
 {% if profile.vpn_type == "openvpn" %}
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
@@ -127,6 +128,7 @@
   function stateHtml(value) {
     if (value === "connected") return '<span class="status-good">● Connected</span>';
     if (value === "connecting") return '<span class="status-warn">◐ Connecting</span>';
+    if (value === "standby") return '<span class="muted">○ Standby · no assigned clients</span>';
     if (value === "failed") return '<span class="status-bad">● Failed</span>';
     if (value === "stale") return '<span class="status-warn">◐ Stale interface</span>';
     return '<span class="muted">○ Disconnected</span>';
