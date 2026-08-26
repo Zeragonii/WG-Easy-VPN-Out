@@ -238,19 +238,64 @@ class RoutingEngine:
                     f"  set group_{group.id}_v4 {{ type ipv4_addr; flags interval; }}"
                 )
 
+        # Mark forced classic-DNS traffic before the RFC1918 bypass. This is
+        # important for PIA DNS (10.0.0.242), which intentionally lives inside
+        # 10/8 even though that range is otherwise treated as local/private.
         lines.extend([
             "  chain prerouting {",
             "    type filter hook prerouting priority mangle; policy accept;",
+        ])
+
+        for group in groups:
+            target = group.effective_dns_target
+            if group.vpn_profile_id and target:
+                lines.append(
+                    f"    ip saddr @group_{group.id}_v4 udp dport 53 "
+                    f"meta mark set {group.mark_hex}"
+                )
+                lines.append(
+                    f"    ip saddr @group_{group.id}_v4 tcp dport 53 "
+                    f"meta mark set {group.mark_hex}"
+                )
+
+        lines.extend([
             "    ip daddr 127.0.0.0/8 return",
             "    ip daddr 10.0.0.0/8 return",
             "    ip daddr 172.16.0.0/12 return",
             "    ip daddr 192.168.0.0/16 return",
             "    ip daddr 169.254.0.0/16 return",
         ])
+
         for group in groups:
             lines.append(
                 f"    ip saddr @group_{group.id}_v4 meta mark set {group.mark_hex}"
             )
+        lines.append("  }")
+
+        # Destination NAT transparently redirects classic UDP/TCP DNS from
+        # assigned WG-Easy clients to the routing group's selected resolver.
+        # The fwmark above ensures the rewritten destination follows the same
+        # policy table / VPN path as the rest of the group traffic.
+        lines.extend([
+            "  chain dns_redirect {",
+            "    type nat hook prerouting priority dstnat; policy accept;",
+        ])
+        for group in groups:
+            target = group.effective_dns_target
+            iface, mode = effective_ifaces.get(group.id, ("", ""))
+            # Only install forced provider/custom DNS while the VPN is the
+            # effective path. If the group is blocked, its policy table remains
+            # blackholed. If it is in WAN fallback, leave DNS untouched rather
+            # than silently pretending provider DNS is still active.
+            if group.vpn_profile_id and target and mode == "vpn":
+                lines.append(
+                    f"    ip saddr @group_{group.id}_v4 udp dport 53 "
+                    f"dnat to {target}"
+                )
+                lines.append(
+                    f"    ip saddr @group_{group.id}_v4 tcp dport 53 "
+                    f"dnat to {target}"
+                )
         lines.append("  }")
 
         lines.extend([

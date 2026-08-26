@@ -103,6 +103,8 @@ def build_diagnostics(
             "name": group.name,
             "target": group.target_label,
             "fallback_mode": group.fallback_mode,
+            "dns_mode": group.dns_mode,
+            "dns_target": group.effective_dns_target,
             "fwmark": group.mark_hex,
             "table_id": group.table_id,
             "state": state.state,
@@ -263,8 +265,10 @@ def render_text(data):
         lines.append(
             f"[{group['id']}] {group['name']} | target={group['target']} | "
             f"effective={group['effective_exit']} | state={group['state']} | "
-            f"fallback={group['fallback_mode']} | mark={group['fwmark']} | "
-            f"table={group['table_id']} | clients={group['assigned_clients']}"
+            f"fallback={group['fallback_mode']} | "
+            f"dns={group.get('dns_mode')}:{group.get('dns_target')} | "
+            f"mark={group['fwmark']} | table={group['table_id']} | "
+            f"clients={group['assigned_clients']}"
         )
         lines.append(f"  {group['detail']}")
 

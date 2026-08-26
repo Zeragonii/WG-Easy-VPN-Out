@@ -1,5 +1,17 @@
 {% extends "base.html" %}
-{% block title %}{% if group %}Edit {{ group.name }}{% else %}Add Routing Group{% endif %} · VPN Router{% endblock %}
+{% block title %}{% if group %}Edit {{ group.name }}{% else %}Add Routing Group{% endif %} · VPN Router
+<script>
+(() => {
+  const mode = document.getElementById("dns-mode");
+  const wrap = document.getElementById("dns-target-wrap");
+  function syncDns() {
+    wrap.style.display = mode.value === "custom" ? "" : "none";
+  }
+  mode.addEventListener("change", syncDns);
+  syncDns();
+})();
+</script>
+{% endblock %}
 {% block content %}
 <h1>{% if group %}Edit Routing Group{% else %}Add Routing Group{% endif %}</h1>
 
@@ -43,6 +55,40 @@
   <p class="muted">
     Fallback only applies when a VPN profile is selected. WAN groups always use the host default WAN.
   </p>
+
+  <div class="card" style="margin-top:1rem;background:var(--panel2);">
+    <h2 style="margin-top:0;">DNS policy</h2>
+    <label>
+      DNS mode
+      <select name="dns_mode" id="dns-mode">
+        <option value="inherit"
+          {% if not group or group.dns_mode == "inherit" %}selected{% endif %}>
+          Existing / client DNS
+        </option>
+        <option value="pia"
+          {% if group and group.dns_mode == "pia" %}selected{% endif %}>
+          Force PIA DNS (10.0.0.242)
+        </option>
+        <option value="custom"
+          {% if group and group.dns_mode == "custom" %}selected{% endif %}>
+          Force custom DNS
+        </option>
+      </select>
+    </label>
+
+    <label id="dns-target-wrap">
+      Custom DNS IPv4 address
+      <input name="dns_target" id="dns-target"
+             value="{{ group.dns_target if group and group.dns_target else '' }}"
+             placeholder="e.g. 9.9.9.9">
+    </label>
+
+    <p class="muted">
+      Forced DNS intercepts classic UDP/TCP port 53 from WG-Easy clients
+      assigned to this VPN-backed group and redirects it through the group's
+      VPN routing table. It does not intercept DNS-over-HTTPS.
+    </p>
+  </div>
 
   <div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1rem;">
     <button type="submit" style="width:auto;">

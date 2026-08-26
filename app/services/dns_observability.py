@@ -162,3 +162,89 @@ def run_dns_leak_probe(runtime, profile, iface, tunnel_ip, query_count=6):
     parsed["queries_attempted"] = queries_attempted
     parsed["queries_completed"] = queries_attempted
     return parsed
+
+
+def run_explicit_resolver_probe(
+    runtime,
+    profile,
+    iface,
+    tunnel_ip,
+    resolver_ip,
+    query_count=6,
+):
+    """
+    Validate a configured classic-DNS resolver through a specific VPN tunnel.
+
+    Unlike the host-resolver visibility probe, these DNS queries are sent
+    directly to the selected resolver and bound to the VPN tunnel address.
+    """
+    runtime.ensure_probe_route(profile, iface, tunnel_ip)
+
+    id_result = subprocess.run(
+        [
+            "curl", "--silent", "--show-error", "--fail",
+            "--max-time", "6",
+            "--interface", tunnel_ip,
+            BASHWS_ID_URL,
+        ],
+        text=True,
+        capture_output=True,
+        timeout=8,
+        check=False,
+    )
+    leak_id = id_result.stdout.strip()
+    if id_result.returncode != 0 or not leak_id or len(leak_id) > 64:
+        raise RuntimeError(
+            "Could not initialise the external DNS leak test through the VPN."
+        )
+
+    queries_attempted = max(1, int(query_count))
+    for index in range(1, queries_attempted + 1):
+        hostname = f"{index}.{leak_id}.bash.ws"
+        result = subprocess.run(
+            [
+                "dig",
+                "-4",
+                "-b", tunnel_ip,
+                f"@{resolver_ip}",
+                "+time=3",
+                "+tries=1",
+                "+short",
+                hostname,
+            ],
+            text=True,
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Configured DNS resolver {resolver_ip} is not reachable "
+                "through this VPN tunnel."
+            )
+
+    result = subprocess.run(
+        [
+            "curl", "--silent", "--show-error", "--fail",
+            "--max-time", "7",
+            "--interface", tunnel_ip,
+            BASHWS_RESULT_URL.format(leak_id=leak_id),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=9,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("Could not retrieve DNS leak test results.")
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("DNS leak service returned invalid JSON.") from exc
+
+    parsed = parse_bashws_results(payload)
+    parsed["queries_attempted"] = queries_attempted
+    parsed["queries_completed"] = queries_attempted
+    parsed["configured_resolver"] = resolver_ip
+    return parsed

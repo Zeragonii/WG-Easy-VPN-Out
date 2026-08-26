@@ -45,6 +45,8 @@ class RoutingGroup(db.Model):
         nullable=True,
     )
     fallback_mode = db.Column(db.String(16), nullable=False, default="block")
+    dns_mode = db.Column(db.String(16), nullable=False, default="inherit")
+    dns_target = db.Column(db.String(64), nullable=True)
     fwmark = db.Column(db.Integer, unique=True, nullable=True)
     table_id = db.Column(db.Integer, unique=True, nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
@@ -64,6 +66,23 @@ class RoutingGroup(db.Model):
     @property
     def mark_hex(self):
         return f"0x{self.fwmark:x}" if self.fwmark is not None else "—"
+
+
+    @property
+    def effective_dns_target(self):
+        if self.dns_mode == "pia":
+            return "10.0.0.242"
+        if self.dns_mode == "custom":
+            return self.dns_target
+        return None
+
+    @property
+    def dns_policy_label(self):
+        if self.dns_mode == "pia":
+            return "PIA DNS"
+        if self.dns_mode == "custom":
+            return f"Custom DNS ({self.dns_target or 'not set'})"
+        return "Existing / client DNS"
 
 
 class ClientAssignment(db.Model):

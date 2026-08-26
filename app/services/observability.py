@@ -10,7 +10,7 @@ import time
 import requests
 
 from .vpn_runtime import VPNRuntimeService
-from .dns_observability import run_dns_leak_probe
+from .dns_observability import run_dns_leak_probe, run_explicit_resolver_probe
 
 
 def _iso_now():
@@ -201,6 +201,50 @@ class ObservabilityService:
         else:
             result["checking"] = False
             self._set_dns_state(profile.id, **result)
+
+    def refresh_dns_group(self, group):
+        with self.app.app_context():
+            profile = group.vpn_profile
+            if profile is None:
+                raise ValueError("Routing group is not VPN-backed.")
+
+            status = self.runtime.status(profile, include_probe=False)
+            if status.state != "connected" or not status.tunnel_ipv4:
+                result = {
+                    "state": "unavailable",
+                    "detail": "VPN is not currently connected.",
+                    "checked_at": _iso_now(),
+                    "resolvers": [],
+                    "checking": False,
+                }
+                self._set_dns_state(profile.id, **result)
+                return result
+
+            target = group.effective_dns_target
+            if target:
+                try:
+                    result = run_explicit_resolver_probe(
+                        self.runtime,
+                        profile,
+                        status.interface_name,
+                        status.tunnel_ipv4,
+                        target,
+                    )
+                except Exception as exc:
+                    result = {
+                        "state": "unavailable",
+                        "detail": str(exc)[-400:],
+                        "checked_at": _iso_now(),
+                        "resolvers": [],
+                        "configured_resolver": target,
+                        "checking": False,
+                    }
+                else:
+                    result["checking"] = False
+                self._set_dns_state(profile.id, **result)
+                return result
+
+            return self.refresh_dns_profile(profile.id)
 
     def refresh_dns_profile(self, profile_id):
         with self.app.app_context():

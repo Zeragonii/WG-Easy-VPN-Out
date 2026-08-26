@@ -18,6 +18,30 @@ def _profiles():
     ).scalars().all()
 
 
+
+def _parse_dns_policy(vpn_profile_id):
+    mode = request.form.get("dns_mode", "inherit").strip().lower()
+    target = request.form.get("dns_target", "").strip()
+
+    if vpn_profile_id is None:
+        return "inherit", None, None
+
+    if mode not in ("inherit", "pia", "custom"):
+        return None, None, "Invalid DNS policy."
+
+    if mode == "inherit":
+        return "inherit", None, None
+
+    if mode == "pia":
+        return "pia", None, None
+
+    try:
+        parsed = str(__import__("ipaddress").IPv4Address(target))
+    except Exception:
+        return None, None, "Custom DNS must be a valid IPv4 address."
+
+    return "custom", parsed, None
+
 def _rebuild_with_flash(success_message=None):
     try:
         RoutingEngine().rebuild(db, RoutingGroup)
@@ -107,10 +131,21 @@ def new():
         if fallback not in ("block", "wan"):
             fallback = "block"
 
+        dns_mode, dns_target, dns_error = _parse_dns_policy(vpn_profile_id)
+        if dns_error:
+            flash(dns_error, "error")
+            return render_template(
+                "routing_groups/form.html",
+                group=None,
+                profiles=profiles,
+            )
+
         group = RoutingGroup(
             name=name,
             vpn_profile_id=vpn_profile_id,
             fallback_mode=fallback,
+            dns_mode=dns_mode,
+            dns_target=dns_target,
         )
         db.session.add(group)
 
@@ -182,6 +217,17 @@ def edit(group_id):
                     profiles=profiles,
                 )
             group.vpn_profile_id = profile_id
+
+        dns_mode, dns_target, dns_error = _parse_dns_policy(group.vpn_profile_id)
+        if dns_error:
+            flash(dns_error, "error")
+            return render_template(
+                "routing_groups/form.html",
+                group=group,
+                profiles=profiles,
+            )
+        group.dns_mode = dns_mode
+        group.dns_target = dns_target
 
         try:
             db.session.commit()
@@ -259,7 +305,7 @@ def probe_dns(group_id):
         return redirect(url_for("routing_groups.index"))
 
     try:
-        result = observability.refresh_dns_profile(group.vpn_profile_id)
+        result = observability.refresh_dns_group(group)
     except Exception as exc:
         flash(f"DNS probe failed: {exc}", "error")
     else:

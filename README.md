@@ -804,3 +804,33 @@ queries had been generated. v1.2.2 now mirrors the upstream behavior: it fires
 the tunnel-bound ping triggers without interpreting their return codes, then
 uses the bash.ws result endpoint itself to determine whether resolvers were
 observed.
+
+
+## v1.3.0 - DNS policy and leak prevention
+
+Routing groups can now control classic DNS for assigned WG-Easy clients.
+
+### DNS modes
+
+- **Existing / client DNS** — preserves v1.2 behavior.
+- **Force PIA DNS** — transparently redirects UDP/TCP port 53 to
+  `10.0.0.242` and routes it through the group's PIA tunnel.
+- **Force custom DNS** — transparently redirects UDP/TCP port 53 to a
+  user-supplied IPv4 resolver through the group's VPN routing table.
+
+Forced DNS is implemented inside VPN Router's nftables policy table. DNS
+traffic is marked before RFC1918/private-address bypass rules, which allows PIA
+DNS (`10.0.0.242`) to use the VPN path even though the rest of `10.0.0.0/8`
+continues to retain normal local/private-network bypass behavior.
+
+DNS follows kill-switch behavior. A block-on-failure VPN group retains its
+blackhole policy when the tunnel is unavailable; VPN Router does not silently
+fall back to the host resolver. WAN-fallback groups stop forcing provider DNS
+while WAN fallback is active.
+
+The Routing Group Health page now shows the configured DNS policy and resolver.
+Manual DNS visibility tests for forced-DNS groups query the selected resolver
+through the actual VPN tunnel before retrieving external resolver observations.
+
+v1.3.0 controls classic UDP/TCP port 53 only. DNS-over-HTTPS is intentionally
+out of scope and is not intercepted.

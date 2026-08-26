@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0
+
+### DNS policy & leak prevention
+
+- Added schema v4 routing-group DNS policy fields.
+- Added per-group Existing / PIA / Custom DNS modes.
+- Added transparent UDP/TCP port 53 redirection for assigned WG-Easy clients.
+- Forced DNS is marked before RFC1918 bypass so PIA DNS at `10.0.0.242`
+  correctly follows the VPN routing table.
+- DNS policy follows VPN kill-switch/fallback behavior.
+- Added explicit resolver validation through the selected VPN tunnel.
+- Added DNS policy details to Routing Group Health and diagnostics.
+- Added DNS policy fields to backup/restore with backward-compatible defaults.
+- DNS-over-HTTPS remains intentionally out of scope.
+
 ## 1.2.2
 
 ### DNS leak probe result handling

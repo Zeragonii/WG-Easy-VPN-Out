@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 
 class MigrationError(RuntimeError):
@@ -80,10 +80,31 @@ def _migration_3_routing_events(connection):
     """)
 
 
+
+def _migration_4_dns_policy(connection):
+    columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(routing_groups)"
+        ).fetchall()
+    }
+    if "dns_mode" not in columns:
+        connection.execute(
+            "ALTER TABLE routing_groups "
+            "ADD COLUMN dns_mode VARCHAR(16) NOT NULL DEFAULT 'inherit'"
+        )
+    if "dns_target" not in columns:
+        connection.execute(
+            "ALTER TABLE routing_groups "
+            "ADD COLUMN dns_target VARCHAR(64)"
+        )
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
     Migration(3, "routing-health-history", _migration_3_routing_events),
+    Migration(4, "routing-group-dns-policy", _migration_4_dns_policy),
 )
 
 

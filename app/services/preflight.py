@@ -120,7 +120,7 @@ def run_preflight(
     ))
 
     # Essential tools
-    tools = ("ip", "nft", "openvpn", "wg", "curl", "ping")
+    tools = ("ip", "nft", "openvpn", "wg", "curl", "ping", "dig")
     missing = [tool for tool in tools if not _command_exists(tool)]
     checks.append(CheckResult(
         "tools",

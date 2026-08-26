@@ -79,6 +79,8 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
             "name": g.name,
             "vpn_profile_id": g.vpn_profile_id,
             "fallback_mode": g.fallback_mode,
+            "dns_mode": g.dns_mode,
+            "dns_target": g.dns_target,
             "fwmark": g.fwmark,
             "table_id": g.table_id,
             "created_at": _iso(g.created_at),
@@ -273,6 +275,20 @@ def _validate_backup_data(data, configs):
             raise BackupError(
                 f"Routing group '{name}' has invalid fallback mode."
             )
+
+        dns_mode = row.get("dns_mode", "inherit")
+        if dns_mode not in ("inherit", "pia", "custom"):
+            raise BackupError(
+                f"Routing group '{name}' has invalid DNS mode."
+            )
+        dns_target = row.get("dns_target")
+        if dns_mode == "custom":
+            try:
+                ipaddress.IPv4Address(dns_target)
+            except (ipaddress.AddressValueError, TypeError) as exc:
+                raise BackupError(
+                    f"Routing group '{name}' has invalid custom DNS."
+                ) from exc
 
         target = row.get("vpn_profile_id")
         if target is not None:
@@ -620,6 +636,8 @@ def restore_backup(
                         else None
                     ),
                     fallback_mode=row.get("fallback_mode", "block"),
+                    dns_mode=row.get("dns_mode", "inherit"),
+                    dns_target=row.get("dns_target"),
                     fwmark=int(row["fwmark"]),
                     table_id=int(row["table_id"]),
                 ))
