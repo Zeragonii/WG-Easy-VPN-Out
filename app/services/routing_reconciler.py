@@ -17,6 +17,7 @@ class RoutingReconciler:
         self._stop = threading.Event()
         self._thread = None
         self._last_signature = None
+        self._last_health = {}
 
     def reload_settings(self):
         if self.interval_override is not None:
@@ -57,6 +58,53 @@ class RoutingReconciler:
             ))
         return tuple(snapshot)
 
+    def _health_snapshot(self):
+        engine = RoutingEngine()
+        groups = self.db.session.execute(
+            self.db.select(self.RoutingGroup)
+            .order_by(self.RoutingGroup.id.asc())
+        ).scalars().all()
+        return {
+            group.id: engine.inspect_group(group)
+            for group in groups
+        }
+
+    def _record_transitions(self, current_health):
+        from ..models import RoutingEvent
+
+        changed = 0
+        for group_id, health in current_health.items():
+            previous = self._last_health.get(group_id)
+            current_key = (
+                health.state,
+                health.effective_exit,
+                health.detail,
+            )
+            previous_key = (
+                (
+                    previous.state,
+                    previous.effective_exit,
+                    previous.detail,
+                )
+                if previous is not None
+                else None
+            )
+
+            if previous_key is not None and current_key != previous_key:
+                self.db.session.add(RoutingEvent(
+                    routing_group_id=group_id,
+                    state=health.state,
+                    effective_exit=health.effective_exit,
+                    detail=health.detail,
+                ))
+                changed += 1
+
+        if changed:
+            self.db.session.commit()
+
+        self._last_health = dict(current_health)
+        return changed
+
     def _loop(self):
         while not self._stop.wait(self.interval_seconds):
             try:
@@ -75,8 +123,12 @@ class RoutingReconciler:
                                 exc,
                             )
                         else:
+                            current_health = self._health_snapshot()
+                            transitions = self._record_transitions(current_health)
                             self.app.logger.info(
-                                "Routing reconciler applied VPN state change."
+                                "Routing reconciler applied VPN state change "
+                                "(%s routing transition(s) recorded).",
+                                transitions,
                             )
                             self._last_signature = current
 
@@ -94,6 +146,7 @@ class RoutingReconciler:
 
         with self.app.app_context():
             self._last_signature = self._snapshot()
+            self._last_health = self._health_snapshot()
             self.db.session.remove()
 
         self._thread = threading.Thread(

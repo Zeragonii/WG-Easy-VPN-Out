@@ -102,3 +102,26 @@ class AppSetting(db.Model):
         onupdate=db.func.now(),
         nullable=False,
     )
+
+
+class RoutingEvent(db.Model):
+    __tablename__ = "routing_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    routing_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("routing_groups.id"),
+        nullable=False,
+        index=True,
+    )
+    state = db.Column(db.String(32), nullable=False)
+    effective_exit = db.Column(db.String(255), nullable=False)
+    detail = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        nullable=False,
+        index=True,
+    )
+
+    routing_group = db.relationship("RoutingGroup")

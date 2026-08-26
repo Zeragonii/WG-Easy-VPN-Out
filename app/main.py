@@ -7,7 +7,7 @@ from flask import Blueprint, current_app, jsonify, render_template
 from flask_login import login_required
 
 from . import db
-from .models import AppSetting, ClientAssignment, RoutingGroup, VPNProfile
+from .models import AppSetting, ClientAssignment, RoutingEvent, RoutingGroup, VPNProfile
 from .services.routing import RoutingEngine
 from .services.vpn_runtime import VPNRuntimeService
 from .services.settings import SettingsService
@@ -192,6 +192,20 @@ def _routing_snapshot(groups, assignments):
     for group in groups:
         runtime = engine.inspect_group(group)
 
+        latest_event = db.session.execute(
+            db.select(RoutingEvent)
+            .where(RoutingEvent.routing_group_id == group.id)
+            .order_by(RoutingEvent.created_at.desc(), RoutingEvent.id.desc())
+            .limit(1)
+        ).scalars().first()
+
+        observability = current_app.extensions.get("observability")
+        dns_state = (
+            observability.dns_state(group.vpn_profile_id)
+            if observability and group.vpn_profile_id
+            else None
+        )
+
         rows.append({
             "id": group.id,
             "name": group.name,
@@ -199,6 +213,12 @@ def _routing_snapshot(groups, assignments):
             "effective_exit": runtime.effective_exit,
             "state": runtime.state,
             "detail": runtime.detail,
+            "dns": dns_state,
+            "last_transition_at": (
+                latest_event.created_at.isoformat()
+                if latest_event and latest_event.created_at
+                else None
+            ),
             "fallback": (
                 "WAN fallback"
                 if group.fallback_mode == "wan"

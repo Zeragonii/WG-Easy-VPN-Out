@@ -1,12 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Routing Groups · VPN Router{% endblock %}
+{% block title %}Routing Health · VPN Router{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
   <div>
-    <h1 style="margin-bottom:.35rem;">Routing Groups</h1>
+    <h1 style="margin-bottom:.35rem;">Routing Group Health</h1>
     <p class="muted" style="margin-top:0;">
-      nftables source sets → fwmarks → dedicated Linux routing tables.
-      WG-Easy client assignments populate these sets in v0.5.0.
+      Live route state, effective exit, DNS visibility and recent transitions.
     </p>
   </div>
   <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
@@ -18,74 +17,146 @@
   </div>
 </div>
 
-<div class="card">
-{% if groups %}
-<div class="table-wrap">
-<table>
-<thead>
-<tr>
-  <th>Name</th>
-  <th>Configured exit</th>
-  <th>Effective exit</th>
-  <th>Fallback</th>
-  <th>fwmark</th>
-  <th>Table</th>
-  <th>State</th>
-  <th></th>
-</tr>
-</thead>
-<tbody>
 {% for group in groups %}
 {% set rt = runtime[group.id] %}
-<tr>
-  <td><strong>{{ group.name }}</strong></td>
-  <td>{{ group.target_label }}</td>
-  <td>{{ rt.effective_exit }}</td>
-  <td>{% if group.vpn_profile_id %}{{ group.fallback_mode|capitalize }}{% else %}—{% endif %}</td>
-  <td><code>{{ group.mark_hex }}</code></td>
-  <td><code>{{ group.table_id }}</code></td>
-  <td>
-    {% if rt.state == "ready" %}<span class="status-good">● Ready</span>
-    {% elif rt.state == "fallback" %}<span class="status-warn">◐ WAN fallback</span>
-    {% else %}<span class="status-bad">● Blocked</span>{% endif %}
-    <div class="muted" style="font-size:.8rem;">{{ rt.detail }}</div>
-  </td>
-  <td>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-      <a class="button-link secondary" href="{{ url_for('routing_groups.edit', group_id=group.id) }}">Edit</a>
-      <form method="post" action="{{ url_for('routing_groups.delete', group_id=group.id) }}"
-            onsubmit="return confirm('Delete this routing group?');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="danger-button" type="submit">Delete</button>
-      </form>
+{% set dns_state = dns[group.id] %}
+<section class="card" style="margin-bottom:1rem;">
+  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:.1rem 0 .25rem;">{{ group.name }}</h2>
+      <div class="muted">
+        {{ group.mark_hex }} · table {{ group.table_id or "—" }}
+        {% if group.vpn_profile_id %} · fallback {{ group.fallback_mode }}{% endif %}
+      </div>
     </div>
-  </td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
-{% else %}
-<p class="muted" style="margin:0;">
-  No routing groups yet. Create a WAN or VPN-backed group to initialise the routing engine.
-</p>
-{% endif %}
-</div>
+    <div>
+      {% if rt.state == "ready" %}
+        <span class="status-good">● Ready</span>
+      {% elif rt.state == "fallback" %}
+        <span class="status-warn">◐ WAN fallback</span>
+      {% else %}
+        <span class="status-bad">● Blocked</span>
+      {% endif %}
+    </div>
+  </div>
 
-<div class="card" style="margin-top:1rem;">
-  <h2>Automatic routing reconciliation</h2>
-  <p class="muted">
-    VPN Router watches tunnel state and automatically rebuilds routing when a
-    VPN connects, disconnects, reconnects, or receives a new address/gateway.
-    Default check interval: 3 seconds.
+  <div class="grid" style="margin-top:1rem;">
+    <div>
+      <div class="muted">Configured exit</div>
+      <strong>{{ group.target_label }}</strong>
+    </div>
+    <div>
+      <div class="muted">Effective exit</div>
+      <strong>{{ rt.effective_exit }}</strong>
+    </div>
+    <div>
+      <div class="muted">Route detail</div>
+      <strong>{{ rt.detail }}</strong>
+    </div>
+    <div>
+      <div class="muted">DNS visibility</div>
+      {% if not group.vpn_profile_id %}
+        <span class="muted">Not applicable to WAN</span>
+      {% elif dns_state and dns_state.checking %}
+        <span class="status-warn">◐ Checking…</span>
+      {% elif dns_state and dns_state.state == "no_obvious_leak" %}
+        <span class="status-good">● No obvious leak</span>
+      {% elif dns_state and dns_state.state == "potential_leak" %}
+        <span class="status-warn">⚠ Potential DNS leak</span>
+      {% elif dns_state and dns_state.state == "observed" %}
+        <span class="status-warn">◐ Resolver observed</span>
+      {% elif dns_state %}
+        <span class="muted">○ Unavailable</span>
+      {% else %}
+        <span class="muted">○ Not tested yet</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if group.vpn_profile_id %}
+  <div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem;">
+    {% if dns_state %}
+      <div class="muted">{{ dns_state.detail }}</div>
+      {% if dns_state.resolvers %}
+        <div style="margin-top:.5rem;">
+          <strong>Observed resolvers:</strong>
+          {% for resolver in dns_state.resolvers %}
+            <div>
+              <code>{{ resolver.ip or "unknown" }}</code>
+              {% if resolver.country %} · {{ resolver.country }}{% endif %}
+              {% if resolver.asn %} · {{ resolver.asn }}{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% if dns_state.exit_asn %}
+        <div class="muted" style="margin-top:.4rem;">
+          VPN exit ASN: {{ dns_state.exit_asn }}
+          {% if dns_state.checked_at %} · checked {{ dns_state.checked_at }}{% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
+    <form method="post" action="{{ url_for('routing_groups.probe_dns', group_id=group.id) }}" style="margin-top:.7rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="inline-button" type="submit">Run DNS leak test now</button>
+    </form>
+    <div class="muted" style="font-size:.78rem;margin-top:.5rem;">
+      DNS status is observational only. The probe is generated by VPN Router and
+      pinned to this outbound tunnel; it does not rewrite DNS and cannot prove
+      that every individual WG-Easy client uses the same resolver path.
+    </div>
+  </div>
+  {% endif %}
+
+  <details style="margin-top:1rem;">
+    <summary>Recent routing transitions</summary>
+    {% if events[group.id] %}
+      <div style="margin-top:.7rem;">
+      {% for event in events[group.id] %}
+        <div style="padding:.55rem 0;border-top:1px solid var(--border);">
+          <strong>
+            {% if event.state == "ready" %}Ready
+            {% elif event.state == "fallback" %}WAN fallback
+            {% else %}Blocked{% endif %}
+          </strong>
+          → {{ event.effective_exit }}
+          <div class="muted" style="font-size:.8rem;">
+            {{ event.created_at }} · {{ event.detail }}
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No state transitions recorded since v1.2.0 was installed.</p>
+    {% endif %}
+  </details>
+
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem;">
+    <a class="button-link secondary" href="{{ url_for('routing_groups.edit', group_id=group.id) }}">Edit</a>
+    <form method="post" action="{{ url_for('routing_groups.delete', group_id=group.id) }}"
+          onsubmit="return confirm('Delete this routing group?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="danger-button" type="submit">Delete</button>
+    </form>
+  </div>
+</section>
+{% else %}
+<div class="card">
+  <p class="muted" style="margin:0;">
+    No routing groups yet. Create a WAN or VPN-backed group to initialise the routing engine.
   </p>
 </div>
+{% endfor %}
 
 <div class="card" style="margin-top:1rem;">
-  <h2>Assignment engine</h2>
+  <h2>How DNS visibility works</h2>
   <p class="muted">
-    WG-Easy client assignments are persisted in SQLite and restored into the
-    nftables source sets whenever the routing engine rebuilds.
+    VPN Router generates unique DNS lookups while binding the probe to the
+    selected outbound tunnel, then asks the external bash.ws DNS-leak service
+    which resolver networks observed those lookups. A matching resolver/VPN ASN
+    is shown as “No obvious leak”; a different ASN is deliberately labelled
+    “Potential DNS leak” because legitimate third-party DNS providers such as
+    public encrypted resolvers can also differ from the VPN provider.
   </p>
 </div>
 {% endblock %}

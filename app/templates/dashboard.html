@@ -216,7 +216,8 @@
           <th>Clients</th>
           <th>Configured exit</th>
           <th>Effective exit</th>
-          <th>Fallback</th>
+          <th>DNS</th>
+          <th>Last change</th>
           <th>State</th>
         </tr>
       </thead>
@@ -232,7 +233,20 @@
           <td><strong>{{ group.assigned_clients }}</strong></td>
           <td>{{ group.configured_exit }}</td>
           <td>{{ group.effective_exit }}</td>
-          <td>{{ group.fallback }}</td>
+          <td>
+            {% if not group.dns %}
+              <span class="muted">—</span>
+            {% elif group.dns.state == "no_obvious_leak" %}
+              <span class="status-good">● No obvious leak</span>
+            {% elif group.dns.state == "potential_leak" %}
+              <span class="status-warn">⚠ Potential leak</span>
+            {% elif group.dns.checking %}
+              <span class="status-warn">◐ Checking…</span>
+            {% else %}
+              <span class="muted">○ {{ group.dns.state|replace("_", " ")|capitalize }}</span>
+            {% endif %}
+          </td>
+          <td>{{ group.last_transition_at or "—" }}</td>
           <td>
             {% if group.state == "ready" %}
               <span class="status-good">● Ready</span>
@@ -246,7 +260,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="6" class="muted">No routing groups configured.</td>
+          <td colspan="7" class="muted">No routing groups configured.</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0
+
+### Routing health
+
+- Added schema v3 and persistent routing transition history.
+- Routing Group Health now shows configured/effective exits and recent state
+  transitions.
+- Dashboard routing health shows DNS state and last transition time.
+
+### DNS leak visibility
+
+- Added tunnel-pinned DNS leak probes using bash.ws.
+- Added resolver IP/country/ASN visibility.
+- Added conservative “No obvious leak” / “Potential DNS leak” health states.
+- Added manual per-routing-group DNS tests.
+- Added configurable automatic DNS probe interval (default 900 seconds).
+- Added `dig` to the container image and release preflight.
+- DNS remains observational only; v1.2.0 does not rewrite or enforce resolvers.
+
 ## 1.1.0
 
 ### First-run setup

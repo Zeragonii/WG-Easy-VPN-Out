@@ -10,6 +10,7 @@ import time
 import requests
 
 from .vpn_runtime import VPNRuntimeService
+from .dns_observability import run_dns_leak_probe
 
 
 def _iso_now():
@@ -128,6 +129,7 @@ class ObservabilityService:
         self._thread = None
 
         self._exit_ips = {}
+        self._dns_states = {}
         self._update = {
             "installed": _installed_version(),
             "latest": None,
@@ -140,6 +142,7 @@ class ObservabilityService:
         self._update_checked_monotonic = None
 
         self._next_exit_refresh = 0.0
+        self._next_dns_refresh = 0.0
 
     def reload_settings(self):
         from ..models import AppSetting
@@ -147,11 +150,93 @@ class ObservabilityService:
         with self.app.app_context():
             settings = SettingsService(self.db, AppSetting)
             self.exit_ip_interval = float(settings.get("exit_ip_probe_interval"))
+            self.dns_probe_interval = float(settings.get("dns_leak_probe_interval"))
             self.update_cache_seconds = float(settings.get("update_check_cache_seconds"))
             self.update_url = str(settings.get("update_version_url")).strip()
             self.repository_url = str(settings.get("update_repository_url")).strip()
             if hasattr(self, "_update") and isinstance(self._update, dict):
                 self._update["repository_url"] = self.repository_url
+
+    def dns_state(self, profile_id):
+        with self._lock:
+            value = self._dns_states.get(int(profile_id))
+            return dict(value) if value else None
+
+    def _set_dns_state(self, profile_id, **values):
+        with self._lock:
+            current = dict(self._dns_states.get(int(profile_id), {}))
+            current.update(values)
+            self._dns_states[int(profile_id)] = current
+
+    def _probe_dns_for_profile(self, profile):
+        status = self.runtime.status(profile, include_probe=False)
+        if status.state != "connected" or not status.tunnel_ipv4:
+            self._set_dns_state(
+                profile.id,
+                state="unavailable",
+                detail="VPN is not currently connected.",
+                checked_at=_iso_now(),
+                resolvers=[],
+                checking=False,
+            )
+            return
+
+        self._set_dns_state(profile.id, checking=True)
+        try:
+            result = run_dns_leak_probe(
+                self.runtime,
+                profile,
+                status.interface_name,
+                status.tunnel_ipv4,
+            )
+        except Exception as exc:
+            self._set_dns_state(
+                profile.id,
+                state="unavailable",
+                detail=str(exc)[-400:],
+                checked_at=_iso_now(),
+                resolvers=[],
+                checking=False,
+            )
+        else:
+            result["checking"] = False
+            self._set_dns_state(profile.id, **result)
+
+    def refresh_dns_profile(self, profile_id):
+        with self.app.app_context():
+            profile = self.db.session.get(self.VPNProfile, int(profile_id))
+            if profile is None:
+                raise ValueError("VPN profile not found.")
+            self._probe_dns_for_profile(profile)
+            result = self.dns_state(profile.id)
+            self.db.session.remove()
+            return result
+
+    def _refresh_dns(self):
+        with self.app.app_context():
+            profiles = self.db.session.execute(
+                self.db.select(self.VPNProfile)
+                .where(
+                    self.VPNProfile.vpn_type == "openvpn",
+                    self.VPNProfile.enabled.is_(True),
+                )
+                .order_by(self.VPNProfile.id.asc())
+            ).scalars().all()
+
+            active_ids = {profile.id for profile in profiles}
+            for profile in profiles:
+                self._probe_dns_for_profile(profile)
+
+            with self._lock:
+                stale = [
+                    profile_id
+                    for profile_id in self._dns_states
+                    if profile_id not in active_ids
+                ]
+                for profile_id in stale:
+                    self._dns_states.pop(profile_id, None)
+
+            self.db.session.remove()
 
     def exit_ip_state(self, profile_id):
         with self._lock:
@@ -173,6 +258,10 @@ class ObservabilityService:
                     for key, value in self._exit_ips.items()
                 },
                 "update": dict(self._update),
+                "dns": {
+                    str(key): dict(value)
+                    for key, value in self._dns_states.items()
+                },
             }
 
     def _set_exit_state(self, profile_id, **values):
@@ -324,6 +413,18 @@ class ObservabilityService:
                         "Unhandled exit-IP observability refresh error."
                     )
 
+            if (
+                self.dns_probe_interval > 0
+                and now >= self._next_dns_refresh
+            ):
+                self._next_dns_refresh = now + self.dns_probe_interval
+                try:
+                    self._refresh_dns()
+                except Exception:
+                    self.app.logger.exception(
+                        "Unhandled DNS observability refresh error."
+                    )
+
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -374,6 +475,8 @@ class ObservabilityService:
             "loop_interval_seconds": self.loop_interval,
             "exit_ip_interval_seconds": self.exit_ip_interval,
             "update_cache_seconds": self.update_cache_seconds,
+            "dns_probe_interval_seconds": self.dns_probe_interval,
+            "cached_dns_states": len(self._dns_states),
             "cached_exit_ips": cached_exit_ips,
             "update_checked_at": update_checked_at,
         }

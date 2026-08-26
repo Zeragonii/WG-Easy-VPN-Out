@@ -30,6 +30,7 @@ DEFINITIONS = {
         SettingDefinition("vpn_retry_max_failures", "VPN_RETRY_MAX_FAILURES", "0", "int", label="Maximum retry failures (0 = unlimited)", section="VPN resilience"),
         SettingDefinition("vpn_connect_timeout_seconds", "VPN_CONNECT_TIMEOUT_SECONDS", "45", "float", label="Connecting timeout (seconds, 0 = disabled)", section="VPN resilience"),
         SettingDefinition("exit_ip_probe_interval", "EXIT_IP_PROBE_INTERVAL", "60", "float", label="Exit-IP probe interval (seconds)", section="Observability"),
+        SettingDefinition("dns_leak_probe_interval", "DNS_LEAK_PROBE_INTERVAL", "900", "float", label="DNS leak probe interval (seconds, 0 = manual only)", section="Observability"),
         SettingDefinition("update_check_cache_seconds", "UPDATE_CHECK_CACHE_SECONDS", "900", "float", label="Update-check cache (seconds)", section="Observability"),
         SettingDefinition("update_version_url", "UPDATE_VERSION_URL", "https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION", label="Version URL", section="Observability"),
         SettingDefinition("update_repository_url", "UPDATE_REPOSITORY_URL", "https://github.com/Zeragonii/WG-Easy-VPN-Out", label="Repository URL", section="Observability"),

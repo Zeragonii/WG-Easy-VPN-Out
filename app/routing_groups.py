@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 from sqlalchemy.exc import IntegrityError
 
 from . import db
-from .models import RoutingGroup, VPNProfile
+from .models import RoutingEvent, RoutingGroup, VPNProfile
 from .services.routing import RoutingEngine, RoutingEngineError
 
 
@@ -37,10 +37,32 @@ def index():
     ).scalars().all()
     engine = RoutingEngine()
     runtime = {group.id: engine.inspect_group(group) for group in groups}
+    observability = current_app.extensions.get("observability")
+
+    events = {}
+    for group in groups:
+        events[group.id] = db.session.execute(
+            db.select(RoutingEvent)
+            .where(RoutingEvent.routing_group_id == group.id)
+            .order_by(RoutingEvent.created_at.desc(), RoutingEvent.id.desc())
+            .limit(5)
+        ).scalars().all()
+
+    dns = {
+        group.id: (
+            observability.dns_state(group.vpn_profile_id)
+            if observability and group.vpn_profile_id
+            else None
+        )
+        for group in groups
+    }
+
     return render_template(
         "routing_groups/index.html",
         groups=groups,
         runtime=runtime,
+        events=events,
+        dns=dns,
     )
 
 
@@ -209,6 +231,7 @@ def delete(group_id):
     # defence.
     RoutingEngine().remove_group_state(group_id)
 
+    db.session.query(RoutingEvent).filter_by(routing_group_id=group.id).delete()
     db.session.delete(group)
     db.session.commit()
     _rebuild_with_flash(f"Routing group '{name}' deleted.")
@@ -219,4 +242,28 @@ def delete(group_id):
 @login_required
 def rebuild():
     _rebuild_with_flash("Routing engine rebuilt.")
+    return redirect(url_for("routing_groups.index"))
+
+
+@bp.post("/<int:group_id>/probe-dns")
+@login_required
+def probe_dns(group_id):
+    group = db.get_or_404(RoutingGroup, group_id)
+    if not group.vpn_profile_id:
+        flash("DNS leak probing applies only to VPN-backed routing groups.", "error")
+        return redirect(url_for("routing_groups.index"))
+
+    observability = current_app.extensions.get("observability")
+    if observability is None:
+        flash("Observability service is unavailable.", "error")
+        return redirect(url_for("routing_groups.index"))
+
+    try:
+        result = observability.refresh_dns_profile(group.vpn_profile_id)
+    except Exception as exc:
+        flash(f"DNS probe failed: {exc}", "error")
+    else:
+        label = (result or {}).get("state", "unknown").replace("_", " ")
+        flash(f"DNS probe completed: {label}.", "success")
+
     return redirect(url_for("routing_groups.index"))

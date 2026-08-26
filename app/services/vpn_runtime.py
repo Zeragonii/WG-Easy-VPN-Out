@@ -209,6 +209,11 @@ class VPNRuntimeService:
         value = result.stdout.strip()
         return value if result.returncode == 0 and value and len(value) < 65 else None
 
+
+    def ensure_probe_route(self, profile, iface, tunnel_ip):
+        """Public wrapper used by observability probes pinned to a VPN tunnel."""
+        self._ensure_probe_route(profile, iface, tunnel_ip)
+
     def exit_ip(self, profile, iface=None, tunnel_ip=None):
         """
         Probe the public IPv4 exit for a connected profile.

@@ -88,6 +88,11 @@ def build_diagnostics(
             ),
             "last_error": status.last_error,
             "retry": retry,
+            "dns": (
+                app.extensions.get("observability").dns_state(profile.id)
+                if app is not None and app.extensions.get("observability")
+                else None
+            ),
         })
 
     group_rows = []
@@ -226,6 +231,21 @@ def render_text(data):
         )
         if vpn["last_error"]:
             lines.append(f"  last_error={vpn['last_error']}")
+        if vpn.get("dns"):
+            dns = vpn["dns"]
+            lines.append(
+                "  dns="
+                f"state:{dns.get('state')} "
+                f"checked_at:{dns.get('checked_at')} "
+                f"exit_asn:{dns.get('exit_asn')}"
+            )
+            for resolver in dns.get("resolvers") or []:
+                lines.append(
+                    "    resolver="
+                    f"{resolver.get('ip')} "
+                    f"country:{resolver.get('country')} "
+                    f"asn:{resolver.get('asn')}"
+                )
         if vpn.get("retry"):
             retry = vpn["retry"]
             lines.append(

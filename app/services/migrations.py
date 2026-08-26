@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 class MigrationError(RuntimeError):
@@ -57,9 +57,33 @@ def _migration_2_application_settings(connection):
     """)
 
 
+
+def _migration_3_routing_events(connection):
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS routing_events (
+            id INTEGER PRIMARY KEY,
+            routing_group_id INTEGER NOT NULL,
+            state VARCHAR(32) NOT NULL,
+            effective_exit VARCHAR(255) NOT NULL,
+            detail TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(routing_group_id) REFERENCES routing_groups(id)
+        )
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_routing_events_routing_group_id
+        ON routing_events(routing_group_id)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_routing_events_created_at
+        ON routing_events(created_at)
+    """)
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
+    Migration(3, "routing-health-history", _migration_3_routing_events),
 )
 
 

@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
+       bind9-dnsutils \
        curl \
        iproute2 \
        nftables \
