@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.5.8
+
+### Routing-group DNS observability cleanup
+
+- DNS visibility for Routing Group Health is now cached per routing group
+  instead of per VPN profile.
+- Automatic/background DNS checks now honor each routing group's configured DNS
+  policy.
+- Groups using PIA/custom forced DNS automatically run the same explicit
+  resolver test used by the **Run DNS leak test now** button.
+- Groups using Existing/client DNS continue to use the generic tunnel-bound
+  DNS visibility probe.
+- Manual and automatic checks now write to the same routing-group cache, so a
+  startup generic result can no longer overwrite a forced-DNS result.
+- Multiple routing groups may share one VPN profile while retaining independent
+  DNS-policy visibility.
+- Profile-level generic DNS cache remains available for profile observability.
+- No schema, routing, DNS interception, provider-adapter, or on-demand lifecycle
+  changes.
+
 ## 1.5.7
 
 ### Forced-DNS probe path fix

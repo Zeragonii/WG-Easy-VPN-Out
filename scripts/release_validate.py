@@ -148,6 +148,31 @@ def main():
             "from active failures"
         )
 
+    observability_source = (
+        ROOT / "app/services/observability.py"
+    ).read_text(encoding="utf-8")
+    for required_fragment in (
+        "_dns_group_states",
+        "def dns_group_state",
+        "def _set_dns_group_state",
+        "self.refresh_dns_group(group)",
+    ):
+        if required_fragment not in observability_source:
+            fail(
+                "Routing-group DNS observability is missing: "
+                f"{required_fragment}"
+            )
+
+    routing_groups_source = (
+        ROOT / "app/routing_groups.py"
+    ).read_text(encoding="utf-8")
+    if "observability.dns_group_state(group.id)" not in routing_groups_source:
+        fail("Routing Group Health must read DNS state by routing-group ID")
+
+    main_source = (ROOT / "app/main.py").read_text(encoding="utf-8")
+    if "observability.dns_group_state(group.id)" not in main_source:
+        fail("Dashboard routing snapshot must read DNS state by routing-group ID")
+
     readme_lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
     first_h2 = next((line for line in readme_lines if line.startswith("## ")), None)
     if first_h2 != "## AI-assisted development":

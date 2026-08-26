@@ -74,7 +74,7 @@ def index():
 
     dns = {
         group.id: (
-            observability.dns_state(group.vpn_profile_id)
+            observability.dns_group_state(group.id)
             if observability and group.vpn_profile_id
             else None
         )

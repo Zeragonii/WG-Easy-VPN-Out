@@ -201,7 +201,7 @@ def _routing_snapshot(groups, assignments):
 
         observability = current_app.extensions.get("observability")
         dns_state = (
-            observability.dns_state(group.vpn_profile_id)
+            observability.dns_group_state(group.id)
             if observability and group.vpn_profile_id
             else None
         )

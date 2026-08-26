@@ -130,6 +130,7 @@ class ObservabilityService:
 
         self._exit_ips = {}
         self._dns_states = {}
+        self._dns_group_states = {}
         self._update = {
             "installed": _installed_version(),
             "latest": None,
@@ -161,6 +162,17 @@ class ObservabilityService:
         with self._lock:
             value = self._dns_states.get(int(profile_id))
             return dict(value) if value else None
+
+    def dns_group_state(self, group_id):
+        with self._lock:
+            value = self._dns_group_states.get(int(group_id))
+            return dict(value) if value else None
+
+    def _set_dns_group_state(self, group_id, **values):
+        with self._lock:
+            current = dict(self._dns_group_states.get(int(group_id), {}))
+            current.update(values)
+            self._dns_group_states[int(group_id)] = current
 
     def _set_dns_state(self, profile_id, **values):
         with self._lock:
@@ -204,7 +216,12 @@ class ObservabilityService:
 
     def refresh_dns_group(self, group):
         with self.app.app_context():
-            profile = group.vpn_profile
+            # Re-read inside this app context when possible so background
+            # refreshes and request-triggered refreshes use current policy.
+            from ..models import RoutingGroup
+            current = self.db.session.get(RoutingGroup, int(group.id)) or group
+
+            profile = current.vpn_profile
             if profile is None:
                 raise ValueError("Routing group is not VPN-backed.")
 
@@ -217,36 +234,45 @@ class ObservabilityService:
                     "resolvers": [],
                     "checking": False,
                 }
-                self._set_dns_state(profile.id, **result)
+                self._set_dns_group_state(current.id, **result)
                 return result
 
-            target = group.effective_dns_target
-            if target:
-                try:
+            target = current.effective_dns_target
+            self._set_dns_group_state(current.id, checking=True)
+
+            try:
+                if target:
                     result = run_explicit_resolver_probe(
                         self.runtime,
                         profile,
                         status.interface_name,
                         status.tunnel_ipv4,
                         target,
-                        group.table_id,
-                        group.mark_hex,
+                        current.table_id,
+                        current.mark_hex,
                     )
-                except Exception as exc:
-                    result = {
-                        "state": "unavailable",
-                        "detail": str(exc)[-400:],
-                        "checked_at": _iso_now(),
-                        "resolvers": [],
-                        "configured_resolver": target,
-                        "checking": False,
-                    }
+                    result["configured_resolver"] = target
                 else:
-                    result["checking"] = False
-                self._set_dns_state(profile.id, **result)
-                return result
+                    result = run_dns_leak_probe(
+                        self.runtime,
+                        profile,
+                        status.interface_name,
+                        status.tunnel_ipv4,
+                    )
+            except Exception as exc:
+                result = {
+                    "state": "unavailable",
+                    "detail": str(exc)[-400:],
+                    "checked_at": _iso_now(),
+                    "resolvers": [],
+                }
+                if target:
+                    result["configured_resolver"] = target
 
-            return self.refresh_dns_profile(profile.id)
+            result["checking"] = False
+            self._set_dns_group_state(current.id, **result)
+            return result
+
 
     def refresh_dns_profile(self, profile_id):
         with self.app.app_context():
@@ -259,30 +285,36 @@ class ObservabilityService:
             return result
 
     def _refresh_dns(self):
+        """
+        Refresh DNS visibility using routing-group policy, not profile-only
+        defaults. A forced/custom resolver group must be tested through its
+        configured resolver automatically, exactly like the manual button.
+        """
         with self.app.app_context():
-            profiles = self.db.session.execute(
-                self.db.select(self.VPNProfile)
-                .where(
-                    self.VPNProfile.vpn_type == "openvpn",
-                    self.VPNProfile.enabled.is_(True),
-                )
-                .order_by(self.VPNProfile.id.asc())
+            from ..models import RoutingGroup
+
+            groups = self.db.session.execute(
+                self.db.select(RoutingGroup)
+                .where(RoutingGroup.vpn_profile_id.is_not(None))
+                .order_by(RoutingGroup.id.asc())
             ).scalars().all()
 
-            active_ids = {profile.id for profile in profiles}
-            for profile in profiles:
-                self._probe_dns_for_profile(profile)
+            active_group_ids = {group.id for group in groups}
+
+            for group in groups:
+                self.refresh_dns_group(group)
 
             with self._lock:
                 stale = [
-                    profile_id
-                    for profile_id in self._dns_states
-                    if profile_id not in active_ids
+                    group_id
+                    for group_id in self._dns_group_states
+                    if group_id not in active_group_ids
                 ]
-                for profile_id in stale:
-                    self._dns_states.pop(profile_id, None)
+                for group_id in stale:
+                    self._dns_group_states.pop(group_id, None)
 
             self.db.session.remove()
+
 
     def exit_ip_state(self, profile_id):
         with self._lock:
@@ -307,6 +339,10 @@ class ObservabilityService:
                 "dns": {
                     str(key): dict(value)
                     for key, value in self._dns_states.items()
+                },
+                "dns_groups": {
+                    str(key): dict(value)
+                    for key, value in self._dns_group_states.items()
                 },
             }
 
@@ -523,6 +559,7 @@ class ObservabilityService:
             "update_cache_seconds": self.update_cache_seconds,
             "dns_probe_interval_seconds": self.dns_probe_interval,
             "cached_dns_states": len(self._dns_states),
+            "cached_dns_group_states": len(self._dns_group_states),
             "cached_exit_ips": cached_exit_ips,
             "update_checked_at": update_checked_at,
         }
