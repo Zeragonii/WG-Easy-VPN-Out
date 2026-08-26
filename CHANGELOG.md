@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.9
+
+### README refresh
+
+- Reorganised `README.md` around current functionality.
+- README now starts with AI disclosure, current features, startup guide,
+  operational notes, then full patch history.
+- Preserved the original disclosure.
+- Restored missing v1.5.2-v1.5.8 README patch entries from `CHANGELOG.md`.
+- Documented current On-demand, DNS, routing, provider, setup and backup
+  behavior.
+- Documented that Auto-connect must be enabled for On-demand automation.
+- No application, schema, routing, DNS, lifecycle or container behavior
+  changes.
+
 ## 1.5.8
 
 ### Routing-group DNS observability cleanup

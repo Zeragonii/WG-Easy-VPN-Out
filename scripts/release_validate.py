@@ -178,6 +178,25 @@ def main():
     if first_h2 != "## AI-assisted development":
         fail("AI-assisted development disclosure must be the first README section")
 
+    readme_text = "\n".join(readme_lines)
+    for section in (
+        "## What VPN Router does",
+        "## Basic startup guide",
+        "## Routing and DNS behavior",
+        "## Data and backups",
+        "## Security notes",
+        "## Release and patch history",
+    ):
+        if section not in readme_text:
+            fail(f"README.md is missing current documentation section: {section}")
+
+    for historical_version in (
+        "v1.5.2", "v1.5.3", "v1.5.4", "v1.5.5",
+        "v1.5.6", "v1.5.7", "v1.5.8",
+    ):
+        if f"## {historical_version}" not in readme_text:
+            fail(f"README.md patch history is missing {historical_version}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

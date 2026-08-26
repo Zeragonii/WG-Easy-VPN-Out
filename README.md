@@ -19,47 +19,274 @@ informed judgement about the project's development process and provenance.
 A small Flask-based management UI for policy-routing WG-Easy clients through
 named outbound VPN sessions (OpenVPN or WireGuard).
 
-## Current milestone: Foundation
+## What VPN Router does
 
-This first build intentionally **does not alter routing**. It provides:
+VPN Router is a LAN-hosted policy-routing controller designed to sit alongside
+WG-Easy. It lets individual WG-Easy clients use different outbound paths
+without changing the WireGuard configuration distributed to those clients.
 
-- Flask + Gunicorn web application
-- Authentication
-- Persistent SQLite database under `/data`
-- Health/status endpoint
-- Docker image with OpenVPN, WireGuard, nftables and iproute2 tooling installed
-- Portainer/Docker Compose deployment
-- GitHub Actions build and publish to GHCR
+Current functionality includes:
 
-Routing/VPN management is added in later milestones after the deployment
-foundation is verified.
+- WG-Easy client discovery and metadata synchronisation.
+- Per-client assignment to routing groups.
+- Default-WAN or OpenVPN-backed routing groups.
+- Private/local IPv4 destination bypass.
+- Per-group **Block / kill-switch** or **WAN fallback** behavior.
+- Per-group DNS policy:
+  - **Existing / client DNS**
+  - **PIA DNS**
+  - **Custom DNS**
+- Transparent forced classic DNS interception for UDP/TCP port 53.
+- Routing-group-aware DNS visibility/leak testing.
+- VPN exit-IP visibility.
+- Routing health and recent transition history.
+- OpenVPN retry/recovery with exponential backoff and connect timeout.
+- VPN connection policies:
+  - **Always connected**
+  - **On demand**
+- Assignment-driven On-demand lifecycle:
+  - an assignment means the outbound VPN is required
+  - the target VPN connects before a client assignment is moved
+  - unused On-demand tunnels disconnect after an idle grace period
+- Provider/profile intelligence.
+- Provider adapter framework with PIA-specific interpretation and generic
+  fallback for unknown providers.
+- Encrypted VPN credentials.
+- First-run setup wizard and persistent settings.
+- Backup/restore.
+- Diagnostics and release-preflight checks.
+- GitHub update awareness.
 
-## Local build
+### Current runtime scope
 
-```bash
-docker build -t vpn-router:dev .
-docker compose up -d
+OpenVPN is the supported outbound VPN runtime today.
+
+WireGuard configuration parsing/intelligence exists, but outbound WireGuard
+runtime activation is not yet implemented.
+
+VPN Router does not replace WG-Easy. WG-Easy remains the WireGuard server and
+client-management layer; VPN Router adds outbound policy routing around it.
+
+## Basic startup guide
+
+### 1. Requirements
+
+You need:
+
+- Docker / Docker Compose or Portainer
+- WG-Easy already running
+- host networking
+- `/dev/net/tun`
+- `NET_ADMIN`
+- `NET_RAW`
+- IPv4 forwarding enabled on the host
+- a LAN gateway route for the WG-Easy client subnet back to the VPN Router host
+
+VPN Router uses host networking because it manages host routes, policy rules,
+nftables and VPN tunnel interfaces directly.
+
+### 2. Minimal Compose example
+
+```yaml
+services:
+  vpn-router:
+    image: ghcr.io/zeragonii/wg-easy-vpn-out:latest
+    container_name: vpn-router
+    network_mode: host
+    restart: unless-stopped
+
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    environment:
+      TZ: Europe/London
+      VPN_ROUTER_PORT: "8085"
+      VPN_ROUTER_BIND: "0.0.0.0"
+      SECRET_KEY: "replace-with-a-long-stable-random-secret"
+
+    volumes:
+      - vpn-router-data:/data
+
+volumes:
+  vpn-router-data:
 ```
 
-Open:
+Keep `SECRET_KEY` stable. It protects encrypted stored values; changing it later
+can make previously encrypted data unreadable.
 
-`http://<docker-host>:8085`
+### 3. Host networking prerequisites
 
-Default credentials are supplied through environment variables in Compose.
+Enable IPv4 forwarding:
 
-## Persistent data
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+```
 
-Everything persistent lives beneath `/data`.
+Persist it using your distribution's normal sysctl configuration.
 
-Back this directory/volume up.
+Your LAN gateway must also know how to return traffic to the WG-Easy client
+subnet. For example:
 
-## Security
+```text
+WG-Easy clients: 192.168.3.0/24
+VPN Router host: 192.168.1.202
+```
 
-This container uses host networking and `NET_ADMIN` because later versions
-will create VPN interfaces and policy-routing rules in the host network
-namespace.
+requires a route equivalent to:
 
-Do not expose the management UI directly to the Internet.
+```text
+192.168.3.0/24 via 192.168.1.202
+```
+
+### 4. First start
+
+Start the container and open:
+
+```text
+http://<VPN-Router-host>:8085
+```
+
+A fresh install creates a one-time setup token at:
+
+```text
+/data/runtime/setup-token
+```
+
+The token is also written to the container logs.
+
+Use the setup wizard to:
+
+1. Create the administrator account.
+2. Configure WG-Easy URL and credentials.
+3. Test the WG-Easy connection.
+4. Finish setup.
+
+### 5. Add outbound VPN profiles
+
+Import OpenVPN configurations from the VPN Profiles page.
+
+Each profile can have:
+
+- friendly name
+- provider
+- credentials where required
+- Auto-connect
+- **Always connected** or **On demand** connection policy
+
+For On-demand profiles, **Auto-connect must be enabled**. Auto-connect means VPN
+Router is permitted to start the profile automatically; On demand determines
+when it should run.
+
+### 6. Create routing groups
+
+Create a routing group and select:
+
+- outbound VPN profile or Default WAN
+- fallback behavior
+- DNS policy
+
+VPN-backed groups receive their own fwmark and policy-routing table.
+
+### 7. Assign WG-Easy clients
+
+Assign WG-Easy clients to routing groups from the Clients page.
+
+For an On-demand profile:
+
+```text
+client assigned
+→ VPN required
+→ tunnel starts if needed
+→ VPN becomes ready
+→ assignment/routing takes effect
+```
+
+When the final assignment using that VPN is removed, it enters the idle grace
+period and then disconnects.
+
+This is assignment-driven rather than handshake-driven, so the outbound tunnel
+can already be ready when an offline WireGuard client reconnects.
+
+## Routing and DNS behavior
+
+### Local/private traffic bypass
+
+The following ranges bypass the outbound VPN path by default:
+
+```text
+127.0.0.0/8
+10.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+169.254.0.0/16
+```
+
+Forced DNS is handled specially so provider DNS inside a private range can
+still be routed into the VPN.
+
+### Forced classic DNS
+
+Forced PIA/custom DNS intercepts classic:
+
+```text
+UDP/53
+TCP/53
+```
+
+and transparently redirects it to the configured resolver.
+
+DNS-over-HTTPS is not intercepted. DNS-over-TLS is not transparently rewritten,
+although it still follows the routing group's normal outbound path.
+
+### Kill-switch behavior
+
+With **Block / kill-switch**, a VPN-backed group is blackholed if its VPN is
+unavailable.
+
+With **WAN fallback**, traffic may use WAN while the VPN is unavailable.
+
+## Data and backups
+
+Persistent state lives under:
+
+```text
+/data
+```
+
+This includes the SQLite database, imported VPN configs, encrypted credentials,
+runtime metadata and setup state.
+
+Use a persistent volume or bind mount for `/data`.
+
+Built-in backup/restore can export the application configuration and may
+optionally include the `SECRET_KEY`. Treat backups containing the key as
+sensitive.
+
+## Security notes
+
+VPN Router is intended as a trusted LAN administration service.
+
+It requires elevated networking capabilities because it manages interfaces,
+routes, policy rules and nftables. It intentionally does **not** require the
+Docker socket or a fully privileged container.
+
+Recommended practice:
+
+- keep the UI LAN-only
+- use a strong stable `SECRET_KEY`
+- restrict host access
+- back up `/data`
+- do not expose the admin UI directly to the public internet
+
+## Release and patch history
+
+The sections below are intentionally retained as the project's development
+record. They document the incremental features, fixes, regressions and
+hardening work that led to the current release.
 
 ## v0.2.0 - WG-Easy discovery
 
@@ -883,3 +1110,114 @@ from nftables prerouting, but local container probes do not traverse that hook.
 v1.5.1 temporarily installs a narrow source+destination rule for the selected
 resolver and removes it after the probe, making the validation path match the
 routing group's actual VPN egress without changing client routing behavior.
+
+## v1.5.2
+
+### Documentation transparency
+
+- Moved the existing **AI-assisted development** disclosure to the top of
+  `README.md`, immediately after the project title.
+- Preserved the disclosure text unchanged.
+- Future appended release notes can remain below it without moving the
+  disclosure again.
+- No application, routing, runtime, schema, or container behavior changes.
+
+## v1.5.3
+
+### VPN profile route hotfix
+
+- Fixed `/vpn-profiles/` returning HTTP 500 because detail-page template
+  variables were accidentally passed from the list route.
+- Restored `runtime_display_state` and `on_demand` to the VPN profile detail
+  template context where they belong.
+- Added release-validation checks to catch this route/template context
+  regression in future builds.
+- Retains the v1.5.1 standby/DNS-probe fixes and the v1.5.2 README disclosure
+  placement.
+- No schema, routing-policy, or on-demand lifecycle behavior changes.
+
+## v1.5.4
+
+### VPN client list status semantics
+
+- Unused enabled on-demand VPN profiles now display **Offline** in the VPN
+  Clients list instead of inheriting historical OpenVPN failure state.
+- **Failed** is reserved for profiles that are actually required/expected to
+  be connected and have genuinely failed.
+- Individual profile detail pages retain the richer **Standby** state and real
+  failure diagnostics.
+- No schema, routing, DNS, lifecycle, or provider-adapter behavior changes.
+
+## v1.5.5
+
+### DNS probe hotfix
+
+- Fixed the forced-DNS manual probe raising `name 'resolver_ip' is not defined`.
+- Rebuilt the explicit resolver probe so `resolver_ip` and routing-table scope
+  are explicit and correctly scoped.
+- Preserved the narrow source+destination policy rule used to mirror the
+  routing group's VPN path for locally generated DNS tests.
+- Added better command stderr/stdout detail when a temporary rule or DNS query
+  genuinely fails.
+- Retains the v1.5.4 VPN-list Offline/Failed status semantics.
+- No schema, client routing, DNS interception, or on-demand lifecycle behavior
+  changes.
+
+## v1.5.6
+
+### DNS probe regression fix
+
+- Restored the generic DNS leak probe to a resolver-agnostic implementation.
+- Removed accidental `resolver_ip` / `routing_table_id` references from
+  `run_dns_leak_probe()`.
+- Existing/client DNS leak tests once again use the original tunnel-bound
+  bash.ws lookup flow.
+- Forced/custom DNS validation remains isolated in
+  `run_explicit_resolver_probe()`.
+
+### Manual disconnect status fix
+
+- A manually disabled/disconnected VPN profile now reports **Disconnected**
+  rather than inheriting historical OpenVPN log errors as **Failed**.
+- Historical errors are suppressed while a profile is disabled.
+- Enabled profiles that genuinely fail still report **Failed**.
+- On-demand Standby/Offline behavior remains unchanged.
+
+- No schema, routing-policy, DNS interception, provider-adapter, or on-demand
+  lifecycle changes.
+
+## v1.5.7
+
+### Forced-DNS probe path fix
+
+- Changed forced/custom DNS validation to use the routing group's actual
+  fwmark, matching WG-Easy client policy routing.
+- Local DNS probe traffic is temporarily marked in an nftables route/output
+  chain because local traffic does not traverse prerouting.
+- Existing fwmark policy rules and postrouting masquerade are reused by the
+  probe.
+- Removed the previous source+destination policy-rule approximation.
+- Temporary nftables probe chains are cleaned up after each test.
+- Existing/client DNS probing is unchanged.
+- No schema, client DNS interception, routing-group policy, or on-demand
+  lifecycle changes.
+
+## v1.5.8
+
+### Routing-group DNS observability cleanup
+
+- DNS visibility for Routing Group Health is now cached per routing group
+  instead of per VPN profile.
+- Automatic/background DNS checks now honor each routing group's configured DNS
+  policy.
+- Groups using PIA/custom forced DNS automatically run the same explicit
+  resolver test used by the **Run DNS leak test now** button.
+- Groups using Existing/client DNS continue to use the generic tunnel-bound
+  DNS visibility probe.
+- Manual and automatic checks now write to the same routing-group cache, so a
+  startup generic result can no longer overwrite a forced-DNS result.
+- Multiple routing groups may share one VPN profile while retaining independent
+  DNS-policy visibility.
+- Profile-level generic DNS cache remains available for profile observability.
+- No schema, routing, DNS interception, provider-adapter, or on-demand lifecycle
+  changes.
