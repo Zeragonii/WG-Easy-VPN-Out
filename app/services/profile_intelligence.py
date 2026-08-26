@@ -54,16 +54,60 @@ def _provider_from_text(*values):
 def _region_hint(host: str | None):
     if not host:
         return None
+
     first = host.lower().split(".", 1)[0]
     tokens = [t for t in re.split(r"[-_]", first) if t]
-    countries = {
+
+    prefixes = {
         "us": "US", "uk": "UK", "gb": "UK", "ca": "Canada",
         "de": "Germany", "fr": "France", "nl": "Netherlands",
         "ie": "Ireland", "au": "Australia", "jp": "Japan",
         "sg": "Singapore", "se": "Sweden", "ch": "Switzerland",
     }
-    if len(tokens) >= 2 and tokens[0] in countries:
-        return f"{countries[tokens[0]]} · {' '.join(t.capitalize() for t in tokens[1:])}"
+
+    standalone_countries = {
+        "ireland": "Ireland",
+        "austria": "Austria",
+        "belgium": "Belgium",
+        "bulgaria": "Bulgaria",
+        "denmark": "Denmark",
+        "finland": "Finland",
+        "france": "France",
+        "germany": "Germany",
+        "greece": "Greece",
+        "iceland": "Iceland",
+        "italy": "Italy",
+        "norway": "Norway",
+        "poland": "Poland",
+        "portugal": "Portugal",
+        "romania": "Romania",
+        "singapore": "Singapore",
+        "slovakia": "Slovakia",
+        "slovenia": "Slovenia",
+        "spain": "Spain",
+        "sweden": "Sweden",
+        "switzerland": "Switzerland",
+    }
+
+    if first in standalone_countries:
+        return standalone_countries[first]
+
+    if len(tokens) >= 2 and tokens[0] in prefixes:
+        country = prefixes[tokens[0]]
+        remainder = tokens[1:]
+
+        if remainder and remainder[-1] == "so":
+            remainder = remainder[:-1]
+            if remainder and remainder[0] == country.lower():
+                remainder = remainder[1:]
+            if remainder:
+                location = " ".join(t.capitalize() for t in remainder)
+                return f"{country} · {location} · Streaming Optimized"
+            return f"{country} · Streaming Optimized"
+
+        location = " ".join(t.capitalize() for t in remainder)
+        return f"{country} · {location}" if location else country
+
     return None
 
 

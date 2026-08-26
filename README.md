@@ -856,3 +856,10 @@ detection.
 
 Provider intelligence is informational only. v1.4.0 does not rewrite configs,
 select endpoints, or add provider-specific routing automation.
+
+
+## v1.4.1 - Region hint parsing fixes
+
+The profile-intelligence parser now handles PIA country-only endpoint names,
+including `ireland.privacy.network`, and understands PIA's `-so` suffix as a
+Streaming Optimized endpoint variant.

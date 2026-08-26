@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.1
+
+### Region hint parsing fixes
+
+- Added support for country-only PIA endpoint names such as
+  `ireland.privacy.network`.
+- Recognise PIA `-so` endpoint suffixes as **Streaming Optimized**.
+- Avoid redundant output such as `Netherlands · Netherlands So`.
+- No routing, schema, provider-runtime, or configuration changes.
+
 ## 1.4.0
 
 ### Provider metadata & profile intelligence
