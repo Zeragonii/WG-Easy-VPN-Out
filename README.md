@@ -791,3 +791,16 @@ retrieval remain associated with the selected VPN path.
 
 `dig` is no longer required. `ping` is included in the container image and
 networking-tools preflight.
+
+
+## v1.2.2 - DNS trigger result handling fix
+
+The bash.ws DNS leak test uses generated hostnames only to cause the system
+resolver to perform lookups. The subsequent ICMP ping does not need to succeed,
+and the upstream shell implementation intentionally discards the ping result.
+
+v1.2.1 incorrectly treated failed hostname/ping results as evidence that no DNS
+queries had been generated. v1.2.2 now mirrors the upstream behavior: it fires
+the tunnel-bound ping triggers without interpreting their return codes, then
+uses the bash.ws result endpoint itself to determine whether resolvers were
+observed.

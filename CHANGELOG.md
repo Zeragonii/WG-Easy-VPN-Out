@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.2
+
+### DNS leak probe result handling
+
+- Fixed false `Unavailable` results caused by treating bash.ws trigger ping
+  failures as DNS-generation failures.
+- Ping return codes are now intentionally ignored, matching the upstream
+  bash.ws dnsleaktest implementation.
+- Resolver observation from the bash.ws result endpoint is now the authoritative
+  signal for whether DNS servers were detected.
+
 ## 1.2.1
 
 ### DNS leak probe fix
