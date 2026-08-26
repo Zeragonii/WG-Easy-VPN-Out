@@ -93,6 +93,9 @@ def build_diagnostics(
             "transport": intelligence.transport,
             "protocol": intelligence.protocol,
             "region_hint": intelligence.region_hint,
+            "provider_key": intelligence.provider_key,
+            "provider_confidence": intelligence.provider_confidence,
+            "provider_reason": intelligence.provider_reason,
             "type": profile.vpn_type,
             "enabled": bool(profile.enabled),
             "state": status.state,
@@ -248,6 +251,8 @@ def render_text(data):
             f"enabled={vpn['enabled']} | provider={vpn.get('provider')} | "
             f"endpoint={vpn.get('endpoint')} | protocol={vpn.get('protocol')} | "
             f"transport={vpn.get('transport')} | region={vpn.get('region_hint')} | "
+            f"provider_key={vpn.get('provider_key')} | "
+            f"confidence={vpn.get('provider_confidence')} | "
             f"iface={vpn['interface']} | ip={vpn['tunnel_ipv4']} | "
             f"gateway={vpn['gateway']} | uptime={vpn['uptime_seconds']}"
         )

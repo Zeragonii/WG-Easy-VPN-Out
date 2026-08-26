@@ -1,14 +1,15 @@
 
 from __future__ import annotations
-
 from dataclasses import dataclass, asdict
 import ipaddress
-import re
-
+from .providers import detect_provider
 
 @dataclass(slots=True)
 class ProfileIntelligence:
     provider_detected: str | None = None
+    provider_key: str | None = None
+    provider_confidence: str | None = None
+    provider_reason: str | None = None
     endpoint_host: str | None = None
     endpoint_port: int | None = None
     protocol: str | None = None
@@ -24,92 +25,24 @@ class ProfileIntelligence:
     def to_dict(self):
         return asdict(self)
 
-
-PROVIDER_PATTERNS = (
-    ("Private Internet Access", ("privacy.network", "privateinternetaccess.com", "pia.")),
-    ("Mullvad", ("mullvad.net",)),
-    ("Proton VPN", ("protonvpn.net", "protonvpn.com")),
-    ("NordVPN", ("nordvpn.com",)),
-    ("Surfshark", ("surfshark.com",)),
-    ("ExpressVPN", ("expressnetw.com", "expressvpn.com")),
-    ("IVPN", ("ivpn.net",)),
-)
-
-
 def _clean(line: str) -> str:
     line = line.strip()
     if not line or line.startswith(("#", ";")):
         return ""
     return line
 
+def _apply_provider_metadata(meta: ProfileIntelligence, content: str):
+    match = detect_provider(meta.endpoint_host, content)
+    adapter = match.adapter
+    meta.provider_key = getattr(adapter, "key", "generic")
+    meta.provider_confidence = match.confidence
+    meta.provider_reason = match.reason
 
-def _provider_from_text(*values):
-    haystack = " ".join(v for v in values if v).lower()
-    for provider, needles in PROVIDER_PATTERNS:
-        if any(needle in haystack for needle in needles):
-            return provider
-    return None
+    if meta.provider_key != "generic":
+        meta.provider_detected = adapter.display_name
+        meta.region_hint = adapter.region_hint(meta.endpoint_host)
 
-
-def _region_hint(host: str | None):
-    if not host:
-        return None
-
-    first = host.lower().split(".", 1)[0]
-    tokens = [t for t in re.split(r"[-_]", first) if t]
-
-    prefixes = {
-        "us": "US", "uk": "UK", "gb": "UK", "ca": "Canada",
-        "de": "Germany", "fr": "France", "nl": "Netherlands",
-        "ie": "Ireland", "au": "Australia", "jp": "Japan",
-        "sg": "Singapore", "se": "Sweden", "ch": "Switzerland",
-    }
-
-    standalone_countries = {
-        "ireland": "Ireland",
-        "austria": "Austria",
-        "belgium": "Belgium",
-        "bulgaria": "Bulgaria",
-        "denmark": "Denmark",
-        "finland": "Finland",
-        "france": "France",
-        "germany": "Germany",
-        "greece": "Greece",
-        "iceland": "Iceland",
-        "italy": "Italy",
-        "norway": "Norway",
-        "poland": "Poland",
-        "portugal": "Portugal",
-        "romania": "Romania",
-        "singapore": "Singapore",
-        "slovakia": "Slovakia",
-        "slovenia": "Slovenia",
-        "spain": "Spain",
-        "sweden": "Sweden",
-        "switzerland": "Switzerland",
-    }
-
-    if first in standalone_countries:
-        return standalone_countries[first]
-
-    if len(tokens) >= 2 and tokens[0] in prefixes:
-        country = prefixes[tokens[0]]
-        remainder = tokens[1:]
-
-        if remainder and remainder[-1] == "so":
-            remainder = remainder[:-1]
-            if remainder and remainder[0] == country.lower():
-                remainder = remainder[1:]
-            if remainder:
-                location = " ".join(t.capitalize() for t in remainder)
-                return f"{country} · {location} · Streaming Optimized"
-            return f"{country} · Streaming Optimized"
-
-        location = " ".join(t.capitalize() for t in remainder)
-        return f"{country} · {location}" if location else country
-
-    return None
-
+    return meta
 
 def parse_openvpn(content: str) -> ProfileIntelligence:
     remotes = []
@@ -158,21 +91,21 @@ def parse_openvpn(content: str) -> ProfileIntelligence:
     if proto:
         transport = "UDP" if "udp" in proto else ("TCP" if "tcp" in proto else proto.upper())
 
-    return ProfileIntelligence(
-        provider_detected=_provider_from_text(host, content[:4096]),
-        endpoint_host=host,
-        endpoint_port=port,
-        protocol=proto.upper() if proto else None,
-        device=dev,
-        transport=transport,
-        auth_mode=auth_mode,
-        cipher=cipher,
-        tls_mode=tls_mode,
-        remote_count=len(remotes),
-        region_hint=_region_hint(host),
-        endpoint_is_ip=endpoint_is_ip,
+    return _apply_provider_metadata(
+        ProfileIntelligence(
+            endpoint_host=host,
+            endpoint_port=port,
+            protocol=proto.upper() if proto else None,
+            device=dev,
+            transport=transport,
+            auth_mode=auth_mode,
+            cipher=cipher,
+            tls_mode=tls_mode,
+            remote_count=len(remotes),
+            endpoint_is_ip=endpoint_is_ip,
+        ),
+        content,
     )
-
 
 def parse_wireguard(content: str) -> ProfileIntelligence:
     endpoint = None
@@ -192,6 +125,7 @@ def parse_wireguard(content: str) -> ProfileIntelligence:
             host, raw_port = endpoint.rsplit(":", 1)
         else:
             host = endpoint
+
         if raw_port:
             try:
                 port = int(raw_port)
@@ -206,19 +140,19 @@ def parse_wireguard(content: str) -> ProfileIntelligence:
         except ValueError:
             pass
 
-    return ProfileIntelligence(
-        provider_detected=_provider_from_text(host, content[:4096]),
-        endpoint_host=host,
-        endpoint_port=port,
-        protocol="WireGuard",
-        device="wg",
-        transport="UDP",
-        auth_mode="Public key",
-        remote_count=1 if endpoint else 0,
-        region_hint=_region_hint(host),
-        endpoint_is_ip=endpoint_is_ip,
+    return _apply_provider_metadata(
+        ProfileIntelligence(
+            endpoint_host=host,
+            endpoint_port=port,
+            protocol="WireGuard",
+            device="wg",
+            transport="UDP",
+            auth_mode="Public key",
+            remote_count=1 if endpoint else 0,
+            endpoint_is_ip=endpoint_is_ip,
+        ),
+        content,
     )
-
 
 def inspect_profile(profile, content: str) -> ProfileIntelligence:
     if profile.vpn_type == "openvpn":
@@ -227,10 +161,8 @@ def inspect_profile(profile, content: str) -> ProfileIntelligence:
         return parse_wireguard(content)
     return ProfileIntelligence()
 
-
 def display_provider(profile, intelligence: ProfileIntelligence) -> str:
     return profile.provider or intelligence.provider_detected or "Unknown"
-
 
 def endpoint_label(intelligence: ProfileIntelligence) -> str:
     if not intelligence.endpoint_host:

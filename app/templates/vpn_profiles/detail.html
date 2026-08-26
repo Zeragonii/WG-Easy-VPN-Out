@@ -66,7 +66,14 @@
 <section class="card" style="margin-top:1rem;">
 <h2>Profile intelligence</h2>
 <div class="grid-2">
-  <div><div class="muted">Provider</div><strong>{{ intelligence.provider }}</strong>{% if not profile.provider and intelligence.raw.provider_detected %}<div class="muted">Detected from configuration</div>{% endif %}</div>
+  <div>
+    <div class="muted">Provider</div>
+    <strong>{{ intelligence.provider }}</strong>
+    {% if not profile.provider and intelligence.raw.provider_detected %}
+      <div class="muted">Detected · {{ intelligence.raw.provider_confidence|capitalize }} confidence</div>
+      {% if intelligence.raw.provider_reason %}<div class="muted">{{ intelligence.raw.provider_reason }}</div>{% endif %}
+    {% endif %}
+  </div>
   <div><div class="muted">Endpoint</div><code>{{ intelligence.endpoint }}</code></div>
   <div><div class="muted">Protocol / transport</div><strong>{{ intelligence.raw.protocol or profile.type_label }}</strong>{% if intelligence.raw.transport %} · {{ intelligence.raw.transport }}{% endif %}</div>
   <div><div class="muted">Region hint</div><strong>{{ intelligence.raw.region_hint or "—" }}</strong></div>
@@ -75,7 +82,7 @@
   <div><div class="muted">Cipher declaration</div><code>{{ intelligence.raw.cipher or "—" }}</code></div>
   <div><div class="muted">Remote endpoints</div><strong>{{ intelligence.raw.remote_count }}</strong></div>
 </div>
-<p class="muted" style="margin-bottom:0;">Derived read-only from the imported VPN configuration. Detection is heuristic and does not change routing or provider behavior.</p>
+<p class="muted" style="margin-bottom:0;">Derived read-only from the imported VPN configuration. Provider-specific interpretation is handled by adapters and does not change routing or provider behavior.</p>
 </section>
 
 <section class="card" style="margin-top:1rem;">

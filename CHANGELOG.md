@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.2
+
+### Provider adapter framework
+
+- Refactored profile intelligence into generic parsing plus provider adapters.
+- Added generic fallback adapter for unknown providers.
+- Moved PIA detection and region parsing into a dedicated PIA adapter.
+- Added provider detection confidence and reason metadata.
+- Added provider capability metadata for future provider-specific features.
+- PIA adapter exposes DNS presets for future reuse without changing current
+  routing behavior.
+- No schema migration and no routing/runtime behavior changes.
+
 ## 1.4.1
 
 ### Region hint parsing fixes

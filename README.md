@@ -863,3 +863,19 @@ select endpoints, or add provider-specific routing automation.
 The profile-intelligence parser now handles PIA country-only endpoint names,
 including `ireland.privacy.network`, and understands PIA's `-so` suffix as a
 Streaming Optimized endpoint variant.
+
+
+## v1.4.2 - Provider adapter framework
+
+The v1.4 profile-intelligence feature now separates generic VPN parsing from
+provider-specific interpretation.
+
+- Generic OpenVPN/WireGuard parsers extract protocol-level facts.
+- Provider adapters interpret provider-specific naming and capabilities.
+- Unknown providers use a generic fallback without breaking metadata display.
+- PIA-specific region parsing now lives entirely in the PIA adapter.
+- Detection confidence and reason are shown on the profile detail page.
+- The PIA adapter exposes DNS presets for future reuse, without changing current
+  DNS routing behavior.
+
+No database migration or routing/runtime behavior change is included.
