@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.0
+
+### Provider metadata & profile intelligence
+
+- Added read-only VPN configuration intelligence.
+- Added conservative provider detection for common VPN endpoint patterns.
+- Added endpoint, port, protocol/transport, auth, TLS, cipher and remote-count
+  metadata for OpenVPN profiles.
+- Added endpoint/provider metadata parsing for WireGuard configs.
+- Added conservative region hints from unambiguous endpoint naming.
+- Added richer VPN Clients list and Profile Intelligence detail card.
+- Added derived profile metadata to diagnostics.
+- No schema migration; configuration files remain the source of truth.
+- No provider-specific routing automation or configuration rewriting.
+
 ## 1.3.0
 
 ### DNS policy & leak prevention

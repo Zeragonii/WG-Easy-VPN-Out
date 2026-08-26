@@ -10,6 +10,7 @@ from .services.vpn_profiles import VPNProfileValidationError, safe_filename, val
 from .services.vpn_runtime import VPNRuntimeError, VPNRuntimeService
 from .services.secrets import encrypt_secret
 from .services.routing import RoutingEngine, RoutingEngineError
+from .services.profile_intelligence import inspect_profile, display_provider, endpoint_label
 
 bp = Blueprint("vpn_profiles", __name__, url_prefix="/vpn-profiles")
 
@@ -36,7 +37,23 @@ def index():
     profiles = db.session.execute(db.select(VPNProfile).order_by(VPNProfile.name.asc())).scalars().all()
     svc = VPNRuntimeService()
     runtime = {p.id: svc.status(p, include_probe=False) for p in profiles}
-    return render_template("vpn_profiles/index.html", profiles=profiles, runtime=runtime)
+    intelligence = {}
+    for profile in profiles:
+        try:
+            meta = inspect_profile(profile, _read_config(profile))
+        except OSError:
+            meta = inspect_profile(profile, "")
+        intelligence[profile.id] = {
+            "raw": meta,
+            "provider": display_provider(profile, meta),
+            "endpoint": endpoint_label(meta),
+        }
+    return render_template(
+        "vpn_profiles/index.html",
+        profiles=profiles,
+        runtime=runtime,
+        intelligence=intelligence,
+    )
 
 @bp.route("/new", methods=["GET", "POST"])
 @login_required
@@ -107,12 +124,22 @@ def detail(profile_id):
         validation, config_error = None, str(exc)
 
     runtime = VPNRuntimeService().status(profile, include_probe=False)
+    try:
+        intelligence_raw = inspect_profile(profile, _read_config(profile))
+    except OSError:
+        intelligence_raw = inspect_profile(profile, "")
+    intelligence = {
+        "raw": intelligence_raw,
+        "provider": display_provider(profile, intelligence_raw),
+        "endpoint": endpoint_label(intelligence_raw),
+    }
     return render_template(
         "vpn_profiles/detail.html",
         profile=profile,
         validation=validation,
         config_error=config_error,
         runtime=runtime,
+        intelligence=intelligence,
     )
 
 @bp.post("/<int:profile_id>/connect")

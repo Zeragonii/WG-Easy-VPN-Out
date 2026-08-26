@@ -13,6 +13,7 @@ from .migrations import (
 from .routing import RoutingEngine
 from .settings import DEFINITIONS, SettingsService
 from .vpn_runtime import VPNRuntimeService
+from .profile_intelligence import inspect_profile, display_provider, endpoint_label
 
 
 def _run(args, timeout=5):
@@ -28,6 +29,16 @@ def _run(args, timeout=5):
     except (OSError, subprocess.SubprocessError) as exc:
         return f"<error: {exc}>"
 
+
+def _profile_config_text(profile):
+    root = os.getenv("VPN_ROUTER_DATA_DIR", "/data")
+    folder = "openvpn" if profile.vpn_type == "openvpn" else "wireguard"
+    path = os.path.join(root, folder, profile.config_filename)
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            return handle.read()
+    except OSError:
+        return ""
 
 def _safe_env():
     # Deployment-level environment only; application settings are reported
@@ -71,10 +82,17 @@ def build_diagnostics(
             else None
         )
 
+        intelligence = inspect_profile(profile, _profile_config_text(profile))
+
         vpn_rows.append({
             "id": profile.id,
             "name": profile.name,
-            "provider": profile.provider,
+            "provider": display_provider(profile, intelligence),
+            "detected_provider": intelligence.provider_detected,
+            "endpoint": endpoint_label(intelligence),
+            "transport": intelligence.transport,
+            "protocol": intelligence.protocol,
+            "region_hint": intelligence.region_hint,
             "type": profile.vpn_type,
             "enabled": bool(profile.enabled),
             "state": status.state,
@@ -227,9 +245,11 @@ def render_text(data):
     for vpn in data["vpns"]:
         lines.append(
             f"[{vpn['id']}] {vpn['name']} | {vpn['state']} | "
-            f"enabled={vpn['enabled']} | iface={vpn['interface']} | "
-            f"ip={vpn['tunnel_ipv4']} | gateway={vpn['gateway']} | "
-            f"uptime={vpn['uptime_seconds']}"
+            f"enabled={vpn['enabled']} | provider={vpn.get('provider')} | "
+            f"endpoint={vpn.get('endpoint')} | protocol={vpn.get('protocol')} | "
+            f"transport={vpn.get('transport')} | region={vpn.get('region_hint')} | "
+            f"iface={vpn['interface']} | ip={vpn['tunnel_ipv4']} | "
+            f"gateway={vpn['gateway']} | uptime={vpn['uptime_seconds']}"
         )
         if vpn["last_error"]:
             lines.append(f"  last_error={vpn['last_error']}")

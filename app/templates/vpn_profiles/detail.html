@@ -64,6 +64,21 @@
 </div>
 
 <section class="card" style="margin-top:1rem;">
+<h2>Profile intelligence</h2>
+<div class="grid-2">
+  <div><div class="muted">Provider</div><strong>{{ intelligence.provider }}</strong>{% if not profile.provider and intelligence.raw.provider_detected %}<div class="muted">Detected from configuration</div>{% endif %}</div>
+  <div><div class="muted">Endpoint</div><code>{{ intelligence.endpoint }}</code></div>
+  <div><div class="muted">Protocol / transport</div><strong>{{ intelligence.raw.protocol or profile.type_label }}</strong>{% if intelligence.raw.transport %} · {{ intelligence.raw.transport }}{% endif %}</div>
+  <div><div class="muted">Region hint</div><strong>{{ intelligence.raw.region_hint or "—" }}</strong></div>
+  <div><div class="muted">Authentication</div><strong>{{ intelligence.raw.auth_mode or "—" }}</strong></div>
+  <div><div class="muted">TLS mode</div><strong>{{ intelligence.raw.tls_mode or "—" }}</strong></div>
+  <div><div class="muted">Cipher declaration</div><code>{{ intelligence.raw.cipher or "—" }}</code></div>
+  <div><div class="muted">Remote endpoints</div><strong>{{ intelligence.raw.remote_count }}</strong></div>
+</div>
+<p class="muted" style="margin-bottom:0;">Derived read-only from the imported VPN configuration. Detection is heuristic and does not change routing or provider behavior.</p>
+</section>
+
+<section class="card" style="margin-top:1rem;">
 <h2>OpenVPN log</h2>
 <pre id="runtime-log" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:var(--panel2);padding:.8rem;border-radius:8px;">{% if runtime.log_tail %}{{ runtime.log_tail|join('\n') }}{% else %}No runtime log yet.{% endif %}</pre>
 </section>

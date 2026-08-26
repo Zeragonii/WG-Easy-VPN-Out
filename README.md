@@ -834,3 +834,25 @@ through the actual VPN tunnel before retrieving external resolver observations.
 
 v1.3.0 controls classic UDP/TCP port 53 only. DNS-over-HTTPS is intentionally
 out of scope and is not intercepted.
+
+
+## v1.4.0 - Provider metadata and profile intelligence
+
+VPN Router now derives read-only metadata from imported VPN configurations.
+
+For OpenVPN profiles it surfaces the primary remote endpoint and port,
+protocol/transport, device, authentication style, TLS mode, cipher declaration,
+remote count, conservative provider detection, and conservative region hints
+where endpoint naming clearly exposes one.
+
+WireGuard configuration files receive equivalent endpoint/provider/transport
+metadata where available, although outbound WireGuard runtime activation
+remains deferred.
+
+Metadata is parsed on demand from the config rather than duplicated in the
+database. Existing profiles benefit immediately and no schema migration is
+required. A user-entered Provider always takes precedence over heuristic
+detection.
+
+Provider intelligence is informational only. v1.4.0 does not rewrite configs,
+select endpoints, or add provider-specific routing automation.
