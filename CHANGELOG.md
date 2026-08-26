@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.3
+
+### VPN profile route hotfix
+
+- Fixed `/vpn-profiles/` returning HTTP 500 because detail-page template
+  variables were accidentally passed from the list route.
+- Restored `runtime_display_state` and `on_demand` to the VPN profile detail
+  template context where they belong.
+- Added release-validation checks to catch this route/template context
+  regression in future builds.
+- Retains the v1.5.1 standby/DNS-probe fixes and the v1.5.2 README disclosure
+  placement.
+- No schema, routing-policy, or on-demand lifecycle behavior changes.
+
 ## 1.5.2
 
 ### Documentation transparency

@@ -52,8 +52,6 @@ def index():
         "vpn_profiles/index.html",
         profiles=profiles,
         runtime=runtime,
-        runtime_display_state=runtime_display_state,
-        on_demand=on_demand,
         intelligence=intelligence,
     )
 
@@ -155,6 +153,8 @@ def detail(profile_id):
         validation=validation,
         config_error=config_error,
         runtime=runtime,
+        runtime_display_state=runtime_display_state,
+        on_demand=on_demand,
         intelligence=intelligence,
     )
 
