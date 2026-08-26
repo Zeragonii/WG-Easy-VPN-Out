@@ -22,10 +22,12 @@
 <td><span class="pill">{{ profile.type_label }}</span>{% if intelligence[profile.id].raw.transport %} · {{ intelligence[profile.id].raw.transport }}{% endif %}</td>
 <td><code>{{ rt.interface_name }}</code></td>
 <td>
-{% if rt.state == "connected" %}<span class="status-good">● Connected</span>
-{% elif rt.state == "connecting" %}<span class="status-warn">◐ Connecting</span>
-{% elif rt.state == "failed" %}<span class="status-bad">● Failed</span>
-{% else %}<span class="muted">○ Disconnected</span>{% endif %}
+{% set display_state = runtime_display[profile.id] %}
+{% if display_state == "connected" %}<span class="status-good">● Connected</span>
+{% elif display_state == "connecting" %}<span class="status-warn">◐ Connecting</span>
+{% elif display_state == "failed" %}<span class="status-bad">● Failed</span>
+{% elif display_state == "stale" %}<span class="status-warn">◐ Stale</span>
+{% else %}<span class="muted">○ Offline</span>{% endif %}
 </td>
 <td>{% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}</td>
 <td>{% if profile.enabled %}<span class="status-good">● On</span>{% else %}<span class="muted">○ Off</span>{% endif %}</td>

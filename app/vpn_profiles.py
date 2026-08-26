@@ -37,8 +37,31 @@ def index():
     profiles = db.session.execute(db.select(VPNProfile).order_by(VPNProfile.name.asc())).scalars().all()
     svc = VPNRuntimeService()
     runtime = {p.id: svc.status(p, include_probe=False) for p in profiles}
+
+    from flask import current_app
+    manager = current_app.extensions.get("on_demand_vpn")
+
+    runtime_display = {}
     intelligence = {}
+
     for profile in profiles:
+        rt = runtime[profile.id]
+        display_state = rt.state
+
+        # List semantics:
+        # idle on-demand profiles are Offline, not Failed. A real failure is
+        # retained whenever the profile is actually required.
+        if (
+            profile.enabled
+            and profile.connection_policy == "on_demand"
+            and manager is not None
+        ):
+            demand = manager.public_state(profile.id)
+            if demand.get("standby") and rt.state in ("disconnected", "failed"):
+                display_state = "offline"
+
+        runtime_display[profile.id] = display_state
+
         try:
             meta = inspect_profile(profile, _read_config(profile))
         except OSError:
@@ -48,10 +71,12 @@ def index():
             "provider": display_provider(profile, meta),
             "endpoint": endpoint_label(meta),
         }
+
     return render_template(
         "vpn_profiles/index.html",
         profiles=profiles,
         runtime=runtime,
+        runtime_display=runtime_display,
         intelligence=intelligence,
     )
 

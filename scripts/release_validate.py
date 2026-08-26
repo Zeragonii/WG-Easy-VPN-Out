@@ -66,17 +66,55 @@ def main():
     index_body = index_block.group("body")
     detail_body = detail_block.group("body")
 
-    for leaked_name in ("runtime_display_state", "on_demand"):
-        if leaked_name in index_body:
+    # Catch the actual v1.5.1 regression: detail-only template context
+    # must never be passed from the list route. The literal string
+    # "on_demand" is valid in index() because connection-policy logic lives
+    # there.
+    for forbidden_fragment in (
+        "runtime_display_state=runtime_display_state",
+        "on_demand=on_demand",
+    ):
+        if forbidden_fragment in index_body:
             fail(
-                f"vpn_profiles.index references detail-only variable: {leaked_name}"
+                "vpn_profiles.index leaks detail-only template context: "
+                f"{forbidden_fragment}"
             )
 
-    for required_name in ("runtime_display_state", "on_demand"):
-        if required_name not in detail_body:
+    for required_fragment in (
+        "runtime_display_state=runtime_display_state",
+        "on_demand=on_demand",
+    ):
+        if required_fragment not in detail_body:
             fail(
-                f"vpn_profiles.detail is missing required template context: {required_name}"
+                "vpn_profiles.detail is missing required template context: "
+                f"{required_fragment}"
             )
+
+    if "runtime_display=runtime_display" not in index_body:
+        fail("vpn_profiles.index is missing runtime_display template context")
+
+    index_template = (
+        ROOT / "app/templates/vpn_profiles/index.html"
+    ).read_text(encoding="utf-8")
+    if "○ Offline" not in index_template:
+        fail("VPN profile list must label idle profiles as Offline")
+
+    dns_probe_source = (
+        ROOT / "app/services/dns_observability.py"
+    ).read_text(encoding="utf-8")
+    dns_probe = re.search(
+        r"def run_explicit_resolver_probe\((?P<sig>.*?)\):(?P<body>.*?)(?=\ndef |\Z)",
+        dns_probe_source,
+        flags=re.S,
+    )
+    if not dns_probe:
+        fail("Could not inspect explicit DNS resolver probe")
+    if "resolver_ip" not in dns_probe.group("sig"):
+        fail("Explicit DNS resolver probe signature is missing resolver_ip")
+    if "routing_table_id" not in dns_probe.group("sig"):
+        fail("Explicit DNS resolver probe signature is missing routing_table_id")
+    if 'f"@{resolver_ip}"' not in dns_probe.group("body"):
+        fail("Explicit DNS resolver probe does not use resolver_ip in dig")
 
     readme_lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
     first_h2 = next((line for line in readme_lines if line.startswith("## ")), None)

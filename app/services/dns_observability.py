@@ -209,10 +209,46 @@ def run_explicit_resolver_probe(
     """
     Validate a configured classic-DNS resolver through a specific VPN tunnel.
 
-    Unlike the host-resolver visibility probe, these DNS queries are sent
-    directly to the selected resolver and bound to the VPN tunnel address.
+    WG-Easy client DNS is policy-routed through the routing group's fwmark/table.
+    Local probe traffic does not traverse nftables prerouting, so this function
+    temporarily installs a narrow source+destination policy rule that mirrors
+    the routing group's table for the configured resolver.
     """
     runtime.ensure_probe_route(profile, iface, tunnel_ip)
+
+    probe_priority = 18000 + int(profile.id)
+
+    # Clear a stale probe rule from an interrupted prior run.
+    subprocess.run(
+        [
+            "ip", "-4", "rule", "del",
+            "priority", str(probe_priority),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=3,
+        check=False,
+    )
+
+    rule_result = subprocess.run(
+        [
+            "ip", "-4", "rule", "add",
+            "priority", str(probe_priority),
+            "from", f"{tunnel_ip}/32",
+            "to", f"{resolver_ip}/32",
+            "lookup", str(int(routing_table_id)),
+        ],
+        text=True,
+        capture_output=True,
+        timeout=3,
+        check=False,
+    )
+    if rule_result.returncode != 0:
+        detail = (rule_result.stderr or rule_result.stdout or "").strip()
+        raise RuntimeError(
+            "Could not prepare the routing-group path for the DNS probe"
+            + (f": {detail}" if detail else ".")
+        )
 
     try:
         id_result = subprocess.run(
@@ -227,6 +263,7 @@ def run_explicit_resolver_probe(
             timeout=8,
             check=False,
         )
+
         leak_id = id_result.stdout.strip()
         if id_result.returncode != 0 or not leak_id or len(leak_id) > 64:
             raise RuntimeError(
@@ -234,6 +271,7 @@ def run_explicit_resolver_probe(
             )
 
         queries_attempted = max(1, int(query_count))
+
         for index in range(1, queries_attempted + 1):
             hostname = f"{index}.{leak_id}.bash.ws"
             result = subprocess.run(
@@ -252,10 +290,13 @@ def run_explicit_resolver_probe(
                 timeout=5,
                 check=False,
             )
+
             if result.returncode != 0:
+                detail = (result.stderr or result.stdout or "").strip()
                 raise RuntimeError(
                     f"Configured DNS resolver {resolver_ip} is not reachable "
-                    "through this VPN tunnel."
+                    "through this VPN tunnel"
+                    + (f": {detail}" if detail else ".")
                 )
 
         result = subprocess.run(
@@ -270,6 +311,7 @@ def run_explicit_resolver_probe(
             timeout=9,
             check=False,
         )
+
         if result.returncode != 0:
             raise RuntimeError("Could not retrieve DNS leak test results.")
 
@@ -283,6 +325,7 @@ def run_explicit_resolver_probe(
         parsed["queries_completed"] = queries_attempted
         parsed["configured_resolver"] = resolver_ip
         return parsed
+
     finally:
         subprocess.run(
             [
@@ -294,3 +337,5 @@ def run_explicit_resolver_probe(
             timeout=3,
             check=False,
         )
+
+

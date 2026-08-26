@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.5.5
+
+### DNS probe hotfix
+
+- Fixed the forced-DNS manual probe raising `name 'resolver_ip' is not defined`.
+- Rebuilt the explicit resolver probe so `resolver_ip` and routing-table scope
+  are explicit and correctly scoped.
+- Preserved the narrow source+destination policy rule used to mirror the
+  routing group's VPN path for locally generated DNS tests.
+- Added better command stderr/stdout detail when a temporary rule or DNS query
+  genuinely fails.
+- Retains the v1.5.4 VPN-list Offline/Failed status semantics.
+- No schema, client routing, DNS interception, or on-demand lifecycle behavior
+  changes.
+
+## 1.5.4
+
+### VPN client list status semantics
+
+- Unused enabled on-demand VPN profiles now display **Offline** in the VPN
+  Clients list instead of inheriting historical OpenVPN failure state.
+- **Failed** is reserved for profiles that are actually required/expected to
+  be connected and have genuinely failed.
+- Individual profile detail pages retain the richer **Standby** state and real
+  failure diagnostics.
+- No schema, routing, DNS, lifecycle, or provider-adapter behavior changes.
+
 ## 1.5.3
 
 ### VPN profile route hotfix
