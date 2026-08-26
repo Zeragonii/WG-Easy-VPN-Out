@@ -177,49 +177,48 @@ def run_explicit_resolver_probe(
     tunnel_ip,
     resolver_ip,
     routing_table_id,
+    fwmark,
     query_count=6,
 ):
     """
-    Validate a configured classic-DNS resolver through a specific VPN tunnel.
+    Validate a configured classic-DNS resolver through the same policy-routing
+    path used by assigned WG-Easy clients.
 
-    WG-Easy client DNS is policy-routed through the routing group's fwmark/table.
-    Local probe traffic does not traverse nftables prerouting, so this function
-    temporarily installs a narrow source+destination policy rule that mirrors
-    the routing group's table for the configured resolver.
+    Forwarded WG-Easy DNS is marked in nftables prerouting. Local probe traffic
+    never visits prerouting, so a temporary route/output chain applies the
+    routing group's real fwmark. The existing fwmark ip rule and postrouting
+    masquerade then handle the packet exactly like routed client traffic.
     """
     runtime.ensure_probe_route(profile, iface, tunnel_ip)
 
-    probe_priority = 18000 + int(profile.id)
+    chain_name = f"dns_probe_{int(profile.id)}"
 
-    # Clear a stale probe rule from an interrupted prior run.
     subprocess.run(
-        [
-            "ip", "-4", "rule", "del",
-            "priority", str(probe_priority),
-        ],
+        ["nft", "delete", "chain", "inet", "vpn_router", chain_name],
         text=True,
         capture_output=True,
         timeout=3,
         check=False,
     )
 
+    nft_script = f"""
+add chain inet vpn_router {chain_name} {{ type route hook output priority mangle; policy accept; }}
+add rule inet vpn_router {chain_name} ip saddr {tunnel_ip} ip daddr {resolver_ip} udp dport 53 meta mark set {fwmark}
+add rule inet vpn_router {chain_name} ip saddr {tunnel_ip} ip daddr {resolver_ip} tcp dport 53 meta mark set {fwmark}
+"""
+
     rule_result = subprocess.run(
-        [
-            "ip", "-4", "rule", "add",
-            "priority", str(probe_priority),
-            "from", f"{tunnel_ip}/32",
-            "to", f"{resolver_ip}/32",
-            "lookup", str(int(routing_table_id)),
-        ],
+        ["nft", "-f", "-"],
+        input=nft_script,
         text=True,
         capture_output=True,
-        timeout=3,
+        timeout=4,
         check=False,
     )
     if rule_result.returncode != 0:
         detail = (rule_result.stderr or rule_result.stdout or "").strip()
         raise RuntimeError(
-            "Could not prepare the routing-group path for the DNS probe"
+            "Could not prepare the VPN-marked DNS probe path"
             + (f": {detail}" if detail else ".")
         )
 
@@ -268,7 +267,7 @@ def run_explicit_resolver_probe(
                 detail = (result.stderr or result.stdout or "").strip()
                 raise RuntimeError(
                     f"Configured DNS resolver {resolver_ip} is not reachable "
-                    "through this VPN tunnel"
+                    "through the VPN-marked routing path"
                     + (f": {detail}" if detail else ".")
                 )
 
@@ -301,14 +300,10 @@ def run_explicit_resolver_probe(
 
     finally:
         subprocess.run(
-            [
-                "ip", "-4", "rule", "del",
-                "priority", str(probe_priority),
-            ],
+            ["nft", "delete", "chain", "inet", "vpn_router", chain_name],
             text=True,
             capture_output=True,
             timeout=3,
             check=False,
         )
-
 

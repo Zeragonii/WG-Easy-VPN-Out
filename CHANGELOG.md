@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.7
+
+### Forced-DNS probe path fix
+
+- Changed forced/custom DNS validation to use the routing group's actual
+  fwmark, matching WG-Easy client policy routing.
+- Local DNS probe traffic is temporarily marked in an nftables route/output
+  chain because local traffic does not traverse prerouting.
+- Existing fwmark policy rules and postrouting masquerade are reused by the
+  probe.
+- Removed the previous source+destination policy-rule approximation.
+- Temporary nftables probe chains are cleaned up after each test.
+- Existing/client DNS probing is unchanged.
+- No schema, client DNS interception, routing-group policy, or on-demand
+  lifecycle changes.
+
 ## 1.5.6
 
 ### DNS probe regression fix

@@ -230,6 +230,7 @@ class ObservabilityService:
                         status.tunnel_ipv4,
                         target,
                         group.table_id,
+                        group.mark_hex,
                     )
                 except Exception as exc:
                     result = {

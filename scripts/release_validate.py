@@ -113,8 +113,14 @@ def main():
         fail("Explicit DNS resolver probe signature is missing resolver_ip")
     if "routing_table_id" not in dns_probe.group("sig"):
         fail("Explicit DNS resolver probe signature is missing routing_table_id")
+    if "fwmark" not in dns_probe.group("sig"):
+        fail("Explicit DNS resolver probe signature is missing fwmark")
     if 'f"@{resolver_ip}"' not in dns_probe.group("body"):
         fail("Explicit DNS resolver probe does not use resolver_ip in dig")
+    if "type route hook output priority mangle" not in dns_probe.group("body"):
+        fail("Explicit DNS resolver probe does not mark local DNS in output")
+    if "meta mark set" not in dns_probe.group("body"):
+        fail("Explicit DNS resolver probe does not apply fwmark")
 
     generic_dns_probe = re.search(
         r"def run_dns_leak_probe\((?P<sig>.*?)\):(?P<body>.*?)(?=\ndef run_explicit_resolver_probe)",
