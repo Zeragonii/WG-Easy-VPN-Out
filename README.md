@@ -1,5 +1,21 @@
 # VPN Router
 
+## AI-assisted development
+
+This project was created with substantial assistance from **OpenAI's ChatGPT**.
+
+AI assistance was used during the design and implementation process for tasks
+including architecture discussion, code generation and refactoring, debugging,
+release planning, documentation, test design, and analysis of diagnostic output.
+
+The project was not developed autonomously by an AI system. Its requirements,
+deployment environment, testing decisions, validation, and release approval
+were directed and performed by the project maintainer. Changes were repeatedly
+tested against a real WG-Easy/OpenVPN deployment before the 1.0 release.
+
+This disclosure is included intentionally so users and contributors can make an
+informed judgement about the project's development process and provenance.
+
 A small Flask-based management UI for policy-routing WG-Easy clients through
 named outbound VPN sessions (OpenVPN or WireGuard).
 
@@ -45,7 +61,6 @@ namespace.
 
 Do not expose the management UI directly to the Internet.
 
-
 ## v0.2.0 - WG-Easy discovery
 
 Configure these environment variables:
@@ -66,7 +81,6 @@ After deployment, open `/clients/` in VPN Router.
 This milestone is read-only and does not alter routes, nftables, WireGuard,
 OpenVPN, or WG-Easy configuration.
 
-
 ## v0.2.1 - Handshake-derived client status
 
 WG-Easy does not provide a persistent `online` boolean for clients.
@@ -80,7 +94,6 @@ VPN Router now derives a useful UI state from `latestHandshakeAt`:
 
 The clients page also displays human-readable RX/TX counters.
 
-
 ## v0.2.2 - Live WG-Easy client refresh
 
 The WG-Easy Clients page now:
@@ -93,7 +106,6 @@ The WG-Easy Clients page now:
 - provides a manual "Refresh now" button
 
 No routing or firewall changes are performed in this release.
-
 
 ## v0.3.1 - OpenVPN runtime management
 
@@ -121,7 +133,6 @@ with subnet topology, including PIA.
 
 WG-Easy client policy routing is still disabled in this release.
 
-
 ## v0.3.3 - Auto-connect persistence
 
 Adds persistent tunnel intent across container restarts.
@@ -134,7 +145,6 @@ Adds persistent tunnel intent across container restarts.
 
 This makes VPN profiles survive Portainer/container restarts while keeping
 failure behaviour predictable.
-
 
 ## v0.4.0 - Routing groups and security tidy-up
 
@@ -170,7 +180,6 @@ automatically at startup.
 **Important:** keep the same `SECRET_KEY` across upgrades/redeployments.
 Changing it after credentials have been encrypted will make those stored
 passwords undecryptable.
-
 
 ## v0.5.0 - WG-Easy client routing assignments
 
@@ -209,7 +218,6 @@ by using Python list-comprehension syntax inside a Jinja expression.
 
 Routing/assignment behaviour is unchanged from v0.5.0.
 
-
 ## v0.5.2 - Automatic routing reconciliation
 
 Adds a lightweight routing-state reconciler. Every 3 seconds by default it
@@ -229,7 +237,6 @@ while OpenVPN was still connecting and remain blocked until a manual rebuild.
 Configure the interval with:
 
     ROUTING_RECONCILE_INTERVAL=3
-
 
 ## v0.6.0 - VPN retry and recovery
 
@@ -261,7 +268,6 @@ Set a positive value to stop after that many failures.
 
 Retry state persists at `/data/runtime/retry-state.json`.
 
-
 ## v0.6.1 - Dashboard refresh
 
 Replaces the stale early-development dashboard copy with a live operational
@@ -282,7 +288,6 @@ Dashboard now shows:
 - networking tool availability
 - current feature-set summary and next milestone
 
-
 ## v0.6.2 - WG-Easy dashboard client totals
 
 Adds a live `Total clients` metric to the WG-Easy dashboard card.
@@ -292,7 +297,6 @@ Adds a live `Total clients` metric to the WG-Easy dashboard card.
 
 If the WG-Easy API is temporarily unavailable, the dashboard shows the total
 as unavailable while retaining the persisted assigned-client count.
-
 
 ## v0.7.0 - Observability and dashboard polish
 
@@ -324,7 +328,6 @@ Routing group health table:
 The release is intentionally observability-only: it does not change packet
 marking, route construction, VPN startup, retry, or reconciliation behaviour.
 
-
 ## v0.7.1 - Local-network routing bypass
 
 Fixes policy-routed WG-Easy clients losing access to local services such as
@@ -349,7 +352,6 @@ Result:
 - Docker bridge/private-network destinations are no longer accidentally sent
   toward outbound VPN routing tables
 
-
 ## v0.7.2 - Image-owned application version
 
 The application version is now stored in the repository's root `VERSION` file
@@ -366,7 +368,6 @@ Version resolution order:
 3. `unknown` if neither is available
 
 For each release, update the repository `VERSION` file before building/pushing.
-
 
 ## v0.7.3 - Async observability and update awareness
 
@@ -410,7 +411,6 @@ Configuration:
     UPDATE_VERSION_URL=https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION
     UPDATE_REPOSITORY_URL=https://github.com/Zeragonii/WG-Easy-VPN-Out
 
-
 ## v0.7.4 - Dashboard-triggered update checks
 
 GitHub update awareness is now demand-driven instead of timer-driven.
@@ -435,7 +435,6 @@ Examples:
 
 The exit-IP background polling behaviour is unchanged.
 
-
 ## v0.7.5 - Flexible version comparison
 
 Update awareness now supports arbitrary numeric depth and alphabetic suffixes.
@@ -451,7 +450,6 @@ Examples that compare correctly:
 
 The project's convention intentionally treats an added suffix as a later
 micro-patch, so `0.7.5a` is considered newer than `0.7.5`.
-
 
 ## v0.8.0 - Backup and Restore
 
@@ -486,7 +484,6 @@ redeploy before encrypted VPN credentials can be used.
 
 Restore validates archive structure, paths, entity references and required
 configuration files before replacing current persistent configuration.
-
 
 ## v0.9.0 - Core hardening and diagnostics
 
@@ -538,7 +535,6 @@ credentials, VPN usernames/passwords, and VPN configuration file contents.
 Cross-service users now call public VPN runtime helpers for log-tail/gateway
 inspection rather than depending directly on private helper methods.
 
-
 ## v0.9.1 - Service lifecycle and recovery hardening
 
 ### Graceful background-service shutdown
@@ -574,7 +570,6 @@ successful recovery timestamp.
 
 The observability service now uses a public `VPNRuntimeService.exit_ip()` API
 instead of directly calling the private `_exit_ip()` helper.
-
 
 ## v0.9.2 - Migration and restore hardening
 
@@ -623,7 +618,6 @@ directory before the live configuration is replaced. If the database/file
 replacement fails, the SQL transaction is rolled back and the previous config
 files are restored.
 
-
 ## v0.9.3 - Release Candidate Readiness
 
 v0.9.3 is intentionally feature-frozen. Its purpose is to verify that the
@@ -656,7 +650,6 @@ Fixes the Diagnostics **Run preflight** button. The preflight JavaScript is now 
 ## v0.9.3b - Resilience accounting hotfix
 
 A retry process successfully starting is no longer counted as a successful VPN connection. Retry failures and exponential backoff remain intact until the tunnel is actually observed as connected.
-
 
 ## v1.0.0 - Stable OpenVPN Release
 
@@ -692,24 +685,6 @@ The 1.0 release was validated through:
 
 Outbound WireGuard support remains intentionally deferred to a post-1.0 release.
 
-
-## AI-assisted development
-
-This project was created with substantial assistance from **OpenAI's ChatGPT**.
-
-AI assistance was used during the design and implementation process for tasks
-including architecture discussion, code generation and refactoring, debugging,
-release planning, documentation, test design, and analysis of diagnostic output.
-
-The project was not developed autonomously by an AI system. Its requirements,
-deployment environment, testing decisions, validation, and release approval
-were directed and performed by the project maintainer. Changes were repeatedly
-tested against a real WG-Easy/OpenVPN deployment before the 1.0 release.
-
-This disclosure is included intentionally so users and contributors can make an
-informed judgement about the project's development process and provenance.
-
-
 ## v1.1.0 - First-run setup and application settings
 
 Fresh deployments now require only the deployment-level environment values
@@ -740,7 +715,6 @@ services reload applicable settings after a save.
 
 Backups created by v1.1 include application settings. Older backups without
 settings remain accepted.
-
 
 ## v1.2.0 - Routing health and DNS leak visibility
 
@@ -777,7 +751,6 @@ Automatic probes default to every 900 seconds and can be disabled by setting
 the interval to 0 in Settings; a manual test remains available from the Routing
 Group Health page.
 
-
 ## v1.2.1 - DNS probe routing fix
 
 v1.2.0 bound `dig` directly to the VPN tunnel address. On hosts whose configured
@@ -792,7 +765,6 @@ retrieval remain associated with the selected VPN path.
 `dig` is no longer required. `ping` is included in the container image and
 networking-tools preflight.
 
-
 ## v1.2.2 - DNS trigger result handling fix
 
 The bash.ws DNS leak test uses generated hostnames only to cause the system
@@ -804,7 +776,6 @@ queries had been generated. v1.2.2 now mirrors the upstream behavior: it fires
 the tunnel-bound ping triggers without interpreting their return codes, then
 uses the bash.ws result endpoint itself to determine whether resolvers were
 observed.
-
 
 ## v1.3.0 - DNS policy and leak prevention
 
@@ -835,7 +806,6 @@ through the actual VPN tunnel before retrieving external resolver observations.
 v1.3.0 controls classic UDP/TCP port 53 only. DNS-over-HTTPS is intentionally
 out of scope and is not intercepted.
 
-
 ## v1.4.0 - Provider metadata and profile intelligence
 
 VPN Router now derives read-only metadata from imported VPN configurations.
@@ -857,13 +827,11 @@ detection.
 Provider intelligence is informational only. v1.4.0 does not rewrite configs,
 select endpoints, or add provider-specific routing automation.
 
-
 ## v1.4.1 - Region hint parsing fixes
 
 The profile-intelligence parser now handles PIA country-only endpoint names,
 including `ireland.privacy.network`, and understands PIA's `-so` suffix as a
 Streaming Optimized endpoint variant.
-
 
 ## v1.4.2 - Provider adapter framework
 
@@ -879,7 +847,6 @@ provider-specific interpretation.
   DNS routing behavior.
 
 No database migration or routing/runtime behavior change is included.
-
 
 ## v1.5.0 - On-demand VPN connections
 
@@ -902,7 +869,6 @@ it remains connected until its final assignment moves away.
 
 Existing profiles migrate to **Always connected**, preserving current behavior
 until the user explicitly opts a profile into On demand.
-
 
 ## v1.5.1 - Standby state and DNS probe routing fixes
 

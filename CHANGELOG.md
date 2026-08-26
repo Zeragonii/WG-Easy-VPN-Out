@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.2
+
+### Documentation transparency
+
+- Moved the existing **AI-assisted development** disclosure to the top of
+  `README.md`, immediately after the project title.
+- Preserved the disclosure text unchanged.
+- Future appended release notes can remain below it without moving the
+  disclosure again.
+- No application, routing, runtime, schema, or container behavior changes.
+
 ## 1.5.1
 
 ### On-demand standby state
