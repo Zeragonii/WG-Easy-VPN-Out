@@ -346,7 +346,12 @@ class VPNRuntimeService:
         )
 
         if state == "disconnected" and last_error:
-            state = "failed"
+            if bool(getattr(profile, "enabled", False)):
+                state = "failed"
+            else:
+                # A manually disabled/disconnected profile may have historical
+                # OpenVPN errors in its log. They are not a current failure.
+                last_error = None
 
         uptime = None
         meta = self._read_meta(profile)

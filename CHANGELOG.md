@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.6
+
+### DNS probe regression fix
+
+- Restored the generic DNS leak probe to a resolver-agnostic implementation.
+- Removed accidental `resolver_ip` / `routing_table_id` references from
+  `run_dns_leak_probe()`.
+- Existing/client DNS leak tests once again use the original tunnel-bound
+  bash.ws lookup flow.
+- Forced/custom DNS validation remains isolated in
+  `run_explicit_resolver_probe()`.
+
+### Manual disconnect status fix
+
+- A manually disabled/disconnected VPN profile now reports **Disconnected**
+  rather than inheriting historical OpenVPN log errors as **Failed**.
+- Historical errors are suppressed while a profile is disabled.
+- Enabled profiles that genuinely fail still report **Failed**.
+- On-demand Standby/Offline behavior remains unchanged.
+
+- No schema, routing-policy, DNS interception, provider-adapter, or on-demand
+  lifecycle changes.
+
 ## 1.5.5
 
 ### DNS probe hotfix

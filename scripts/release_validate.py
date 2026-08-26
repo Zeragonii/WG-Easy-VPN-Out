@@ -116,6 +116,32 @@ def main():
     if 'f"@{resolver_ip}"' not in dns_probe.group("body"):
         fail("Explicit DNS resolver probe does not use resolver_ip in dig")
 
+    generic_dns_probe = re.search(
+        r"def run_dns_leak_probe\((?P<sig>.*?)\):(?P<body>.*?)(?=\ndef run_explicit_resolver_probe)",
+        dns_probe_source,
+        flags=re.S,
+    )
+    if not generic_dns_probe:
+        fail("Could not inspect generic DNS leak probe")
+    for forbidden_name in ("resolver_ip", "routing_table_id"):
+        if (
+            forbidden_name in generic_dns_probe.group("sig")
+            or forbidden_name in generic_dns_probe.group("body")
+        ):
+            fail(
+                "Generic DNS leak probe contains forced-resolver-only name: "
+                f"{forbidden_name}"
+            )
+
+    vpn_runtime_source = (
+        ROOT / "app/services/vpn_runtime.py"
+    ).read_text(encoding="utf-8")
+    if 'getattr(profile, "enabled", False)' not in vpn_runtime_source:
+        fail(
+            "VPN runtime status must distinguish disabled disconnects "
+            "from active failures"
+        )
+
     readme_lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
     first_h2 = next((line for line in readme_lines if line.startswith("## ")), None)
     if first_h2 != "## AI-assisted development":
