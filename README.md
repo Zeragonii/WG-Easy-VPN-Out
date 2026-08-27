@@ -1351,3 +1351,13 @@ Current v1.8.0 WireGuard scope is IPv4 outbound provider configs. Provider
 Routing Group DNS policy and VPN Router lifecycle remain authoritative.
 
 No schema change; database schema remains v6.
+
+## v1.8.1
+
+### WireGuard config filename hotfix
+
+- WireGuard provider configs no longer need to be uploaded with a filename that
+  is also a valid interface name.
+- VPN Router creates a sanitized runtime-only `wg-vpn<ID>.conf` copy for
+  `wg-quick strip` and removes it immediately afterward.
+- No schema or routing behavior changes.

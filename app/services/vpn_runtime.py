@@ -281,13 +281,29 @@ class VPNRuntimeService:
                 )
             created = True
 
-            # `wg-quick strip` removes Address/DNS/MTU/PostUp/etc. and leaves
-            # only values accepted by `wg setconf`. We then build addresses,
-            # MTU and policy routes ourselves.
-            stripped = self._run(
-                ["wg-quick", "strip", str(config_path)],
-                timeout=4,
+            # `wg-quick strip` insists the input filename itself is a valid
+            # WireGuard interface name followed by .conf. Uploaded provider
+            # configs often have human-friendly names (spaces, country names,
+            # punctuation), so never pass the persisted upload path directly.
+            #
+            # Copy the config to a sanitized runtime-only filename matching the
+            # actual interface name, run wg-quick strip against that, then feed
+            # the stripped output to wg setconf.
+            sanitized_config_path = self.runtime_dir / f"{iface}.conf"
+            sanitized_config_path.write_text(
+                content,
+                encoding="utf-8",
             )
+            os.chmod(sanitized_config_path, 0o600)
+
+            try:
+                stripped = self._run(
+                    ["wg-quick", "strip", str(sanitized_config_path)],
+                    timeout=4,
+                )
+            finally:
+                sanitized_config_path.unlink(missing_ok=True)
+
             if stripped.returncode != 0 or not stripped.stdout.strip():
                 raise VPNRuntimeError(
                     "Could not parse WireGuard configuration with wg-quick: "

@@ -356,6 +356,14 @@ def main():
 
     runtime_source = (ROOT / "app/services/vpn_runtime.py").read_text(encoding="utf-8")
     for required_fragment in (
+        'sanitized_config_path = self.runtime_dir / f"{iface}.conf"',
+        '["wg-quick", "strip", str(sanitized_config_path)]',
+        "sanitized_config_path.unlink(missing_ok=True)",
+    ):
+        if required_fragment not in runtime_source:
+            fail(f"v1.8.1 WireGuard filename sanitization is missing: {required_fragment}")
+
+    for required_fragment in (
         "def _wg_start(self, profile)",
         "wg-quick\", \"strip",
         "wg\", \"setconf",

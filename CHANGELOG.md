@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.1
+
+### WireGuard config filename hotfix
+
+- Fixed outbound WireGuard startup failing when an uploaded provider config
+  filename was not itself a valid WireGuard interface name.
+- Provider configs are now copied to a runtime-only sanitized filename such as
+  `wg-vpn3.conf` before invoking `wg-quick strip`.
+- The original uploaded filename is preserved for user-facing storage/history.
+- Sanitized runtime copies are deleted immediately after parsing.
+- No routing, lifecycle, schema or provider behavior changes.
+
 ## 1.8.0
 
 ### Outbound WireGuard VPN clients
