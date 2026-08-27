@@ -163,6 +163,10 @@ def create_app():
     traffic_visibility.start()
     app.extensions["traffic_visibility"] = traffic_visibility
 
+    from .services.preflight_jobs import PreflightJobManager
+
+    app.extensions["preflight_jobs"] = PreflightJobManager(app, db)
+
     app.extensions["background_services"] = [
         routing_reconciler,
         on_demand,

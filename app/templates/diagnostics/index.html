@@ -58,7 +58,7 @@
     <div>
       <h2 style="margin-bottom:.25rem;">Release readiness</h2>
       <div class="muted">
-        Preflight checks storage, schema, routing and services, then functionally verifies enabled VPN profiles one at a time. Parked On-demand profiles are temporarily connected, tested and returned to standby.
+        Preflight runs asynchronously in the application process. It checks storage, schema, routing and services, then functionally verifies enabled VPN profiles one at a time. Parked On-demand profiles are temporarily connected, tested and returned to standby. You may leave this page and return while it runs.
       </div>
     </div>
     <button id="run-preflight" type="button" class="inline-button">Run preflight</button>
@@ -115,7 +115,12 @@
         {% for group in diagnostics.routing_groups %}
         <tr>
           <td><strong>{{ group.name }}</strong><div class="muted">{{ group.state }} · {{ group.detail }}</div></td>
-          <td>{{ group.assigned_clients }}</td>
+          <td>
+            <strong>{{ group.effective_clients }}</strong>
+            <div class="muted" style="font-size:.8rem;">
+              permanent {{ group.permanent_clients }} · overrides {{ group.override_clients }}
+            </div>
+          </td>
           <td>{{ group.target }}</td>
           <td>{{ group.effective_exit }}</td>
           <td>{{ group.fallback_mode }}</td>
@@ -148,6 +153,10 @@
   const button = document.getElementById("run-preflight");
   const summary = document.getElementById("preflight-summary");
   const results = document.getElementById("preflight-results");
+  const startUrl = "{{ url_for('diagnostics.preflight_start') }}";
+  const statusUrl = "{{ url_for('diagnostics.preflight_status') }}";
+  const csrfToken = "{{ csrf_token() }}";
+  let pollTimer = null;
 
   function statusClass(status) {
     if (status === "pass") return "status-good";
@@ -155,61 +164,138 @@
     return "status-bad";
   }
 
-  async function run() {
-    button.disabled = true;
-    summary.textContent = "Running checks…";
-    results.innerHTML = "";
+  function renderResult(data) {
+    summary.innerHTML = data.ready
+      ? `<span class="status-good">● Ready</span> · ${data.summary.pass} passed, ${data.summary.warn} warning(s)`
+      : `<span class="status-bad">● Not ready</span> · ${data.summary.fail} failed, ${data.summary.warn} warning(s)`;
 
+    results.innerHTML = "";
+    const table = document.createElement("table");
+    table.innerHTML = `
+      <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
+      <tbody></tbody>
+    `;
+    const tbody = table.querySelector("tbody");
+
+    for (const check of data.checks || []) {
+      const row = document.createElement("tr");
+
+      const label = document.createElement("td");
+      label.textContent = check.label;
+
+      const state = document.createElement("td");
+      const stateSpan = document.createElement("span");
+      stateSpan.className = statusClass(check.status);
+      stateSpan.textContent =
+        check.status === "pass" ? "● Pass" :
+        check.status === "warn" ? "◐ Warning" : "● Fail";
+      state.appendChild(stateSpan);
+
+      const detail = document.createElement("td");
+      detail.textContent = check.detail;
+
+      row.append(label, state, detail);
+      tbody.appendChild(row);
+    }
+
+    results.appendChild(table);
+  }
+
+  function renderJob(job) {
+    if (!job) return;
+
+    if (job.state === "running" || job.running) {
+      button.disabled = true;
+      button.textContent = "Preflight running…";
+      const started = job.started_at
+        ? new Date(job.started_at).toLocaleTimeString()
+        : "just now";
+      summary.innerHTML =
+        `<span class="status-warn">◐ Running</span> · started ${started}. You may leave this page and return later.`;
+      return;
+    }
+
+    button.disabled = false;
+    button.textContent = "Run preflight";
+
+    if (job.state === "complete" && job.result) {
+      renderResult(job.result);
+      return;
+    }
+
+    if (job.state === "failed") {
+      summary.innerHTML =
+        '<span class="status-bad">● Preflight job failed.</span>';
+      results.textContent = job.error || "Unknown preflight error.";
+      return;
+    }
+
+    summary.textContent = "Not run yet.";
+  }
+
+  async function fetchStatus() {
     try {
-      const response = await fetch("{{ url_for('diagnostics.preflight') }}", {
+      const response = await fetch(statusUrl, {
         headers: {"Accept": "application/json"},
         cache: "no-store"
       });
       const data = await response.json();
-      if (!response.ok) throw new Error("Preflight request failed.");
-
-      summary.innerHTML = data.ready
-        ? `<span class="status-good">● Ready</span> · ${data.summary.pass} passed, ${data.summary.warn} warning(s)`
-        : `<span class="status-bad">● Not ready</span> · ${data.summary.fail} failed, ${data.summary.warn} warning(s)`;
-
-      const table = document.createElement("table");
-      table.innerHTML = `
-        <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
-        <tbody></tbody>
-      `;
-      const tbody = table.querySelector("tbody");
-
-      for (const check of data.checks || []) {
-        const row = document.createElement("tr");
-
-        const label = document.createElement("td");
-        label.textContent = check.label;
-
-        const state = document.createElement("td");
-        const stateSpan = document.createElement("span");
-        stateSpan.className = statusClass(check.status);
-        stateSpan.textContent =
-          check.status === "pass" ? "● Pass" :
-          check.status === "warn" ? "◐ Warning" : "● Fail";
-        state.appendChild(stateSpan);
-
-        const detail = document.createElement("td");
-        detail.textContent = check.detail;
-
-        row.append(label, state, detail);
-        tbody.appendChild(row);
+      if (!response.ok || !data.ok) {
+        throw new Error("Could not read preflight status.");
       }
 
-      results.appendChild(table);
+      renderJob(data.job);
+
+      if (data.job?.state === "running" || data.job?.running) {
+        if (!pollTimer) {
+          pollTimer = window.setInterval(fetchStatus, 1000);
+        }
+      } else if (pollTimer) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
     } catch (error) {
       summary.innerHTML =
-        '<span class="status-bad">● Preflight could not be completed.</span>';
-    } finally {
-      button.disabled = false;
+        '<span class="status-bad">● Could not read preflight status.</span>';
     }
   }
 
-  button.addEventListener("click", run);
+  async function start() {
+    button.disabled = true;
+    button.textContent = "Starting…";
+    results.innerHTML = "";
+
+    try {
+      const response = await fetch(startUrl, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "X-CSRFToken": csrfToken
+        },
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error("Could not start preflight.");
+      }
+
+      renderJob(data.job);
+
+      if (!pollTimer) {
+        pollTimer = window.setInterval(fetchStatus, 1000);
+      }
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "Run preflight";
+      summary.innerHTML =
+        '<span class="status-bad">● Preflight could not be started.</span>';
+    }
+  }
+
+  button.addEventListener("click", start);
+
+  // Reattach to an existing run/result whenever Diagnostics is opened.
+  fetchStatus();
 })();
 </script>
 {% endblock %}

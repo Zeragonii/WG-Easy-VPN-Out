@@ -1389,3 +1389,20 @@ This makes On-demand standby a healthy state while still proving that every
 enabled VPN route can be brought online when needed.
 
 No schema or routing-policy changes.
+
+## v1.8.4
+
+### Asynchronous preflight jobs
+
+Preflight now runs independently of the browser request. Starting a run creates
+one process-level background job and Diagnostics polls a lightweight status
+endpoint for progress/completion.
+
+You may navigate away and return while preflight is running; the page will
+reattach to the active job or display the most recent result. Duplicate
+concurrent runs are prevented.
+
+Results are process-local and survive page navigation, but are intentionally
+not persisted across application restarts.
+
+No schema or routing-policy changes.

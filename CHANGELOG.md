@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.8.4
+
+### Asynchronous preflight jobs
+
+- Preflight no longer runs inside the HTTP request that starts it.
+- Added a process-level `PreflightJobManager` that owns one background
+  preflight run at a time.
+- Added separate authenticated endpoints to:
+  - start a preflight job
+  - read current preflight job status/results
+- Diagnostics polls job status once per second while a run is active.
+- Users can leave Diagnostics and return later; the page automatically
+  reattaches to the active run or most recent result.
+- Concurrent duplicate preflight runs are prevented.
+- Preflight results remain available until the next run or application restart.
+- The start action is POST + CSRF protected.
+- Also corrected the Diagnostics routing-group table to display v1.8.2's
+  effective/permanent/override-aware client counts.
+- No schema, routing-policy or VPN lifecycle changes.
+
 ## 1.8.3
 
 ### Functional VPN preflight verification

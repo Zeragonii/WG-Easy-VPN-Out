@@ -430,6 +430,46 @@ def main():
     if '"warn" if not unhealthy else' in preflight_source or "Not currently connected:" in preflight_source:
         fail("v1.8.3 still contains legacy current-state-only VPN preflight logic")
 
+    preflight_jobs_source = (ROOT / "app/services/preflight_jobs.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "class PreflightJobManager",
+        "target=self._run",
+        'name="vpn-router-preflight"',
+        '"state": "running"',
+        '"state": "complete"',
+    ):
+        if required_fragment not in preflight_jobs_source:
+            fail(f"v1.8.4 asynchronous preflight manager is missing: {required_fragment}")
+
+    diagnostics_routes = (ROOT / "app/diagnostics.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        '@bp.post("/preflight/start")',
+        '@bp.get("/preflight/status")',
+        'current_app.extensions["preflight_jobs"]',
+    ):
+        if required_fragment not in diagnostics_routes:
+            fail(f"v1.8.4 asynchronous preflight routes are missing: {required_fragment}")
+
+    if 'run_preflight(' in diagnostics_routes:
+        fail("v1.8.4 diagnostics HTTP routes must not run preflight synchronously")
+
+    diagnostics_template = (ROOT / "app/templates/diagnostics/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "preflight_start",
+        "preflight_status",
+        'method: "POST"',
+        '"X-CSRFToken": csrfToken',
+        "window.setInterval(fetchStatus, 1000)",
+        "You may leave this page and return",
+        "group.effective_clients",
+    ):
+        if required_fragment not in diagnostics_template:
+            fail(f"v1.8.4 asynchronous preflight UI is missing: {required_fragment}")
+
+    init_source = (ROOT / "app/__init__.py").read_text(encoding="utf-8")
+    if 'app.extensions["preflight_jobs"] = PreflightJobManager(app, db)' not in init_source:
+        fail("v1.8.4 PreflightJobManager is not registered")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")
