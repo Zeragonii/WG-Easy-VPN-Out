@@ -413,6 +413,23 @@ def main():
     if "<h2>Runtime log</h2>" not in detail_template:
         fail("v1.8.0 VPN profile runtime log is not transport-neutral")
 
+    preflight_source = (ROOT / "app/services/preflight.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _verify_enabled_vpn_profiles",
+        "def _wait_for_connected",
+        "runtime.start(profile)",
+        "runtime.exit_ip(",
+        "runtime.stop(profile)",
+        "started_temporarily",
+        "Explicitly disabled profiles skipped:",
+        "Enabled VPN profile verification",
+    ):
+        if required_fragment not in preflight_source:
+            fail(f"v1.8.3 functional VPN preflight is missing: {required_fragment}")
+
+    if '"warn" if not unhealthy else' in preflight_source or "Not currently connected:" in preflight_source:
+        fail("v1.8.3 still contains legacy current-state-only VPN preflight logic")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

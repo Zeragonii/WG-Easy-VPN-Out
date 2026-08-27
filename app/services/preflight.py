@@ -6,10 +6,12 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 
 from .migrations import CURRENT_SCHEMA_VERSION, current_schema_version
 from .routing import RoutingEngine
 from .vpn_runtime import VPNRuntimeService
+from .settings import SettingsService
 
 
 @dataclass(slots=True)
@@ -56,6 +58,157 @@ def _expected_policy_rule(group):
         f"fwmark 0x{0x100 + group.id:x}",
         f"lookup {10000 + group.id}",
     )
+
+
+
+def _wait_for_connected(runtime, profile, timeout_seconds):
+    """
+    Wait for a runtime-confirmed tunnel.
+
+    OpenVPN requires the tunnel interface/address to exist. WireGuard additionally
+    requires a recent handshake because VPNRuntimeService.status() only reports
+    Connected after a real handshake has occurred.
+    """
+    deadline = time.monotonic() + max(1.0, float(timeout_seconds))
+
+    while time.monotonic() < deadline:
+        status = runtime.status(profile, include_probe=False)
+
+        if status.state == "connected":
+            return True, status, None
+
+        if status.state in ("failed", "stale"):
+            return False, status, status.last_error or f"runtime entered {status.state} state"
+
+        # A just-started OpenVPN process or WireGuard interface may legitimately
+        # remain Connecting for a short period.
+        time.sleep(0.5)
+
+    status = runtime.status(profile, include_probe=False)
+    return (
+        False,
+        status,
+        status.last_error
+        or f"timed out after {float(timeout_seconds):.0f}s waiting for Connected",
+    )
+
+
+def _verify_enabled_vpn_profiles(app, db, profiles, runtime):
+    """
+    Functionally verify enabled VPN profiles one at a time.
+
+    Profiles that were already connected are left untouched. Enabled profiles
+    that are parked/disconnected are temporarily started, checked for a
+    confirmed tunnel and working Internet egress, then returned to their
+    original parked state before the next profile is tested.
+
+    Explicitly disabled profiles are not activated: disabled means automatic
+    connection is intentionally forbidden elsewhere in the application too.
+    """
+    supported = [
+        profile
+        for profile in profiles
+        if profile.vpn_type in ("openvpn", "wireguard")
+    ]
+    enabled = [profile for profile in supported if profile.enabled]
+    disabled = [profile for profile in supported if not profile.enabled]
+
+    settings = SettingsService(
+        db,
+        __import__("app.models", fromlist=["AppSetting"]).AppSetting,
+    )
+    try:
+        timeout = float(settings.get("vpn_connect_timeout_seconds"))
+    except Exception:
+        timeout = 45.0
+    if timeout <= 0:
+        timeout = 45.0
+
+    verified = []
+    failures = []
+    started_temporarily = []
+    already_connected = []
+
+    for profile in enabled:
+        initial = runtime.status(profile, include_probe=False)
+        temporary_start = initial.state != "connected"
+
+        if not temporary_start:
+            already_connected.append(profile.name)
+
+        try:
+            if temporary_start:
+                # Clear a stale half-created runtime before testing. This only
+                # affects a profile that was not connected when preflight began.
+                if initial.state in ("connecting", "stale", "failed"):
+                    try:
+                        runtime.stop(profile)
+                    except Exception:
+                        pass
+
+                runtime.start(profile)
+                started_temporarily.append(profile.name)
+
+            ok, status, error = _wait_for_connected(
+                runtime,
+                profile,
+                timeout,
+            )
+            if not ok:
+                failures.append(
+                    f"{profile.name}: {error or status.state}"
+                )
+                continue
+
+            # Connection alone is not enough: prove usable outbound IPv4
+            # egress through the tunnel's isolated probe table.
+            exit_ip = None
+            for _attempt in range(2):
+                try:
+                    exit_ip = runtime.exit_ip(
+                        profile,
+                        status.interface_name,
+                        status.tunnel_ipv4,
+                    )
+                except Exception as exc:
+                    error = str(exc)[-300:]
+                    exit_ip = None
+                if exit_ip:
+                    break
+                time.sleep(0.5)
+
+            if not exit_ip:
+                failures.append(
+                    f"{profile.name}: tunnel connected but outbound exit-IP probe failed"
+                    + (f" ({error})" if error else "")
+                )
+                continue
+
+            verified.append(f"{profile.name} → {exit_ip}")
+
+        except Exception as exc:
+            failures.append(f"{profile.name}: {str(exc)[-400:]}")
+
+        finally:
+            if temporary_start:
+                try:
+                    runtime.stop(profile)
+                except Exception as exc:
+                    failures.append(
+                        f"{profile.name}: verified/tested but could not restore parked state "
+                        f"({str(exc)[-300:]})"
+                    )
+
+    return {
+        "supported_count": len(supported),
+        "enabled_count": len(enabled),
+        "disabled_count": len(disabled),
+        "verified": verified,
+        "failures": failures,
+        "started_temporarily": started_temporarily,
+        "already_connected": already_connected,
+        "disabled_names": [profile.name for profile in disabled],
+    }
 
 
 def run_preflight(
@@ -245,21 +398,47 @@ def run_preflight(
         ),
     ))
 
-    # Enabled VPN health
-    enabled = [p for p in profiles if p.enabled and p.vpn_type in ("openvpn", "wireguard")]
-    unhealthy = []
-    for profile in enabled:
-        status = runtime.status(profile, include_probe=False)
-        if status.state != "connected":
-            unhealthy.append(f"{profile.name} ({status.state})")
+    # Enabled VPN functional verification.
+    #
+    # On-demand profiles are expected to be parked when unused. Preflight
+    # therefore verifies capability, not merely current runtime state:
+    # connected profiles are checked in place; parked enabled profiles are
+    # started/tested/stopped sequentially.
+    vpn_verification = _verify_enabled_vpn_profiles(
+        app,
+        db,
+        profiles,
+        runtime,
+    )
+
+    details = []
+    if vpn_verification["verified"]:
+        details.append(
+            "Verified: " + "; ".join(vpn_verification["verified"])
+        )
+    if vpn_verification["started_temporarily"]:
+        details.append(
+            "Temporarily started and restored to parked state: "
+            + ", ".join(vpn_verification["started_temporarily"])
+        )
+    if vpn_verification["disabled_names"]:
+        details.append(
+            "Explicitly disabled profiles skipped: "
+            + ", ".join(vpn_verification["disabled_names"])
+        )
+    if vpn_verification["failures"]:
+        details.append(
+            "Failed: " + "; ".join(vpn_verification["failures"])
+        )
+
     checks.append(CheckResult(
         "enabled_vpns",
-        "Enabled VPN profiles",
-        "pass" if not unhealthy else "warn",
+        "Enabled VPN profile verification",
+        "pass" if not vpn_verification["failures"] else "fail",
         (
-            f"All {len(enabled)} enabled VPN profiles are connected."
-            if not unhealthy
-            else "Not currently connected: " + ", ".join(unhealthy)
+            " | ".join(details)
+            if details
+            else "No supported VPN profiles are enabled for automatic connection."
         ),
     ))
 

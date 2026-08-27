@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.8.3
+
+### Functional VPN preflight verification
+
+- Reworked the VPN preflight check so parked On-demand profiles are no longer
+  warned about simply because they are intentionally offline.
+- Preflight now verifies enabled OpenVPN and WireGuard profiles **one at a
+  time**.
+- Profiles already connected when preflight begins are verified in place and
+  left running.
+- Enabled profiles that are parked/disconnected are temporarily:
+  1. started,
+  2. waited on until runtime-confirmed Connected,
+  3. checked for usable outbound Internet egress with an exit-IP probe,
+  4. stopped again before the next profile is tested.
+- WireGuard verification therefore requires a real recent handshake through
+  the existing runtime Connected semantics.
+- Explicitly disabled profiles are skipped; preflight does not override the
+  application's "Allow automatic connection" safety setting.
+- Preflight now reports which profiles were verified, which were temporarily
+  exercised, their observed exit IPs, skipped disabled profiles, and failures.
+- A failed enabled-profile functional test is now a preflight failure rather
+  than a warning about expected standby state.
+- Updated Diagnostics UI copy to make the active verification behavior clear.
+- No database schema or routing-policy changes.
+
 ## 1.8.2
 
 ### Diagnostics cleanup

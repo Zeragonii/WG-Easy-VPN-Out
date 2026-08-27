@@ -1372,3 +1372,20 @@ No schema change; database schema remains v6.
   temporary-override client counts.
 - Diagnostics summary now reports active overrides and effective client routes.
 - No schema or routing behavior changes.
+
+## v1.8.3
+
+### Functional VPN preflight verification
+
+Preflight now tests whether enabled VPN profiles can actually work instead of
+assuming every enabled profile should already be connected.
+
+Already-active profiles are verified in place. Parked enabled profiles are
+started sequentially, waited on for a confirmed connection, checked for
+outbound egress, then returned to their original parked state before testing
+the next profile. Explicitly disabled profiles remain untouched.
+
+This makes On-demand standby a healthy state while still proving that every
+enabled VPN route can be brought online when needed.
+
+No schema or routing-policy changes.
