@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.11
+
+### Dashboard 500 hotfix
+
+- Fixed dashboard and `/api/dashboard/live` HTTP 500 errors caused by calling
+  a non-existent `VPNResilienceManager.state()` method.
+- Removed the unnecessary resilience-manager dependency from dashboard VPN
+  snapshots.
+- Retains the v1.5.10 policy-aware VPN status handling:
+  - idle On-demand profiles show **Offline**
+  - genuine expected failures show **Failed**
+  - intentional disconnects are not counted as faults
+- No schema, routing, DNS, provider-adapter, resilience or lifecycle behavior
+  changes.
+
 ## 1.5.10
 
 ### Dashboard VPN-status semantics

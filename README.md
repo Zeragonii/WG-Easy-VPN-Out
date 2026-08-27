@@ -1231,3 +1231,11 @@ routing group's actual VPN egress without changing client routing behavior.
 - Dashboard fault counts only include profiles expected to be connected and
   genuinely unhealthy.
 - No runtime/routing behavior changes.
+
+## v1.5.11
+
+### Dashboard 500 hotfix
+
+- Removed an invalid dashboard call to `VPNResilienceManager.state()`.
+- Restored dashboard and live-dashboard API rendering.
+- Keeps the v1.5.10 Offline/Failed status semantics unchanged.

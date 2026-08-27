@@ -186,6 +186,11 @@ def main():
                 f"{required_fragment}"
             )
 
+    if "resilience.state(" in main_source:
+        fail(
+            "Dashboard must not call nonexistent VPNResilienceManager.state()"
+        )
+
     readme_lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
     first_h2 = next((line for line in readme_lines if line.startswith("## ")), None)
     if first_h2 != "## AI-assisted development":

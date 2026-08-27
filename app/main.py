@@ -129,8 +129,6 @@ def _vpn_snapshot(profiles):
     runtime = VPNRuntimeService()
     observability = current_app.extensions.get("observability")
     on_demand = current_app.extensions.get("on_demand_vpn")
-    resilience = current_app.extensions.get("vpn_resilience")
-
     rows = []
 
     for profile in profiles:
@@ -151,7 +149,6 @@ def _vpn_snapshot(profiles):
                 "exit_ip_cache": None,
                 "uptime": "—",
                 "last_error": None,
-                "retry": None,
             })
             continue
 
@@ -179,12 +176,6 @@ def _vpn_snapshot(profiles):
             else None
         )
 
-        retry = (
-            resilience.state(profile.id)
-            if resilience is not None
-            else None
-        )
-
         rows.append({
             "id": profile.id,
             "name": profile.name,
@@ -209,7 +200,6 @@ def _vpn_snapshot(profiles):
                 if display_state == "failed"
                 else None
             ),
-            "retry": retry,
         })
 
     return rows
