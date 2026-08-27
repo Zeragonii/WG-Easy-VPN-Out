@@ -1295,3 +1295,12 @@ routing group's actual VPN egress without changing client routing behavior.
 - Live backend state still refreshes normally while the form selection remains
   intact.
 - No schema or routing behavior changes.
+
+## v1.6.4
+
+### Final temporary-override UI hardening
+
+- Unavailable VPN-backed override targets are disabled in the modal.
+- Override history now distinguishes Started, Replaced, Cancelled and Expired.
+- History timestamps use friendly relative-time display.
+- No schema or routing behavior changes.

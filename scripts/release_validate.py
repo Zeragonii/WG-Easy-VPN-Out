@@ -252,6 +252,14 @@ def main():
 
     client_source = (ROOT / "app/clients.py").read_text(encoding="utf-8")
     for required_fragment in (
+        "replacing_existing = override is not None",
+        '"replaced" if replacing_existing else "started"',
+        "Temporary routing override replaced",
+    ):
+        if required_fragment not in client_source:
+            fail(f"v1.6.4 override replacement history is missing: {required_fragment}")
+
+    for required_fragment in (
         'def set_temporary_override',
         'def cancel_temporary_override',
         'ensure_profile_ready(profile)',
@@ -266,6 +274,16 @@ def main():
             fail(f"Temporary override expiry handling is missing: {required_fragment}")
 
     clients_template = (ROOT / "app/templates/clients.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "selectable:",
+        "unavailable_reason:",
+        'group.selectable ? "" : " disabled"',
+        "function formatEventAge",
+        'event.event_type == "replaced"',
+    ):
+        if required_fragment not in clients_template:
+            fail(f"v1.6.4 override UI hardening is missing: {required_fragment}")
+
     for required_fragment in (
         "function updateModalFromClient(client, preserveForm = false)",
         "const selectedGroup = overrideGroup.value;",

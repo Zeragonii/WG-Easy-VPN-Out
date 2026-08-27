@@ -385,6 +385,8 @@ def set_temporary_override(external_id):
         )
     ).scalar_one_or_none()
 
+    replacing_existing = override is not None
+
     if override is None:
         override = ClientRouteOverride(
             external_id=str(client.external_id),
@@ -403,11 +405,15 @@ def set_temporary_override(external_id):
     db.session.add(RouteOverrideEvent(
         external_id=str(client.external_id),
         client_name=client.name,
-        event_type="started",
+        event_type="replaced" if replacing_existing else "started",
         routing_group_id=group.id,
         routing_group_name=group.name,
         detail=(
-            "Temporary routing override started"
+            (
+                "Temporary routing override replaced"
+                if replacing_existing
+                else "Temporary routing override started"
+            )
             + (
                 f"; expires {expires_at.isoformat()} UTC"
                 if expires_at is not None

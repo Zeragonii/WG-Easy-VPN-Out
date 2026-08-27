@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.4
+
+### Final temporary-override UI hardening
+
+- Disabled routing groups backed by VPN profiles that do not allow automatic
+  connection are now visibly unavailable in the Override Route dropdown.
+- Added client-side guard messaging for stale/unavailable override targets.
+- Override history now distinguishes:
+  - Started
+  - Replaced
+  - Cancelled
+  - Expired
+- Recent override timestamps now display as friendly relative times.
+- Replacing an active override records a dedicated `replaced` history event
+  instead of another generic `started` event.
+- Strengthened release validation around override-target availability and
+  replacement/expiry semantics.
+- No schema, routing, DNS or expiry behavior changes.
+
 ## 1.6.3
 
 ### Override modal polling hotfix

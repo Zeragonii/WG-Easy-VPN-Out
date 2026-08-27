@@ -184,9 +184,21 @@
       {% for event in override_events %}
         <tr>
           <td>{{ event.client_name }}</td>
-          <td>{{ event.event_type|capitalize }}</td>
+          <td>
+            {% if event.event_type == "started" %}
+              <span class="status-good">● Started</span>
+            {% elif event.event_type == "replaced" %}
+              <span class="status-warn">↻ Replaced</span>
+            {% elif event.event_type == "cancelled" %}
+              <span class="muted">○ Cancelled</span>
+            {% elif event.event_type == "expired" %}
+              <span class="status-warn">◐ Expired</span>
+            {% else %}
+              {{ event.event_type|capitalize }}
+            {% endif %}
+          </td>
           <td>{{ event.routing_group_name or "—" }}</td>
-          <td>{{ event.created_at.isoformat() }} UTC</td>
+          <td><span class="override-event-time" data-created-at="{{ event.created_at.isoformat() }}">{{ event.created_at.isoformat() }} UTC</span></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -203,7 +215,13 @@
     {% for group in groups %}
     {
       id: {{ group.id }},
-      name: {{ group.name | tojson }}
+      name: {{ group.name | tojson }},
+      selectable: {{ 'true' if not group.vpn_profile or group.vpn_profile.enabled else 'false' }},
+      unavailable_reason: {{ (
+        ("VPN profile '" ~ group.vpn_profile.name ~ "' does not allow automatic connection.")
+        if group.vpn_profile and not group.vpn_profile.enabled
+        else ""
+      ) | tojson }}
     }{% if not loop.last %},{% endif %}
     {% endfor %}
   ];
@@ -226,6 +244,22 @@
     if (state === "recent") return '<span class="status-warn">◐ Recently active</span>';
     if (state === "offline") return '<span class="muted">○ Offline</span>';
     return '<span class="muted">○ Never connected</span>';
+  }
+
+  function formatEventAge(timestamp) {
+    if (!timestamp) return "Unknown";
+    const iso = String(timestamp);
+    const when = new Date(iso.endsWith("Z") ? iso : `${iso}Z`);
+    if (Number.isNaN(when.getTime())) return timestamp;
+
+    const seconds = Math.max(0, Math.floor((Date.now() - when.getTime()) / 1000));
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   }
 
   function formatAge(timestamp) {
@@ -276,7 +310,11 @@
   function overrideGroupOptions(selected = null) {
     let html = '<option value="">Choose route…</option>';
     for (const group of groups) {
-      html += `<option value="${group.id}"${Number(selected) === Number(group.id) ? " selected" : ""}>${group.name}</option>`;
+      const selectedAttr =
+        Number(selected) === Number(group.id) ? " selected" : "";
+      const disabledAttr = group.selectable ? "" : " disabled";
+      const suffix = group.selectable ? "" : " · unavailable";
+      html += `<option value="${group.id}"${selectedAttr}${disabledAttr}>${group.name}${suffix}</option>`;
     }
     return html;
   }
@@ -404,6 +442,15 @@
     if (!currentOverrideClient) return;
     if (!overrideGroup.value) {
       overrideModalStatus.textContent = "Choose a routing group first.";
+      return;
+    }
+
+    const targetGroup = groups.find(
+      item => Number(item.id) === Number(overrideGroup.value)
+    );
+    if (!targetGroup || !targetGroup.selectable) {
+      overrideModalStatus.textContent =
+        targetGroup?.unavailable_reason || "That routing group is not currently available.";
       return;
     }
 
@@ -697,6 +744,14 @@
     });
   });
 
+  function updateOverrideEventTimes() {
+    document.querySelectorAll(".override-event-time").forEach(node => {
+      node.textContent = formatEventAge(node.dataset.createdAt || "");
+    });
+  }
+
+  updateOverrideEventTimes();
+
   setInterval(() => {
     document.querySelectorAll(".override-countdown").forEach(node => {
       node.textContent = formatOverrideRemaining(node.dataset.expiresAt || null);
@@ -706,6 +761,8 @@
       overrideActiveCountdown.textContent =
         formatOverrideRemaining(currentOverrideClient.override.expires_at);
     }
+
+    updateOverrideEventTimes();
   }, 1000);
 
   refreshNow.addEventListener("click", refreshClients);
