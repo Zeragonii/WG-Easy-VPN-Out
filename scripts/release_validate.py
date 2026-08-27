@@ -232,6 +232,39 @@ def main():
         if required_fragment not in vpn_profiles_source:
             fail(f"Final v1.5 hardening is missing: {required_fragment}")
 
+    migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
+    if "CURRENT_SCHEMA_VERSION = 6" not in migrations_source:
+        fail("v1.6.0 requires schema v6")
+    if "temporary-routing-overrides" not in migrations_source:
+        fail("v1.6.0 temporary override migration is missing")
+
+    effective_source = (ROOT / "app/services/effective_assignments.py").read_text(encoding="utf-8")
+    if "Temporary overrides take precedence" not in effective_source:
+        fail("Effective-assignment override precedence is missing")
+
+    routing_source = (ROOT / "app/services/routing.py").read_text(encoding="utf-8")
+    if routing_source.count("effective_assignments(db)") < 2:
+        fail("Routing rebuild/set refresh must both use effective assignments")
+
+    on_demand_source = (ROOT / "app/services/on_demand.py").read_text(encoding="utf-8")
+    if on_demand_source.count("effective_assignments(self.db)") < 2:
+        fail("On-demand requirements/counts must use effective assignments")
+
+    client_source = (ROOT / "app/clients.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        'def set_temporary_override',
+        'def cancel_temporary_override',
+        'ensure_profile_ready(profile)',
+        'RouteOverrideEvent',
+    ):
+        if required_fragment not in client_source:
+            fail(f"Temporary override controller is missing: {required_fragment}")
+
+    override_service = (ROOT / "app/services/routing_overrides.py").read_text(encoding="utf-8")
+    for required_fragment in ("def expire_once", '"expired"', "RoutingEngine().apply_assignment_sets"):
+        if required_fragment not in override_service:
+            fail(f"Temporary override expiry handling is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

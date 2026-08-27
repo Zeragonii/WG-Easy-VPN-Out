@@ -314,7 +314,7 @@ class RoutingEngine:
         return "\n".join(lines) + "\n"
 
     def rebuild(self, db, RoutingGroup) -> None:
-        from ..models import ClientAssignment
+        from .effective_assignments import effective_assignments
 
         groups = db.session.execute(
             db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
@@ -322,10 +322,7 @@ class RoutingEngine:
 
         self.ensure_allocations(db, groups)
 
-        assignments = db.session.execute(
-            db.select(ClientAssignment)
-            .order_by(ClientAssignment.routing_group_id.asc(), ClientAssignment.id.asc())
-        ).scalars().all()
+        assignments = effective_assignments(db)
 
         assignments_by_group = {}
         valid_group_ids = {group.id for group in groups}
@@ -389,15 +386,13 @@ class RoutingEngine:
         Refresh only nftables set membership without rebuilding route tables.
         Used for client dropdown changes and WG-Easy IP changes.
         """
-        from ..models import ClientAssignment
+        from .effective_assignments import effective_assignments
 
         groups = db.session.execute(
             db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
         ).scalars().all()
 
-        assignments = db.session.execute(
-            db.select(ClientAssignment)
-        ).scalars().all()
+        assignments = effective_assignments(db)
 
         by_group = {group.id: [] for group in groups}
 

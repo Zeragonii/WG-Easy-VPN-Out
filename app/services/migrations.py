@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 
 
 class MigrationError(RuntimeError):
@@ -115,12 +115,70 @@ def _migration_5_connection_policy(connection):
         )
 
 
+def _migration_6_temporary_routing_overrides(connection):
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS client_route_overrides (
+            id INTEGER PRIMARY KEY,
+            external_id VARCHAR(255) NOT NULL UNIQUE,
+            client_name VARCHAR(255) NOT NULL,
+            ipv4_address VARCHAR(64) NOT NULL,
+            routing_group_id INTEGER NOT NULL,
+            expires_at DATETIME,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(routing_group_id) REFERENCES routing_groups(id)
+        )
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_client_route_overrides_external_id
+        ON client_route_overrides(external_id)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_client_route_overrides_routing_group_id
+        ON client_route_overrides(routing_group_id)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_client_route_overrides_expires_at
+        ON client_route_overrides(expires_at)
+    """)
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS route_override_events (
+            id INTEGER PRIMARY KEY,
+            external_id VARCHAR(255) NOT NULL,
+            client_name VARCHAR(255) NOT NULL,
+            event_type VARCHAR(24) NOT NULL,
+            routing_group_id INTEGER,
+            routing_group_name VARCHAR(120),
+            detail TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(routing_group_id) REFERENCES routing_groups(id)
+        )
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_route_override_events_external_id
+        ON route_override_events(external_id)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_route_override_events_event_type
+        ON route_override_events(event_type)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_route_override_events_routing_group_id
+        ON route_override_events(routing_group_id)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_route_override_events_created_at
+        ON route_override_events(created_at)
+    """)
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
     Migration(3, "routing-health-history", _migration_3_routing_events),
     Migration(4, "routing-group-dns-policy", _migration_4_dns_policy),
     Migration(5, "vpn-connection-policy", _migration_5_connection_policy),
+    Migration(6, "temporary-routing-overrides", _migration_6_temporary_routing_overrides),
 )
 
 

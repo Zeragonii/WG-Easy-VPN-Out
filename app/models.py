@@ -86,6 +86,54 @@ class RoutingGroup(db.Model):
         return "Existing / client DNS"
 
 
+class ClientRouteOverride(db.Model):
+    __tablename__ = "client_route_overrides"
+
+    id = db.Column(db.Integer, primary_key=True)
+    external_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    client_name = db.Column(db.String(255), nullable=False)
+    ipv4_address = db.Column(db.String(64), nullable=False)
+    routing_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("routing_groups.id"),
+        nullable=False,
+        index=True,
+    )
+    expires_at = db.Column(db.DateTime, nullable=True, index=True)
+    created_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        nullable=False,
+    )
+
+    routing_group = db.relationship("RoutingGroup")
+
+
+class RouteOverrideEvent(db.Model):
+    __tablename__ = "route_override_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    external_id = db.Column(db.String(255), nullable=False, index=True)
+    client_name = db.Column(db.String(255), nullable=False)
+    event_type = db.Column(db.String(24), nullable=False, index=True)
+    routing_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("routing_groups.id"),
+        nullable=True,
+        index=True,
+    )
+    routing_group_name = db.Column(db.String(120), nullable=True)
+    detail = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        nullable=False,
+        index=True,
+    )
+
+    routing_group = db.relationship("RoutingGroup")
+
+
 class ClientAssignment(db.Model):
     __tablename__ = "client_assignments"
 

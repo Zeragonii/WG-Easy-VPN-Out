@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.6.0
+
+### Temporary routing overrides
+
+- Added persisted per-client temporary routing overrides without modifying the
+  client's permanent routing assignment.
+- Override targets may be applied for:
+  - 15 minutes
+  - 30 minutes
+  - 1 hour
+  - 4 hours
+  - until cancelled
+- Overrides survive container restarts.
+- Expired overrides automatically revert to the client's permanent assignment
+  or normal routing when no permanent assignment exists.
+- VPN-backed override targets are brought up and confirmed ready before the
+  override is committed.
+- If the target VPN fails to become ready, the existing effective route is left
+  unchanged.
+- On-demand VPN requirement/count logic now follows effective assignments,
+  including active overrides.
+- Routing nftables assignment sets now follow effective assignments, with
+  temporary overrides taking precedence.
+- Added explicit start/cancel/expiry override event history.
+- Clients UI now shows permanent route, effective route, active override and
+  expiry/cancel controls.
+- Added schema migration v6 for override state/history.
+
 ## 1.5.12
 
 ### Final v1.5 hardening

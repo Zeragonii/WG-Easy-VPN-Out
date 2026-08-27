@@ -40,7 +40,9 @@
           <th>Last handshake</th>
           <th>RX</th>
           <th>TX</th>
-          <th>Route via</th>
+          <th>Permanent route</th>
+          <th>Effective route</th>
+          <th>Temporary override</th>
         </tr>
       </thead>
       <tbody id="clients-body">
@@ -69,6 +71,7 @@
           </td>
           <td class="client-rx">{{ client.transfer_rx_display }}</td>
           <td class="client-tx">{{ client.transfer_tx_display }}</td>
+          {% set override = overrides.get(client.external_id|string) %}
           <td>
             <select class="route-select" data-client-id="{{ client.external_id }}">
               <option value="" {% if not assignment %}selected{% endif %}>Unassigned / normal routing</option>
@@ -80,6 +83,43 @@
               {% endfor %}
             </select>
             <div class="route-save-status muted" style="font-size:.8rem;margin-top:.25rem;"></div>
+          </td>
+          <td class="effective-route">
+            {% if override %}
+              <strong>{{ override.routing_group.name }}</strong>
+              <div class="status-warn" style="font-size:.8rem;">Temporary override active</div>
+            {% elif assignment %}
+              <strong>{{ assignment.routing_group.name }}</strong>
+              <div class="muted" style="font-size:.8rem;">Permanent assignment</div>
+            {% else %}
+              <span class="muted">Normal routing</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="override-controls" data-client-id="{{ client.external_id }}">
+              <select class="override-group">
+                <option value="">Choose route…</option>
+                {% for group in groups %}
+                  <option value="{{ group.id }}">{{ group.name }}</option>
+                {% endfor %}
+              </select>
+              <select class="override-duration" style="margin-top:.35rem;">
+                <option value="15m">15 minutes</option>
+                <option value="30m" selected>30 minutes</option>
+                <option value="1h">1 hour</option>
+                <option value="4h">4 hours</option>
+                <option value="until_cancelled">Until cancelled</option>
+              </select>
+              <div style="display:flex;gap:.35rem;margin-top:.35rem;flex-wrap:wrap;">
+                <button class="inline-button override-apply" type="button">Apply override</button>
+                <button class="inline-button secondary override-cancel" type="button" {% if not override %}style="display:none;"{% endif %}>Cancel</button>
+              </div>
+              <div class="override-status muted" style="font-size:.8rem;margin-top:.25rem;">
+                {% if override %}
+                  Active{% if override.expires_at %} until {{ override.expires_at.isoformat() }} UTC{% else %} until cancelled{% endif %}
+                {% endif %}
+              </div>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -96,6 +136,27 @@
   Assignments are stored against the WG-Easy client ID and restored after container restarts.
   “Unassigned” means VPN Router applies no policy mark to that client.
 </p>
+
+{% if override_events %}
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-top:0;">Recent temporary overrides</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Client</th><th>Event</th><th>Route</th><th>When</th></tr></thead>
+      <tbody>
+      {% for event in override_events %}
+        <tr>
+          <td>{{ event.client_name }}</td>
+          <td>{{ event.event_type|capitalize }}</td>
+          <td>{{ event.routing_group_name or "—" }}</td>
+          <td>{{ event.created_at.isoformat() }} UTC</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <script>
 (() => {
@@ -150,6 +211,131 @@
       html += `<option value="${group.id}"${Number(selected) === Number(group.id) ? " selected" : ""}>${group.name}</option>`;
     }
     return html;
+  }
+
+  function groupName(groupId) {
+    const group = groups.find(item => Number(item.id) === Number(groupId));
+    return group ? group.name : "Unknown route";
+  }
+
+  function formatOverrideExpiry(expiresAt) {
+    if (!expiresAt) return "until cancelled";
+    const when = new Date(expiresAt + (String(expiresAt).endsWith("Z") ? "" : "Z"));
+    if (Number.isNaN(when.getTime())) return `until ${expiresAt} UTC`;
+    return `until ${when.toLocaleString()}`;
+  }
+
+  function overrideGroupOptions() {
+    let html = '<option value="">Choose route…</option>';
+    for (const group of groups) {
+      html += `<option value="${group.id}">${group.name}</option>`;
+    }
+    return html;
+  }
+
+  function renderEffectiveRoute(row, client) {
+    const cell = row.querySelector(".effective-route");
+    if (client.override) {
+      cell.innerHTML = `<strong>${groupName(client.override.routing_group_id)}</strong><div class="status-warn" style="font-size:.8rem;">Temporary override active</div>`;
+    } else if (client.routing_group_id !== null && client.routing_group_id !== undefined) {
+      cell.innerHTML = `<strong>${groupName(client.routing_group_id)}</strong><div class="muted" style="font-size:.8rem;">Permanent assignment</div>`;
+    } else {
+      cell.innerHTML = '<span class="muted">Normal routing</span>';
+    }
+  }
+
+  function bindOverrideControls(container) {
+    if (!container || container.dataset.bound === "1") return;
+    container.dataset.bound = "1";
+
+    const apply = container.querySelector(".override-apply");
+    const cancel = container.querySelector(".override-cancel");
+    const groupSelect = container.querySelector(".override-group");
+    const durationSelect = container.querySelector(".override-duration");
+    const status = container.querySelector(".override-status");
+
+    apply.addEventListener("click", async () => {
+      const id = container.dataset.clientId;
+      if (!groupSelect.value) {
+        routeErrorText.textContent = "Choose a routing group for the temporary override.";
+        routeError.style.display = "";
+        return;
+      }
+
+      apply.disabled = true;
+      cancel.disabled = true;
+      status.textContent = "Applying override…";
+      routeError.style.display = "none";
+
+      try {
+        const response = await fetch(
+          `{{ url_for('clients.index') }}${encodeURIComponent(id)}/override`,
+          {
+            method: "POST",
+            headers: {
+              "Accept": "application/json",
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrfToken
+            },
+            body: JSON.stringify({
+              routing_group_id: Number(groupSelect.value),
+              duration: durationSelect.value
+            })
+          }
+        );
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        status.textContent = `Active ${formatOverrideExpiry(data.expires_at)}`;
+        cancel.style.display = "";
+        await refreshClients();
+      } catch (error) {
+        routeErrorText.textContent = error.message || "Could not apply temporary override.";
+        routeError.style.display = "";
+        status.textContent = "Failed";
+      } finally {
+        apply.disabled = false;
+        cancel.disabled = false;
+      }
+    });
+
+    cancel.addEventListener("click", async () => {
+      const id = container.dataset.clientId;
+      apply.disabled = true;
+      cancel.disabled = true;
+      status.textContent = "Cancelling…";
+      routeError.style.display = "none";
+
+      try {
+        const response = await fetch(
+          `{{ url_for('clients.index') }}${encodeURIComponent(id)}/override/cancel`,
+          {
+            method: "POST",
+            headers: {
+              "Accept": "application/json",
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrfToken
+            },
+            body: "{}"
+          }
+        );
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        status.textContent = "";
+        cancel.style.display = "none";
+        await refreshClients();
+      } catch (error) {
+        routeErrorText.textContent = error.message || "Could not cancel temporary override.";
+        routeError.style.display = "";
+        status.textContent = "Failed";
+      } finally {
+        apply.disabled = false;
+        cancel.disabled = false;
+      }
+    });
   }
 
   function bindRouteSelect(select) {
@@ -247,6 +433,24 @@
             <select class="route-select"></select>
             <div class="route-save-status muted" style="font-size:.8rem;margin-top:.25rem;"></div>
           </td>
+          <td class="effective-route"></td>
+          <td>
+            <div class="override-controls">
+              <select class="override-group"></select>
+              <select class="override-duration" style="margin-top:.35rem;">
+                <option value="15m">15 minutes</option>
+                <option value="30m" selected>30 minutes</option>
+                <option value="1h">1 hour</option>
+                <option value="4h">4 hours</option>
+                <option value="until_cancelled">Until cancelled</option>
+              </select>
+              <div style="display:flex;gap:.35rem;margin-top:.35rem;flex-wrap:wrap;">
+                <button class="inline-button override-apply" type="button">Apply override</button>
+                <button class="inline-button secondary override-cancel" type="button" style="display:none;">Cancel</button>
+              </div>
+              <div class="override-status muted" style="font-size:.8rem;margin-top:.25rem;"></div>
+            </div>
+          </td>
         `;
         body.appendChild(row);
       }
@@ -277,6 +481,25 @@
       }
 
       bindRouteSelect(select);
+
+      renderEffectiveRoute(row, client);
+
+      const overrideControls = row.querySelector(".override-controls");
+      overrideControls.dataset.clientId = id;
+      const overrideGroup = overrideControls.querySelector(".override-group");
+      if (!overrideGroup.options.length) {
+        overrideGroup.innerHTML = overrideGroupOptions();
+      }
+      const overrideCancel = overrideControls.querySelector(".override-cancel");
+      const overrideStatus = overrideControls.querySelector(".override-status");
+      if (client.override) {
+        overrideCancel.style.display = "";
+        overrideStatus.textContent = `Active ${formatOverrideExpiry(client.override.expires_at)}`;
+      } else {
+        overrideCancel.style.display = "none";
+        overrideStatus.textContent = "";
+      }
+      bindOverrideControls(overrideControls);
     }
 
     for (const [id, row] of existing) {
@@ -322,6 +545,11 @@
   document.querySelectorAll(".route-select").forEach(select => {
     select.dataset.savedValue = select.value;
     bindRouteSelect(select);
+  });
+
+  document.querySelectorAll(".override-controls").forEach(container => {
+    container.querySelector(".override-group").innerHTML = overrideGroupOptions();
+    bindOverrideControls(container);
   });
 
   refreshNow.addEventListener("click", refreshClients);

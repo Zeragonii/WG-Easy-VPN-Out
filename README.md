@@ -29,6 +29,7 @@ Current functionality includes:
 
 - WG-Easy client discovery and metadata synchronisation.
 - Per-client assignment to routing groups.
+- Temporary per-client routing overrides with automatic expiry/revert.
 - Default-WAN or OpenVPN-backed routing groups.
 - Private/local IPv4 destination bypass.
 - Per-group **Block / kill-switch** or **WAN fallback** behavior.
@@ -1252,3 +1253,17 @@ routing group's actual VPN egress without changing client routing behavior.
   connection is allowed again.
 - Added assignment counts to VPN profile views.
 - No routing, DNS or lifecycle behavior changes.
+
+## v1.6.0
+
+### Temporary routing overrides
+
+- Added a separate persisted override layer above permanent WG-Easy client
+  assignments.
+- Overrides support 15m, 30m, 1h, 4h and Until cancelled durations.
+- Expiry automatically restores the permanent assignment or normal routing.
+- VPN targets connect successfully before an override becomes effective.
+- On-demand lifecycle and nftables routing follow the effective overridden
+  assignment.
+- Added override start/cancel/expiry history and Clients UI controls.
+- Schema upgraded to v6.

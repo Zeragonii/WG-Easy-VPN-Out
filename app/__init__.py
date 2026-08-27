@@ -101,10 +101,17 @@ def create_app():
     from .models import ClientAssignment, RoutingGroup, VPNProfile
     from .services.vpn_startup import restore_enabled_profiles
     from .services.on_demand import OnDemandVPNManager
+    from .services.routing_overrides import TemporaryOverrideManager
 
-    # Existing Always profiles restore exactly as before. Required On-demand
-    # profiles are reconciled synchronously before the first routing rebuild.
+    # Existing Always profiles restore exactly as before.
     restore_enabled_profiles(app, db, VPNProfile)
+
+    # Remove expired persisted overrides before calculating which On-demand
+    # tunnels are required and before the initial routing rebuild.
+    temporary_overrides = TemporaryOverrideManager(app, db)
+    with app.app_context():
+        temporary_overrides.expire_once()
+        db.session.remove()
 
     on_demand = OnDemandVPNManager(
         app,
@@ -134,6 +141,9 @@ def create_app():
     on_demand.start()
     app.extensions["on_demand_vpn"] = on_demand
 
+    temporary_overrides.start()
+    app.extensions["temporary_routing_overrides"] = temporary_overrides
+
     from .services.vpn_resilience import VPNResilienceManager
 
     vpn_resilience = VPNResilienceManager(app, db, VPNProfile)
@@ -149,6 +159,7 @@ def create_app():
     app.extensions["background_services"] = [
         routing_reconciler,
         on_demand,
+        temporary_overrides,
         vpn_resilience,
         observability,
     ]

@@ -42,15 +42,25 @@ class OnDemandVPNManager:
         self._lock = threading.RLock()
 
     def _required_ids(self):
+        from .effective_assignments import effective_assignments
+
+        effective = effective_assignments(self.db)
+        group_ids = {
+            int(row.routing_group_id)
+            for row in effective
+        }
+        if not group_ids:
+            return set()
+
         rows = self.db.session.execute(
             self.db.select(self.RoutingGroup.vpn_profile_id)
-            .join(
-                self.ClientAssignment,
-                self.ClientAssignment.routing_group_id == self.RoutingGroup.id,
+            .where(
+                self.RoutingGroup.id.in_(group_ids),
+                self.RoutingGroup.vpn_profile_id.is_not(None),
             )
-            .where(self.RoutingGroup.vpn_profile_id.is_not(None))
             .distinct()
         ).scalars().all()
+
         return {int(value) for value in rows if value is not None}
 
     def required_profile_ids(self):
@@ -60,24 +70,29 @@ class OnDemandVPNManager:
             return values
 
     def consumer_counts(self):
+        from .effective_assignments import effective_assignments
+
         with self.app.app_context():
-            rows = self.db.session.execute(
-                self.db.select(
-                    self.RoutingGroup.vpn_profile_id,
-                    self.db.func.count(self.ClientAssignment.id),
+            effective = effective_assignments(self.db)
+            group_counts = {}
+            for row in effective:
+                group_counts[int(row.routing_group_id)] = (
+                    group_counts.get(int(row.routing_group_id), 0) + 1
                 )
-                .outerjoin(
-                    self.ClientAssignment,
-                    self.ClientAssignment.routing_group_id == self.RoutingGroup.id,
-                )
+
+            groups = self.db.session.execute(
+                self.db.select(self.RoutingGroup)
                 .where(self.RoutingGroup.vpn_profile_id.is_not(None))
-                .group_by(self.RoutingGroup.vpn_profile_id)
-            ).all()
-            result = {
-                int(profile_id): int(count or 0)
-                for profile_id, count in rows
-                if profile_id is not None
-            }
+            ).scalars().all()
+
+            result = {}
+            for group in groups:
+                count = group_counts.get(int(group.id), 0)
+                if not count:
+                    continue
+                profile_id = int(group.vpn_profile_id)
+                result[profile_id] = result.get(profile_id, 0) + count
+
             self.db.session.remove()
             return result
 
