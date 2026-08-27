@@ -215,6 +215,23 @@ def main():
         if f"## {historical_version}" not in readme_text:
             fail(f"README.md patch history is missing {historical_version}")
 
+    clients_source = (ROOT / "app/clients.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "does not allow automatic connection",
+        "Enable Allow automatic connection first.",
+    ):
+        if required_fragment not in clients_source:
+            fail(f"Client assignment guard is missing: {required_fragment}")
+
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "consumer_counts",
+        "consumer_count",
+        "will remain blocked until automatic connection is allowed again",
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"Final v1.5 hardening is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

@@ -11,7 +11,7 @@
 <div class="card">
 {% if profiles %}
 <div class="table-wrap"><table>
-<thead><tr><th>Friendly name</th><th>Provider</th><th>Endpoint</th><th>Protocol</th><th>Interface</th><th>Status</th><th>Policy</th><th>Auto-connect</th></tr></thead>
+<thead><tr><th>Friendly name</th><th>Provider</th><th>Endpoint</th><th>Protocol</th><th>Interface</th><th>Status</th><th>Policy</th><th>Automatic connection</th></tr></thead>
 <tbody>
 {% for profile in profiles %}
 {% set rt = runtime[profile.id] %}
@@ -29,8 +29,11 @@
 {% elif display_state == "stale" %}<span class="status-warn">◐ Stale</span>
 {% else %}<span class="muted">○ Offline</span>{% endif %}
 </td>
-<td>{% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}</td>
-<td>{% if profile.enabled %}<span class="status-good">● On</span>{% else %}<span class="muted">○ Off</span>{% endif %}</td>
+<td>
+{% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}
+<div class="muted" style="margin-top:.25rem;">{{ consumer_counts.get(profile.id, 0) }} assignment{% if consumer_counts.get(profile.id, 0) != 1 %}s{% endif %}</div>
+</td>
+<td>{% if profile.enabled %}<span class="status-good">● Allowed</span>{% else %}<span class="muted">○ Disabled</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody></table></div>

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from pathlib import Path
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 from sqlalchemy.exc import IntegrityError
 from . import db
@@ -40,6 +40,7 @@ def index():
 
     from flask import current_app
     manager = current_app.extensions.get("on_demand_vpn")
+    consumer_counts = manager.consumer_counts() if manager else {}
 
     runtime_display = {}
     intelligence = {}
@@ -77,6 +78,7 @@ def index():
         profiles=profiles,
         runtime=runtime,
         runtime_display=runtime_display,
+        consumer_counts=consumer_counts,
         intelligence=intelligence,
     )
 
@@ -153,6 +155,7 @@ def detail(profile_id):
     from flask import current_app
     manager = current_app.extensions.get("on_demand_vpn")
     on_demand = manager.public_state(profile.id) if manager else None
+    consumer_count = manager.consumer_counts().get(profile.id, 0) if manager else 0
     runtime_display_state = runtime.state
     if (
         profile.enabled
@@ -180,6 +183,7 @@ def detail(profile_id):
         runtime=runtime,
         runtime_display_state=runtime_display_state,
         on_demand=on_demand,
+        consumer_count=consumer_count,
         intelligence=intelligence,
     )
 
@@ -203,13 +207,23 @@ def connect(profile_id):
             RoutingEngine().rebuild(db, RoutingGroup)
         except RoutingEngineError as routing_exc:
             flash(f"VPN connected, but routing rebuild failed: {routing_exc}", "error")
-        flash(f"Connecting '{profile.name}'… Auto-connect enabled.", "success")
+        flash(f"Connecting '{profile.name}'… Automatic connection allowed.", "success")
     return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
 @bp.post("/<int:profile_id>/disconnect")
 @login_required
 def disconnect(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
+
+    manager = current_app.extensions.get("on_demand_vpn")
+    demand = manager.public_state(profile.id) if manager else None
+    was_required = bool(
+        profile.enabled
+        and profile.connection_policy == "on_demand"
+        and demand
+        and demand.get("required")
+    )
+
     VPNRuntimeService().stop(profile)
     profile.enabled = False
     db.session.commit()
@@ -222,7 +236,19 @@ def disconnect(profile_id):
         RoutingEngine().rebuild(db, RoutingGroup)
     except RoutingEngineError as routing_exc:
         flash(f"VPN disconnected, but routing rebuild failed: {routing_exc}", "error")
-    flash(f"Disconnected '{profile.name}'. Auto-connect disabled.", "success")
+
+    if was_required:
+        flash(
+            "This On-demand VPN is still required by one or more client assignments. "
+            "Disconnecting also disabled automatic connection, so those routing groups "
+            "will remain blocked until automatic connection is allowed again.",
+            "warning",
+        )
+
+    flash(
+        f"Disconnected '{profile.name}'. Automatic connection disabled.",
+        "success",
+    )
     return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
 @bp.get("/<int:profile_id>/runtime")

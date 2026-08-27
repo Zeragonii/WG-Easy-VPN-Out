@@ -215,6 +215,16 @@ def set_routing_group(external_id):
     if group is None:
         return jsonify({"ok": False, "error": "Routing group not found."}), 404
 
+    if group.vpn_profile is not None and not group.vpn_profile.enabled:
+        return jsonify({
+            "ok": False,
+            "error": (
+                f"Cannot assign this client to '{group.name}' because VPN profile "
+                f"'{group.vpn_profile.name}' does not allow automatic connection. "
+                "Enable Allow automatic connection first."
+            ),
+        }), 409
+
     try:
         ipv4 = str(ipaddress.IPv4Address(client.ipv4_address))
     except ipaddress.AddressValueError:

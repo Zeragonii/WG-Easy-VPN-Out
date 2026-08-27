@@ -174,10 +174,10 @@ Each profile can have:
 - friendly name
 - provider
 - credentials where required
-- Auto-connect
+- Allow automatic connection
 - **Always connected** or **On demand** connection policy
 
-For On-demand profiles, **Auto-connect must be enabled**. Auto-connect means VPN
+For On-demand profiles, **Allow automatic connection must be enabled**. Allow automatic connection means VPN
 Router is permitted to start the profile automatically; On demand determines
 when it should run.
 
@@ -360,13 +360,13 @@ with subnet topology, including PIA.
 
 WG-Easy client policy routing is still disabled in this release.
 
-## v0.3.3 - Auto-connect persistence
+## v0.3.3 - Allow automatic connection persistence
 
 Adds persistent tunnel intent across container restarts.
 
-- successful manual Connect enables Auto-connect
-- manual Disconnect disables Auto-connect
-- profile page has explicit Enable/Disable Auto-connect controls
+- successful manual Connect enables Allow automatic connection
+- manual Disconnect disables Allow automatic connection
+- profile page has explicit Enable/Disable Allow automatic connection controls
 - enabled OpenVPN profiles reconnect automatically at app startup
 - failed startup attempts are logged without an aggressive retry loop
 
@@ -1239,3 +1239,16 @@ routing group's actual VPN egress without changing client routing behavior.
 - Removed an invalid dashboard call to `VPNResilienceManager.state()`.
 - Restored dashboard and live-dashboard API rendering.
 - Keeps the v1.5.10 Offline/Failed status semantics unchanged.
+
+## v1.5.12
+
+### Final v1.5 hardening
+
+- Prevented new client assignments to routing groups backed by a VPN profile
+  that does not allow automatic connection.
+- Clarified Auto-connect wording as **Allow automatic connection**.
+- Manual disconnect now warns when an On-demand VPN is still required and makes
+  clear that the affected routing groups will remain blocked until automatic
+  connection is allowed again.
+- Added assignment counts to VPN profile views.
+- No routing, DNS or lifecycle behavior changes.

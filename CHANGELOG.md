@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.12
+
+### Final v1.5 hardening
+
+- Prevented assigning clients to routing groups whose VPN profile is disabled.
+- Clarified Auto-connect wording as **Allow automatic connection**.
+- Added an explicit warning when manually disconnecting an On-demand profile
+  that is still required by client assignments; disconnect continues to disable
+  automatic connection, so affected block-mode groups remain blocked until it
+  is allowed again.
+- Added assignment counts to VPN profile list/detail views.
+- Strengthened release validation for these lifecycle/status guardrails.
+- No schema, routing, DNS, provider-adapter or VPN lifecycle behavior changes.
+
 ## 1.5.11
 
 ### Dashboard 500 hotfix
