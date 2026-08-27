@@ -516,6 +516,35 @@ def main():
         if required_fragment not in on_demand_source:
             fail(f"v1.8.5a On-demand stop hardening is missing: {required_fragment}")
 
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        '@bp.get("/runtime-summary")',
+        '"idle_remaining_seconds"',
+        '"consumer_count"',
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"v1.8.5b bulk VPN runtime summary is missing: {required_fragment}")
+
+    vpn_index_template = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "vpn_profiles.runtime_summary",
+        "idle-countdown-{{ profile.id }}",
+        "Auto-stop disabled",
+        "setInterval(refresh, 2000)",
+        "setInterval(renderAllCountdowns, 250)",
+    ):
+        if required_fragment not in vpn_index_template:
+            fail(f"v1.8.5b live list countdown is missing: {required_fragment}")
+
+    vpn_detail_template = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "renderIdleCountdown",
+        "idleSyncedAt",
+        "setInterval(renderIdleCountdown, 250)",
+    ):
+        if required_fragment not in vpn_detail_template:
+            fail(f"v1.8.5b live detail countdown is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

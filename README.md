@@ -1430,3 +1430,18 @@ are retried on subsequent lifecycle ticks instead of being treated as a
 successful stop.
 
 No schema or routing-policy changes.
+
+## v1.8.5b
+
+### Live On-demand countdown + policy clarity hotfix
+
+The VPN Clients list now follows On-demand lifecycle state dynamically instead
+of only rendering an auto-stop timer when the page initially loads.
+
+A single lightweight bulk status endpoint refreshes all profile lifecycle state
+every two seconds, while countdowns tick locally in real time. This keeps the
+page responsive and remains practical with large profile libraries.
+
+Profiles using the Always policy now explicitly display `Auto-stop disabled`.
+
+No schema, routing or lifecycle timing changes.

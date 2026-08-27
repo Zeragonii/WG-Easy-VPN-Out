@@ -2,23 +2,84 @@
 {% block title %}VPN Clients · VPN Router
 <script>
 (() => {
-  const nodes = document.querySelectorAll(".vpn-idle-countdown");
-  if (!nodes.length) return;
+  const endpoint = "{{ url_for('vpn_profiles.runtime_summary') }}";
+  const countdowns = new Map();
+  let lastSyncAt = performance.now();
 
-  function tick() {
-    nodes.forEach(node => {
-      let remaining = Number(node.dataset.remaining || "0");
-      if (!Number.isFinite(remaining)) return;
+  function stateHtml(value) {
+    if (value === "connected") return '<span class="status-good">● Connected</span>';
+    if (value === "connecting") return '<span class="status-warn">◐ Connecting</span>';
+    if (value === "failed") return '<span class="status-bad">● Failed</span>';
+    if (value === "stale") return '<span class="status-warn">◐ Stale</span>';
+    return '<span class="muted">○ Offline</span>';
+  }
 
-      remaining = Math.max(0, remaining - 1);
-      node.dataset.remaining = String(remaining);
-      node.textContent = remaining > 0
-        ? `Auto-stop in ${remaining}s`
-        : "Stopping…";
+  function renderCountdown(profileId) {
+    const node = document.getElementById(`idle-countdown-${profileId}`);
+    if (!node) return;
+
+    const item = countdowns.get(Number(profileId));
+    if (!item || item.remaining === null || item.remaining === undefined) {
+      node.style.display = "none";
+      node.textContent = "";
+      return;
+    }
+
+    const elapsed = Math.floor((performance.now() - item.syncedAt) / 1000);
+    const remaining = Math.max(0, item.remaining - elapsed);
+
+    node.style.display = "";
+    node.textContent = remaining > 0
+      ? `Auto-stop in ${remaining}s`
+      : "Stopping…";
+  }
+
+  function renderAllCountdowns() {
+    document.querySelectorAll(".vpn-idle-countdown").forEach(node => {
+      renderCountdown(node.dataset.profileId);
     });
   }
 
-  window.setInterval(tick, 1000);
+  async function refresh() {
+    try {
+      const response = await fetch(endpoint, {
+        headers: {"Accept": "application/json"},
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) return;
+
+      lastSyncAt = performance.now();
+
+      for (const profile of data.profiles || []) {
+        const state = document.getElementById(`runtime-state-${profile.id}`);
+        if (state) {
+          state.innerHTML = stateHtml(profile.state);
+        }
+
+        const assignments = document.getElementById(`assignment-count-${profile.id}`);
+        if (assignments) {
+          const count = Number(profile.consumer_count || 0);
+          assignments.textContent =
+            `${count} assignment${count === 1 ? "" : "s"}`;
+        }
+
+        countdowns.set(Number(profile.id), {
+          remaining: profile.idle_remaining_seconds,
+          syncedAt: lastSyncAt
+        });
+        renderCountdown(profile.id);
+      }
+    } catch (_) {
+      // Keep displaying the last synchronized countdown between transient
+      // polling failures rather than flashing/removing the timer.
+    }
+  }
+
+  // Smooth local one-second countdown; backend is only sampled periodically.
+  window.setInterval(renderAllCountdowns, 250);
+  window.setInterval(refresh, 2000);
+  refresh();
 })();
 </script>
 
@@ -44,7 +105,7 @@
 <td><code>{{ intelligence[profile.id].endpoint }}</code>{% if intelligence[profile.id].raw.region_hint %}<div class="muted">{{ intelligence[profile.id].raw.region_hint }}</div>{% endif %}</td>
 <td><span class="pill">{{ profile.type_label }}</span>{% if intelligence[profile.id].raw.transport %} · {{ intelligence[profile.id].raw.transport }}{% endif %}</td>
 <td><code>{{ rt.interface_name }}</code></td>
-<td>
+<td id="runtime-state-{{ profile.id }}">
 {% set display_state = runtime_display[profile.id] %}
 {% if display_state == "connected" %}<span class="status-good">● Connected</span>
 {% elif display_state == "connecting" %}<span class="status-warn">◐ Connecting</span>
@@ -54,16 +115,20 @@
 </td>
 <td>
 {% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}
-<div class="muted" style="margin-top:.25rem;">{{ consumer_counts.get(profile.id, 0) }} assignment{% if consumer_counts.get(profile.id, 0) != 1 %}s{% endif %}</div>
+<div class="muted" id="assignment-count-{{ profile.id }}" style="margin-top:.25rem;">{{ consumer_counts.get(profile.id, 0) }} assignment{% if consumer_counts.get(profile.id, 0) != 1 %}s{% endif %}</div>
 {% if profile.connection_policy == "on_demand" %}
   {% set demand = on_demand_states.get(profile.id) %}
-  {% if demand and demand.idle_remaining_seconds is not none %}
-    <div class="status-warn vpn-idle-countdown"
-         style="margin-top:.25rem;font-size:.8rem;"
-         data-remaining="{{ demand.idle_remaining_seconds }}">
+  <div class="status-warn vpn-idle-countdown"
+       id="idle-countdown-{{ profile.id }}"
+       style="margin-top:.25rem;font-size:.8rem;{% if not demand or demand.idle_remaining_seconds is none %}display:none;{% endif %}"
+       data-profile-id="{{ profile.id }}"
+       data-remaining="{{ demand.idle_remaining_seconds if demand and demand.idle_remaining_seconds is not none else '' }}">
+    {% if demand and demand.idle_remaining_seconds is not none %}
       Auto-stop in {{ demand.idle_remaining_seconds }}s
-    </div>
-  {% endif %}
+    {% endif %}
+  </div>
+{% else %}
+  <div class="muted" style="margin-top:.25rem;font-size:.8rem;">Auto-stop disabled</div>
 {% endif %}
 </td>
 <td>{% if profile.enabled %}<span class="status-good">● Allowed</span>{% else %}<span class="muted">○ Disabled</span>{% endif %}</td>

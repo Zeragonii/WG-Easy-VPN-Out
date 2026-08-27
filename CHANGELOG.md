@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.5b
+
+### Live On-demand countdown + policy clarity hotfix
+
+- Fixed the VPN Clients page countdown only existing when a profile was already
+  idle at initial page render.
+- Countdown placeholders now exist for every On-demand profile and appear/
+  disappear dynamically as lifecycle state changes.
+- Added one lightweight bulk `/vpn-profiles/runtime-summary` endpoint so the
+  list can refresh all profiles with a single request rather than polling each
+  profile individually.
+- VPN Clients list refreshes backend lifecycle state every 2 seconds while the
+  visible countdown animates locally in real time between syncs.
+- VPN profile detail countdown now also ticks smoothly between its existing
+  backend runtime polls.
+- Always-connected profiles explicitly show `Auto-stop disabled` to make policy
+  semantics obvious.
+- No lifecycle timing, routing or schema changes.
+
 ## 1.8.5a
 
 ### WireGuard On-demand auto-stop hotfix

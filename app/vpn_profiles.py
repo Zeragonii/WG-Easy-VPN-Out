@@ -88,6 +88,58 @@ def index():
         intelligence=intelligence,
     )
 
+@bp.get("/runtime-summary")
+@login_required
+def runtime_summary():
+    """
+    Lightweight bulk status used by the VPN Clients page.
+
+    Avoids one request per profile so the list remains practical with tens or
+    hundreds of configured VPN exits.
+    """
+    profiles = db.session.execute(
+        db.select(VPNProfile).order_by(VPNProfile.id.asc())
+    ).scalars().all()
+
+    svc = VPNRuntimeService()
+    manager = current_app.extensions.get("on_demand_vpn")
+    consumer_counts = manager.consumer_counts() if manager else {}
+
+    rows = []
+    for profile in profiles:
+        runtime = svc.status(profile, include_probe=False)
+        demand = manager.public_state(profile.id) if manager else None
+
+        display_state = runtime.state
+        if (
+            profile.enabled
+            and profile.connection_policy == "on_demand"
+            and demand
+            and demand.get("standby")
+            and runtime.state in ("disconnected", "failed")
+        ):
+            display_state = "offline"
+
+        rows.append({
+            "id": profile.id,
+            "state": display_state,
+            "connection_policy": profile.connection_policy,
+            "enabled": bool(profile.enabled),
+            "consumer_count": consumer_counts.get(profile.id, 0),
+            "idle_remaining_seconds": (
+                demand.get("idle_remaining_seconds")
+                if demand
+                else None
+            ),
+            "required": demand.get("required") if demand else None,
+        })
+
+    return jsonify({
+        "ok": True,
+        "profiles": rows,
+    })
+
+
 @bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new():

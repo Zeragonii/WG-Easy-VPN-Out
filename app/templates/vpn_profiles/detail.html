@@ -111,6 +111,22 @@
   const retryStatus = document.getElementById("retry-status");
   const idleCountdown = document.getElementById("idle-countdown");
   const log = document.getElementById("runtime-log");
+  let idleRemaining = null;
+  let idleSyncedAt = performance.now();
+
+  function renderIdleCountdown() {
+    if (idleRemaining === null || idleRemaining === undefined) {
+      idleCountdown.textContent = "";
+      idleCountdown.style.display = "none";
+      return;
+    }
+
+    const elapsed = Math.floor((performance.now() - idleSyncedAt) / 1000);
+    const remaining = Math.max(0, idleRemaining - elapsed);
+    idleCountdown.textContent =
+      remaining > 0 ? `Auto-stop in ${remaining}s` : "Stopping…";
+    idleCountdown.style.display = "";
+  }
 
   function fmt(seconds) {
     if (seconds === null || seconds === undefined) return "—";
@@ -150,19 +166,14 @@
       }
 
       const demand = data.on_demand || {};
-      if (
+      idleRemaining = (
         demand.idle_remaining_seconds !== null
         && demand.idle_remaining_seconds !== undefined
-      ) {
-        idleCountdown.textContent =
-          demand.idle_remaining_seconds > 0
-            ? `Auto-stop in ${demand.idle_remaining_seconds}s`
-            : "Stopping…";
-        idleCountdown.style.display = "";
-      } else {
-        idleCountdown.textContent = "";
-        idleCountdown.style.display = "none";
-      }
+      )
+        ? Number(demand.idle_remaining_seconds)
+        : null;
+      idleSyncedAt = performance.now();
+      renderIdleCountdown();
 
       const retry = data.retry || {};
       if (retry.gave_up) {
@@ -187,6 +198,7 @@
   }
   refresh();
   setInterval(refresh, 3000);
+  setInterval(renderIdleCountdown, 250);
 })();
 </script>
 {% endblock %}
