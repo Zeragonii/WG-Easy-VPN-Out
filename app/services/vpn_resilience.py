@@ -175,7 +175,7 @@ class VPNResilienceManager:
             )
             return False
 
-        # Starting an OpenVPN process is not the same as establishing a
+        # Starting a VPN runtime is not the same as establishing a
         # working tunnel. Preserve the existing failure count until a later
         # resilience tick observes status == "connected". This also keeps
         # last_success_at meaningful and allows repeated connecting timeouts
@@ -201,7 +201,7 @@ class VPNResilienceManager:
                 self.reset(profile.id)
             return
 
-        if profile.vpn_type != "openvpn":
+        if profile.vpn_type not in ("openvpn", "wireguard"):
             return
 
         if profile.connection_policy == "on_demand":
@@ -228,8 +228,8 @@ class VPNResilienceManager:
             return
 
         if status.state == "connecting":
-            # A live OpenVPN PID is not enough to call an attempt healthy.
-            # If it never acquires a tunnel address, recycle it and enter the
+            # A live runtime is not enough to call an attempt healthy.
+            # If it never reaches connected state, recycle it and enter the
             # normal exponential retry path.
             if (
                 self.connect_timeout > 0
@@ -237,7 +237,7 @@ class VPNResilienceManager:
                 and status.uptime_seconds >= self.connect_timeout
             ):
                 error = (
-                    f"OpenVPN remained in connecting state for "
+                    f"{profile.type_label} remained in connecting state for "
                     f"{status.uptime_seconds}s "
                     f"(timeout {int(self.connect_timeout)}s)."
                 )

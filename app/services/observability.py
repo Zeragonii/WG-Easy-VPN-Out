@@ -356,7 +356,7 @@ class ObservabilityService:
         with self.app.app_context():
             profiles = self.db.session.execute(
                 self.db.select(self.VPNProfile)
-                .where(self.VPNProfile.vpn_type == "openvpn")
+                .where(self.VPNProfile.vpn_type.in_(("openvpn", "wireguard")))
                 .order_by(self.VPNProfile.id.asc())
             ).scalars().all()
 

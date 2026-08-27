@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.8.0
+
+### Outbound WireGuard VPN clients
+
+- Added outbound WireGuard provider profile runtime support alongside OpenVPN.
+- WireGuard `.conf` profiles now create isolated `wg-vpn<ID>` interfaces.
+- VPN Router deliberately does **not** run provider configs through normal
+  `wg-quick up`; provider `AllowedIPs=0.0.0.0/0` therefore cannot replace the
+  host/container main default route.
+- `wg-quick strip` is used only to produce a `wg setconf`-compatible peer/key
+  configuration. Interface addresses, MTU and policy routing remain owned by
+  VPN Router.
+- WireGuard profiles require a real recent handshake before runtime state
+  becomes Connected, preserving connect-before-switch semantics.
+- A startup probe generates initial tunnel traffic so On-demand assignments and
+  temporary overrides can wait for WireGuard readiness before moving clients.
+- Existing routing groups, kill switch / WAN fallback, DNS policy, exit-IP
+  visibility, temporary overrides, traffic visibility and On-demand lifecycle
+  work with WireGuard profiles through the same routing abstraction.
+- Always-connected WireGuard profiles restore on application startup.
+- VPN resilience/retry now handles both OpenVPN and WireGuard.
+- Preflight and backup failed-restore recovery now include WireGuard profiles.
+- WireGuard `Address`, `PrivateKey`, `Endpoint` and `AllowedIPs` validation is
+  stricter; wg-quick hook commands are intentionally ignored.
+- Routing Group DNS policy remains authoritative; provider `DNS=` values are
+  surfaced by validation but are not applied globally.
+- IPv4 WireGuard tunnel addresses are required in v1.8.0.
+- No database schema change; schema remains v6.
+
 ## 1.7.1
 
 ### Faster asynchronous traffic refresh

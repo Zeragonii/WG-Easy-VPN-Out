@@ -182,7 +182,7 @@ class OnDemandVPNManager:
             if (
                 not profile.enabled
                 or profile.connection_policy != "on_demand"
-                or profile.vpn_type != "openvpn"
+                or profile.vpn_type not in ("openvpn", "wireguard")
             ):
                 self._idle_since.pop(profile.id, None)
                 continue

@@ -246,7 +246,7 @@ def run_preflight(
     ))
 
     # Enabled VPN health
-    enabled = [p for p in profiles if p.enabled and p.vpn_type == "openvpn"]
+    enabled = [p for p in profiles if p.enabled and p.vpn_type in ("openvpn", "wireguard")]
     unhealthy = []
     for profile in enabled:
         status = runtime.status(profile, include_probe=False)
@@ -254,10 +254,10 @@ def run_preflight(
             unhealthy.append(f"{profile.name} ({status.state})")
     checks.append(CheckResult(
         "enabled_vpns",
-        "Enabled OpenVPN profiles",
+        "Enabled VPN profiles",
         "pass" if not unhealthy else "warn",
         (
-            f"All {len(enabled)} enabled OpenVPN profiles are connected."
+            f"All {len(enabled)} enabled VPN profiles are connected."
             if not unhealthy
             else "Not currently connected: " + ", ".join(unhealthy)
         ),

@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import re
 import subprocess
+import tempfile
 import time
 
 from .secrets import decrypt_secret
@@ -104,11 +105,13 @@ class VPNRuntimeService:
             return []
 
     def log_tail(self, profile, lines=20):
-        """Return the most recent OpenVPN log lines for diagnostics/consumers."""
+        """Return the most recent runtime log lines for diagnostics/consumers."""
         return self._log_tail(profile, lines)
 
     def route_gateway(self, profile):
-        """Return the latest pushed route-gateway for a running profile."""
+        """Return the runtime gateway when the VPN transport requires one."""
+        if profile.vpn_type == "wireguard":
+            return None
         return self._route_gateway_from_logs(self._log_tail(profile, 80))
 
     @staticmethod
@@ -143,6 +146,259 @@ class VPNRuntimeService:
             if match:
                 return match.group(1)
         return None
+
+
+    @staticmethod
+    def _wg_interface_values(content):
+        """
+        Extract wg-quick-only [Interface] values that `wg setconf` does not
+        understand. Runtime networking is created explicitly so provider
+        AllowedIPs can never replace the host/container default route.
+        """
+        section = None
+        addresses = []
+        dns = []
+        mtu = None
+
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or line.startswith(";"):
+                continue
+
+            if line.startswith("[") and line.endswith("]"):
+                section = line[1:-1].strip().lower()
+                continue
+
+            if section != "interface" or "=" not in line:
+                continue
+
+            key, value = [part.strip() for part in line.split("=", 1)]
+            lowered = key.lower()
+
+            if lowered == "address":
+                addresses.extend(
+                    item.strip()
+                    for item in value.split(",")
+                    if item.strip()
+                )
+            elif lowered == "dns":
+                dns.extend(
+                    item.strip()
+                    for item in value.split(",")
+                    if item.strip()
+                )
+            elif lowered == "mtu":
+                try:
+                    mtu = int(value)
+                except ValueError:
+                    pass
+
+        return {
+            "addresses": addresses,
+            "dns": dns,
+            "mtu": mtu,
+        }
+
+    def _wg_latest_handshake(self, iface):
+        result = self._run(
+            ["wg", "show", iface, "latest-handshakes"],
+            timeout=2,
+        )
+        if result.returncode != 0:
+            return 0
+
+        latest = 0
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            try:
+                latest = max(latest, int(parts[1]))
+            except ValueError:
+                continue
+        return latest
+
+    def _wg_handshake_recent(self, iface, max_age=180):
+        latest = self._wg_latest_handshake(iface)
+        if latest <= 0:
+            return False
+        return (time.time() - latest) <= max_age
+
+    def _wg_log(self, profile, message):
+        path = self._log_path(profile)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                f"{datetime.now(timezone.utc).isoformat()} "
+                f"{message}\n"
+            )
+
+    def _wg_start(self, profile):
+        if self._interface_exists(self.interface_name(profile)):
+            raise VPNRuntimeError("This WireGuard VPN profile is already running.")
+
+        config_path = self._config_path(profile)
+        if not config_path.exists():
+            raise VPNRuntimeError(f"VPN config file is missing: {config_path}")
+
+        content = config_path.read_text(
+            encoding="utf-8",
+            errors="replace",
+        )
+        values = self._wg_interface_values(content)
+        ipv4_addresses = [
+            address
+            for address in values["addresses"]
+            if ":" not in address
+        ]
+
+        if not ipv4_addresses:
+            raise VPNRuntimeError(
+                "WireGuard config has no IPv4 Address in [Interface]."
+            )
+
+        iface = self.interface_name(profile)
+        self._remove_probe_route(profile)
+        self._pid_path(profile).unlink(missing_ok=True)
+        self._meta_path(profile).unlink(missing_ok=True)
+
+        self._wg_log(
+            profile,
+            "=== WireGuard VPN Router start ===",
+        )
+
+        created = False
+        stripped_path = None
+
+        try:
+            result = self._run(
+                ["ip", "link", "add", iface, "type", "wireguard"],
+                timeout=4,
+            )
+            if result.returncode != 0:
+                raise VPNRuntimeError(
+                    "Could not create WireGuard interface: "
+                    + (result.stderr or result.stdout).strip()
+                )
+            created = True
+
+            # `wg-quick strip` removes Address/DNS/MTU/PostUp/etc. and leaves
+            # only values accepted by `wg setconf`. We then build addresses,
+            # MTU and policy routes ourselves.
+            stripped = self._run(
+                ["wg-quick", "strip", str(config_path)],
+                timeout=4,
+            )
+            if stripped.returncode != 0 or not stripped.stdout.strip():
+                raise VPNRuntimeError(
+                    "Could not parse WireGuard configuration with wg-quick: "
+                    + (stripped.stderr or stripped.stdout).strip()
+                )
+
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                delete=False,
+                dir=self.runtime_dir,
+                prefix=f"wg-{profile.id}-",
+                suffix=".conf",
+            ) as handle:
+                handle.write(stripped.stdout)
+                stripped_path = handle.name
+            os.chmod(stripped_path, 0o600)
+
+            result = self._run(
+                ["wg", "setconf", iface, stripped_path],
+                timeout=4,
+            )
+            if result.returncode != 0:
+                raise VPNRuntimeError(
+                    "Could not apply WireGuard configuration: "
+                    + (result.stderr or result.stdout).strip()
+                )
+
+            for address in ipv4_addresses:
+                result = self._run(
+                    ["ip", "-4", "address", "add", address, "dev", iface],
+                    timeout=3,
+                )
+                if result.returncode != 0:
+                    raise VPNRuntimeError(
+                        f"Could not assign WireGuard address {address}: "
+                        + (result.stderr or result.stdout).strip()
+                    )
+
+            mtu = values["mtu"] or 1420
+            result = self._run(
+                ["ip", "link", "set", "dev", iface, "mtu", str(mtu), "up"],
+                timeout=3,
+            )
+            if result.returncode != 0:
+                raise VPNRuntimeError(
+                    "Could not bring WireGuard interface up: "
+                    + (result.stderr or result.stdout).strip()
+                )
+
+            tunnel_ip = self._interface_ipv4(iface)
+            if not tunnel_ip:
+                raise VPNRuntimeError(
+                    "WireGuard interface came up without an IPv4 tunnel address."
+                )
+
+            self._write_meta(profile, {
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "interface_name": iface,
+                "runtime": "wireguard",
+                "dns": values["dns"],
+                "mtu": mtu,
+            })
+
+            # Install only the isolated probe table/rule. This does NOT modify
+            # the host's main/default route. A short probe generates real WG
+            # traffic so status/connect-before-switch can wait for a handshake.
+            self._ensure_probe_route(profile, iface, tunnel_ip)
+            self._run(
+                [
+                    "ping",
+                    "-c", "1",
+                    "-W", "2",
+                    "-I", tunnel_ip,
+                    "1.1.1.1",
+                ],
+                timeout=3,
+            )
+
+            self._wg_log(
+                profile,
+                f"Interface {iface} created; waiting for WireGuard handshake.",
+            )
+
+        except Exception:
+            self._remove_probe_route(profile)
+            if created and self._interface_exists(iface):
+                self._run(["ip", "link", "delete", iface], timeout=3)
+            self._meta_path(profile).unlink(missing_ok=True)
+            raise
+        finally:
+            if stripped_path:
+                try:
+                    Path(stripped_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def _wg_stop(self, profile):
+        iface = self.interface_name(profile)
+        self._remove_probe_route(profile)
+
+        if self._interface_exists(iface):
+            self._run(["ip", "link", "delete", iface], timeout=4)
+
+        self._pid_path(profile).unlink(missing_ok=True)
+        self._meta_path(profile).unlink(missing_ok=True)
+
+        try:
+            self._wg_log(profile, f"WireGuard interface {iface} stopped.")
+        except OSError:
+            pass
 
     def _probe_ids(self, profile):
         value = 20000 + int(profile.id)
@@ -231,8 +487,11 @@ class VPNRuntimeService:
         return self._exit_ip(profile, iface, tunnel_ip)
 
     def start(self, profile):
+        if profile.vpn_type == "wireguard":
+            return self._wg_start(profile)
+
         if profile.vpn_type != "openvpn":
-            raise VPNRuntimeError("WireGuard runtime activation is not implemented in v0.3.1 yet.")
+            raise VPNRuntimeError(f"Unsupported VPN runtime type: {profile.vpn_type}")
 
         if self._pid_alive(self._read_pid(profile)):
             raise VPNRuntimeError("This VPN profile is already running.")
@@ -297,6 +556,9 @@ class VPNRuntimeService:
             raise VPNRuntimeError(self._detect_last_error(logs, connected=False) or "OpenVPN exited during startup.")
 
     def stop(self, profile):
+        if profile.vpn_type == "wireguard":
+            return self._wg_stop(profile)
+
         pid = self._read_pid(profile)
         iface = self.interface_name(profile)
 
@@ -331,19 +593,33 @@ class VPNRuntimeService:
         tunnel_ip = self._interface_ipv4(iface) if exists else None
         logs = self._log_tail(profile)
 
-        if alive and tunnel_ip:
-            state = "connected"
-        elif alive:
-            state = "connecting"
-        elif exists:
-            state = "stale"
+        if profile.vpn_type == "wireguard":
+            alive = False
+            if exists and tunnel_ip:
+                state = (
+                    "connected"
+                    if self._wg_handshake_recent(iface)
+                    else "connecting"
+                )
+            elif exists:
+                state = "stale"
+            else:
+                state = "disconnected"
+            last_error = None
         else:
-            state = "disconnected"
+            if alive and tunnel_ip:
+                state = "connected"
+            elif alive:
+                state = "connecting"
+            elif exists:
+                state = "stale"
+            else:
+                state = "disconnected"
 
-        last_error = self._detect_last_error(
-            logs,
-            connected=(state == "connected"),
-        )
+            last_error = self._detect_last_error(
+                logs,
+                connected=(state == "connected"),
+            )
 
         if state == "disconnected" and last_error:
             if bool(getattr(profile, "enabled", False)):

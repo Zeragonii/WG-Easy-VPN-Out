@@ -354,6 +354,41 @@ def main():
         if required_fragment not in init_source:
             fail(f"v1.7.0 traffic startup integration is missing: {required_fragment}")
 
+    runtime_source = (ROOT / "app/services/vpn_runtime.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _wg_start(self, profile)",
+        "wg-quick\", \"strip",
+        "wg\", \"setconf",
+        "def _wg_latest_handshake",
+        "if profile.vpn_type == \"wireguard\":",
+        "return self._wg_start(profile)",
+        "return self._wg_stop(profile)",
+        "waiting for WireGuard handshake",
+    ):
+        if required_fragment not in runtime_source:
+            fail(f"v1.8.0 WireGuard runtime is missing: {required_fragment}")
+
+    if '"wg-quick", "up"' in runtime_source:
+        fail("v1.8.0 must not let wg-quick install provider default routes")
+
+    startup_source = (ROOT / "app/services/vpn_startup.py").read_text(encoding="utf-8")
+    if '("openvpn", "wireguard")' not in startup_source:
+        fail("v1.8.0 startup restore does not include WireGuard")
+
+    on_demand_source = (ROOT / "app/services/on_demand.py").read_text(encoding="utf-8")
+    if 'profile.vpn_type not in ("openvpn", "wireguard")' not in on_demand_source:
+        fail("v1.8.0 On-demand lifecycle does not include WireGuard")
+
+    resilience_source = (ROOT / "app/services/vpn_resilience.py").read_text(encoding="utf-8")
+    if 'profile.vpn_type not in ("openvpn", "wireguard")' not in resilience_source:
+        fail("v1.8.0 resilience does not include WireGuard")
+
+    detail_template = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
+    if "WireGuard runtime activation follows after OpenVPN" in detail_template:
+        fail("v1.8.0 detail page still claims WireGuard runtime is unsupported")
+    if "<h2>Runtime log</h2>" not in detail_template:
+        fail("v1.8.0 VPN profile runtime log is not transport-neutral")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

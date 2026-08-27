@@ -702,7 +702,7 @@ def restore_backup(
             db.session.expire_all()
             for profile_id in previously_enabled:
                 profile = db.session.get(VPNProfile, profile_id)
-                if profile is None or profile.vpn_type != "openvpn":
+                if profile is None or profile.vpn_type not in ("openvpn", "wireguard"):
                     continue
                 try:
                     runtime.start(profile)

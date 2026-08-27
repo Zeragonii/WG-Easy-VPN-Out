@@ -1328,3 +1328,26 @@ routing group's actual VPN egress without changing client routing behavior.
 - Traffic sample interval remains configurable; minimum supported interval is
   0.5 seconds.
 - No schema or routing behavior changes.
+
+## v1.8.0
+
+### Outbound WireGuard VPN clients
+
+VPN Router can now use provider WireGuard `.conf` files as outbound routing
+targets alongside OpenVPN profiles.
+
+WireGuard profiles are intentionally activated without letting `wg-quick`
+manage the host routing table. VPN Router creates an isolated `wg-vpn<ID>`
+interface, applies the cryptographic peer configuration, assigns the provider
+tunnel address, and keeps all Internet routing inside the existing per-group
+policy tables.
+
+A WireGuard profile is not declared Connected until a recent handshake has
+been observed. This lets On-demand routing and temporary overrides retain the
+same connect-before-switch behavior used by OpenVPN.
+
+Current v1.8.0 WireGuard scope is IPv4 outbound provider configs. Provider
+`DNS=` declarations and wg-quick hook commands do not modify host networking;
+Routing Group DNS policy and VPN Router lifecycle remain authoritative.
+
+No schema change; database schema remains v6.

@@ -4,7 +4,7 @@ from .vpn_runtime import VPNRuntimeError, VPNRuntimeService
 
 
 def restore_enabled_profiles(app, db, VPNProfile) -> None:
-    """Reconnect enabled OpenVPN profiles once at app startup."""
+    """Reconnect enabled supported VPN profiles once at app startup."""
     with app.app_context():
         profiles = db.session.execute(
             db.select(VPNProfile)
@@ -18,7 +18,7 @@ def restore_enabled_profiles(app, db, VPNProfile) -> None:
         runtime = VPNRuntimeService()
 
         for profile in profiles:
-            if profile.vpn_type != "openvpn":
+            if profile.vpn_type not in ("openvpn", "wireguard"):
                 app.logger.warning(
                     "Skipping auto-connect for profile %s (%s): runtime unsupported",
                     profile.id,

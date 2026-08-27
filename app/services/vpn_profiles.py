@@ -37,14 +37,55 @@ def validate_openvpn(content:str)->ValidationResult:
     return ValidationResult(True,summary,warnings)
 def validate_wireguard(content:str)->ValidationResult:
     summary=[]; warnings=[]
-    if not WG_INTERFACE_RE.search(content): raise VPNProfileValidationError("WireGuard configuration has no [Interface] section.")
-    if not WG_PEER_RE.search(content): raise VPNProfileValidationError("WireGuard configuration has no [Peer] section.")
+    if not WG_INTERFACE_RE.search(content):
+        raise VPNProfileValidationError("WireGuard configuration has no [Interface] section.")
+    if not WG_PEER_RE.search(content):
+        raise VPNProfileValidationError("WireGuard configuration has no [Peer] section.")
+
     endpoint=WG_ENDPOINT_RE.search(content)
-    if endpoint: summary.append(f"Peer endpoint found: {endpoint.group(1).strip()}")
-    else: warnings.append("No Endpoint= line found.")
-    if re.search(r"^\s*PrivateKey\s*=",content,re.I|re.M): summary.append("Private key found.")
-    else: warnings.append("No PrivateKey= line found.")
-    if re.search(r"^\s*AllowedIPs\s*=\s*.*0\.0\.0\.0/0",content,re.I|re.M): warnings.append("AllowedIPs includes 0.0.0.0/0; later startup will isolate it from the host default route.")
+    if endpoint:
+        summary.append(f"Peer endpoint found: {endpoint.group(1).strip()}")
+    else:
+        raise VPNProfileValidationError("WireGuard configuration has no Endpoint= line.")
+
+    if re.search(r"^\s*PrivateKey\s*=",content,re.I|re.M):
+        summary.append("Private key found.")
+    else:
+        raise VPNProfileValidationError("WireGuard configuration has no PrivateKey= line.")
+
+    address = re.search(r"^\s*Address\s*=\s*(.+)$", content, re.I|re.M)
+    if not address:
+        raise VPNProfileValidationError("WireGuard configuration has no Address= line.")
+    if not any(":" not in item for item in address.group(1).split(",")):
+        raise VPNProfileValidationError("WireGuard runtime currently requires an IPv4 Address= value.")
+    summary.append(f"Interface address found: {address.group(1).strip()}")
+
+    allowed = re.search(r"^\s*AllowedIPs\s*=\s*(.+)$", content, re.I|re.M)
+    if not allowed:
+        raise VPNProfileValidationError("WireGuard configuration has no AllowedIPs= line.")
+    if "0.0.0.0/0" in allowed.group(1):
+        summary.append("Full-tunnel IPv4 AllowedIPs detected.")
+        warnings.append(
+            "The provider default route will be isolated inside VPN Router policy tables; "
+            "the host default route will not be replaced."
+        )
+    else:
+        warnings.append(
+            "AllowedIPs does not include 0.0.0.0/0. Internet policy routing may not work "
+            "unless the provider config permits the destination ranges you need."
+        )
+
+    if re.search(r"^\s*(PostUp|PostDown|PreUp|PreDown)\s*=", content, re.I|re.M):
+        warnings.append(
+            "wg-quick hook commands are intentionally ignored; VPN Router owns routing/NAT lifecycle."
+        )
+
+    if re.search(r"^\s*DNS\s*=", content, re.I|re.M):
+        summary.append(
+            "Provider DNS declaration found; imported for visibility only. "
+            "Routing Group DNS policy remains authoritative."
+        )
+
     return ValidationResult(True,summary,warnings)
 def validate_config(filename:str,content:str,vpn_type:str|None=None):
     detected=vpn_type or detect_type(filename,content)

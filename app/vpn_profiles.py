@@ -279,7 +279,7 @@ def runtime(profile_id):
         and payload.get("state") in ("disconnected", "failed")
     ):
         payload["state"] = "standby"
-        # Historical OpenVPN log errors are not current failures when the
+        # Historical runtime log errors are not current failures when the
         # profile was intentionally stopped because it has no consumers.
         payload["last_error"] = None
 

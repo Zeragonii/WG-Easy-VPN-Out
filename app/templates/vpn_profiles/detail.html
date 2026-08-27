@@ -43,7 +43,6 @@
 <p>Exit IP: <code id="runtime-exit">—</code></p>
 <div id="runtime-error" class="error-box" style="{% if not runtime.last_error or runtime_display_state == "standby" %}display:none;{% endif %}">{% if runtime_display_state != "standby" %}{{ runtime.last_error or "" }}{% endif %}</div>
 <div id="retry-status" class="muted" style="margin:.65rem 0;"></div>
-{% if profile.vpn_type == "openvpn" %}
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
 <form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="width:auto;">Connect</button></form>
 <form method="post" action="{{ url_for('vpn_profiles.disconnect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button-link secondary" type="submit">Disconnect</button></form>
@@ -59,9 +58,6 @@
 </form>
 {% endif %}
 </div>
-{% else %}
-<p class="status-warn">WireGuard runtime activation follows after OpenVPN is proven stable.</p>
-{% endif %}
 </section>
 </div>
 
@@ -88,7 +84,7 @@
 </section>
 
 <section class="card" style="margin-top:1rem;">
-<h2>OpenVPN log</h2>
+<h2>Runtime log</h2>
 <pre id="runtime-log" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:var(--panel2);padding:.8rem;border-radius:8px;">{% if runtime.log_tail %}{{ runtime.log_tail|join('\n') }}{% else %}No runtime log yet.{% endif %}</pre>
 </section>
 
@@ -102,7 +98,6 @@
 {% endif %}
 </section>
 
-{% if profile.vpn_type == "openvpn" %}
 <script>
 (() => {
   const endpoint = "{{ url_for('vpn_profiles.runtime', profile_id=profile.id) }}";
@@ -177,5 +172,4 @@
   setInterval(refresh, 3000);
 })();
 </script>
-{% endif %}
 {% endblock %}

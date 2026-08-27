@@ -132,26 +132,6 @@ def _vpn_snapshot(profiles):
     rows = []
 
     for profile in profiles:
-        if profile.vpn_type != "openvpn":
-            rows.append({
-                "id": profile.id,
-                "name": profile.name,
-                "type": profile.vpn_type,
-                "enabled": bool(profile.enabled),
-                "connection_policy": profile.connection_policy,
-                "state": "stored",
-                "runtime_state": "stored",
-                "expected_connected": False,
-                "interface": None,
-                "tunnel_ipv4": None,
-                "gateway": None,
-                "exit_ip": None,
-                "exit_ip_cache": None,
-                "uptime": "—",
-                "last_error": None,
-            })
-            continue
-
         status = runtime.status(profile, include_probe=False)
         display_state = status.state
         expected_connected = bool(profile.enabled)
