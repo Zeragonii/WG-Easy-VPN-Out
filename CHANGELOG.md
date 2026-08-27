@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.10
+
+### Dashboard VPN-status semantics
+
+- Updated dashboard VPN status handling to match current v1.5 runtime
+  semantics.
+- Unused enabled On-demand profiles display **Offline** rather than Failed.
+- **Failed** is reserved for profiles that are expected/required to be
+  connected and have genuinely failed.
+- Dashboard problem counts no longer treat intentional On-demand disconnects as
+  faults.
+- Added `expected_connected` and raw `runtime_state` fields to dashboard VPN
+  snapshot data.
+- Manual/disabled disconnects remain non-failures.
+- No schema, routing, DNS, provider-adapter or lifecycle behavior changes.
+
 ## 1.5.9
 
 ### README refresh

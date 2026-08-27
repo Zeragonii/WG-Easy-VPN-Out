@@ -1221,3 +1221,13 @@ routing group's actual VPN egress without changing client routing behavior.
 - Profile-level generic DNS cache remains available for profile observability.
 - No schema, routing, DNS interception, provider-adapter, or on-demand lifecycle
   changes.
+
+## v1.5.10
+
+### Dashboard VPN-status semantics
+
+- Dashboard status handling now matches the current On-demand lifecycle.
+- Intentional idle On-demand profiles show **Offline** rather than Failed.
+- Dashboard fault counts only include profiles expected to be connected and
+  genuinely unhealthy.
+- No runtime/routing behavior changes.

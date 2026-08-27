@@ -127,46 +127,23 @@ def _wg_easy_snapshot():
 
 def _vpn_snapshot(profiles):
     runtime = VPNRuntimeService()
+    observability = current_app.extensions.get("observability")
+    on_demand = current_app.extensions.get("on_demand_vpn")
+    resilience = current_app.extensions.get("vpn_resilience")
+
     rows = []
 
     for profile in profiles:
-        if profile.vpn_type == "openvpn":
-            status = runtime.status(profile, include_probe=False)
-            gateway = None
-            if status.state == "connected":
-                gateway = runtime.route_gateway(profile)
-
+        if profile.vpn_type != "openvpn":
             rows.append({
                 "id": profile.id,
                 "name": profile.name,
-                "provider": profile.provider or "—",
-                "type": profile.type_label,
+                "type": profile.vpn_type,
                 "enabled": bool(profile.enabled),
-                "state": status.state,
-                "interface": status.interface_name,
-                "tunnel_ipv4": status.tunnel_ipv4,
-                "gateway": gateway,
-                "exit_ip": (
-                    (current_app.extensions.get("observability").exit_ip_state(profile.id) or {}).get("exit_ip")
-                    if current_app.extensions.get("observability")
-                    else None
-                ),
-                "exit_ip_cache": (
-                    current_app.extensions.get("observability").exit_ip_state(profile.id)
-                    if current_app.extensions.get("observability")
-                    else None
-                ),
-                "uptime": _format_uptime(status.uptime_seconds),
-                "last_error": status.last_error,
-            })
-        else:
-            rows.append({
-                "id": profile.id,
-                "name": profile.name,
-                "provider": profile.provider or "—",
-                "type": profile.type_label,
-                "enabled": bool(profile.enabled),
+                "connection_policy": profile.connection_policy,
                 "state": "stored",
+                "runtime_state": "stored",
+                "expected_connected": False,
                 "interface": None,
                 "tunnel_ipv4": None,
                 "gateway": None,
@@ -174,9 +151,69 @@ def _vpn_snapshot(profiles):
                 "exit_ip_cache": None,
                 "uptime": "—",
                 "last_error": None,
+                "retry": None,
             })
+            continue
+
+        status = runtime.status(profile, include_probe=False)
+        display_state = status.state
+        expected_connected = bool(profile.enabled)
+
+        if (
+            profile.enabled
+            and profile.connection_policy == "on_demand"
+            and on_demand is not None
+        ):
+            demand = on_demand.public_state(profile.id)
+            expected_connected = bool(demand.get("required"))
+
+            if (
+                demand.get("standby")
+                and status.state in ("disconnected", "failed")
+            ):
+                display_state = "offline"
+
+        exit_state = (
+            observability.exit_ip_state(profile.id)
+            if observability is not None
+            else None
+        )
+
+        retry = (
+            resilience.state(profile.id)
+            if resilience is not None
+            else None
+        )
+
+        rows.append({
+            "id": profile.id,
+            "name": profile.name,
+            "type": profile.vpn_type,
+            "enabled": bool(profile.enabled),
+            "connection_policy": profile.connection_policy,
+            "state": display_state,
+            "runtime_state": status.state,
+            "expected_connected": expected_connected,
+            "interface": status.interface_name,
+            "tunnel_ipv4": status.tunnel_ipv4,
+            "gateway": (
+                runtime.route_gateway(profile)
+                if status.state == "connected"
+                else None
+            ),
+            "exit_ip": (exit_state or {}).get("exit_ip"),
+            "exit_ip_cache": exit_state,
+            "uptime": _format_uptime(status.uptime_seconds),
+            "last_error": (
+                status.last_error
+                if display_state == "failed"
+                else None
+            ),
+            "retry": retry,
+        })
 
     return rows
+
 
 
 def _routing_snapshot(groups, assignments):
@@ -260,8 +297,8 @@ def operational_status():
         ),
         "vpn_problem": sum(
             1 for row in vpn_rows
-            if row["state"] in ("failed", "disconnected", "stale")
-            and row["enabled"]
+            if row["state"] in ("failed", "stale")
+            and row.get("expected_connected")
         ),
         "routing_groups": len(groups),
         "client_assignments": len(assignments),

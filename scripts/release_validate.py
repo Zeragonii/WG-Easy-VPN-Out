@@ -173,6 +173,19 @@ def main():
     if "observability.dns_group_state(group.id)" not in main_source:
         fail("Dashboard routing snapshot must read DNS state by routing-group ID")
 
+    for required_fragment in (
+        '"expected_connected": expected_connected',
+        '"runtime_state": status.state',
+        'row["state"] in ("failed", "stale")',
+        'row.get("expected_connected")',
+        'display_state = "offline"',
+    ):
+        if required_fragment not in main_source:
+            fail(
+                "Dashboard VPN-status semantics are missing: "
+                f"{required_fragment}"
+            )
+
     readme_lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
     first_h2 = next((line for line in readme_lines if line.startswith("## ")), None)
     if first_h2 != "## AI-assisted development":
