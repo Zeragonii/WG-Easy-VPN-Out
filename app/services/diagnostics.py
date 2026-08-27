@@ -14,6 +14,7 @@ from .routing import RoutingEngine
 from .settings import DEFINITIONS, SettingsService
 from .vpn_runtime import VPNRuntimeService
 from .profile_intelligence import inspect_profile, display_provider, endpoint_label
+from .effective_assignments import active_overrides, effective_assignments
 
 
 def _run(args, timeout=5):
@@ -67,6 +68,8 @@ def build_diagnostics(
     assignments = db.session.execute(
         db.select(ClientAssignment).order_by(ClientAssignment.id.asc())
     ).scalars().all()
+    effective = effective_assignments(db)
+    overrides = active_overrides(db)
 
     vpn_rows = []
     for profile in profiles:
@@ -98,6 +101,12 @@ def build_diagnostics(
             ):
                 display_state = "standby"
 
+        current_last_error = (
+            None
+            if display_state == "standby"
+            else status.last_error
+        )
+
         vpn_rows.append({
             "id": profile.id,
             "name": profile.name,
@@ -122,7 +131,7 @@ def build_diagnostics(
                 if profile.vpn_type == "openvpn"
                 else None
             ),
-            "last_error": status.last_error,
+            "last_error": current_last_error,
             "retry": retry,
             "dns": (
                 app.extensions.get("observability").dns_state(profile.id)
@@ -146,8 +155,16 @@ def build_diagnostics(
             "state": state.state,
             "effective_exit": state.effective_exit,
             "detail": state.detail,
-            "assigned_clients": sum(
+            "permanent_clients": sum(
                 1 for a in assignments if a.routing_group_id == group.id
+            ),
+            "effective_clients": sum(
+                1 for a in effective if a.routing_group_id == group.id
+            ),
+            "override_clients": sum(
+                1
+                for a in effective
+                if a.routing_group_id == group.id and a.overridden
             ),
         })
 
@@ -185,6 +202,8 @@ def build_diagnostics(
             "vpn_profiles": len(profiles),
             "routing_groups": len(groups),
             "client_assignments": len(assignments),
+            "active_overrides": len(overrides),
+            "effective_client_routes": len(effective),
         },
         "schema": {
             "current": current_schema_version(db),
@@ -226,7 +245,9 @@ def render_text(data):
         "-" * 72,
         f"VPN profiles: {data['counts']['vpn_profiles']}",
         f"Routing groups: {data['counts']['routing_groups']}",
-        f"Client assignments: {data['counts']['client_assignments']}",
+        f"Permanent client assignments: {data['counts']['client_assignments']}",
+        f"Active temporary overrides: {data['counts'].get('active_overrides', 0)}",
+        f"Effective client routes: {data['counts'].get('effective_client_routes', 0)}",
         "",
         "Database schema",
         "-" * 72,
@@ -309,7 +330,9 @@ def render_text(data):
             f"fallback={group['fallback_mode']} | "
             f"dns={group.get('dns_mode')}:{group.get('dns_target')} | "
             f"mark={group['fwmark']} | table={group['table_id']} | "
-            f"clients={group['assigned_clients']}"
+            f"clients=permanent:{group['permanent_clients']} "
+            f"effective:{group['effective_clients']} "
+            f"overrides:{group['override_clients']}"
         )
         lines.append(f"  {group['detail']}")
 

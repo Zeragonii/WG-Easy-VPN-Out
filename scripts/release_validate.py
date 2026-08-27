@@ -38,6 +38,22 @@ def main():
             yaml.safe_load(handle)
 
     diagnostics = (ROOT / "app/services/diagnostics.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "effective = effective_assignments(db)",
+        "overrides = active_overrides(db)",
+        'if display_state == "standby"',
+        '"permanent_clients"',
+        '"effective_clients"',
+        '"override_clients"',
+        "Active temporary overrides:",
+        "Effective client routes:",
+    ):
+        if required_fragment not in diagnostics:
+            fail(f"v1.8.2 diagnostics cleanup is missing: {required_fragment}")
+
+    if '"assigned_clients"' in diagnostics:
+        fail("v1.8.2 diagnostics still uses legacy raw assigned_clients counts")
+
     for forbidden in (
         "WG_EASY_PASSWORD",
         "ADMIN_PASSWORD",

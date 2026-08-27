@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.8.2
+
+### Diagnostics cleanup
+
+- Standby On-demand VPN profiles no longer display stale historical runtime
+  errors as if they are current failures.
+- Routing-group diagnostics now use the same effective-assignment model as the
+  routing engine, including active temporary overrides.
+- Routing groups now report separate client counts for:
+  - permanent assignments
+  - effective routes
+  - active override-routed clients
+- Diagnostics summary now distinguishes permanent client assignments, active
+  temporary overrides and total effective client routes.
+- No routing, VPN runtime, lifecycle or schema behavior changes.
+
 ## 1.8.1
 
 ### WireGuard config filename hotfix

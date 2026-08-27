@@ -1361,3 +1361,14 @@ No schema change; database schema remains v6.
 - VPN Router creates a sanitized runtime-only `wg-vpn<ID>.conf` copy for
   `wg-quick strip` and removes it immediately afterward.
 - No schema or routing behavior changes.
+
+## v1.8.2
+
+### Diagnostics cleanup
+
+- Standby On-demand profiles no longer surface stale historical runtime errors
+  as current failures in diagnostics.
+- Routing-group diagnostics now distinguish permanent, effective and
+  temporary-override client counts.
+- Diagnostics summary now reports active overrides and effective client routes.
+- No schema or routing behavior changes.
