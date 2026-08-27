@@ -265,6 +265,21 @@ def main():
         if required_fragment not in override_service:
             fail(f"Temporary override expiry handling is missing: {required_fragment}")
 
+    clients_template = (ROOT / "app/templates/clients.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'id="override-modal-backdrop"',
+        'class="inline-button override-open"',
+        'id="override-active-countdown"',
+        'function formatOverrideRemaining',
+        'Connecting target VPN and applying override…',
+        'Cancel current override',
+    ):
+        if required_fragment not in clients_template:
+            fail(f"v1.6.1 override modal UI is missing: {required_fragment}")
+
+    if "override-controls" in clients_template:
+        fail("Legacy always-visible override controls remain in Clients UI")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

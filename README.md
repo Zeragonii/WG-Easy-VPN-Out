@@ -1267,3 +1267,13 @@ routing group's actual VPN egress without changing client routing behavior.
   assignment.
 - Added override start/cancel/expiry history and Clients UI controls.
 - Schema upgraded to v6.
+
+## v1.6.1
+
+### Temporary override UI cleanup
+
+- Moved temporary override editing into an in-page modal behind a compact
+  **Override** button.
+- Modal shows permanent/effective route, current override, live countdown and
+  apply/replace/cancel actions.
+- No schema or routing behavior changes.

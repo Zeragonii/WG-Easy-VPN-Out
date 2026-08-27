@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.1
+
+### Temporary override UI cleanup
+
+- Replaced always-visible per-client override controls with a compact
+  **Override** button.
+- Added an in-page modal editor showing permanent route, effective route,
+  active override and live time remaining.
+- Applying while an override exists replaces it.
+- Current override can be cancelled from the modal.
+- Apply state indicates when VPN Router is connecting the target VPN.
+- Countdown updates client-side once per second without extra backend polling.
+- Existing routing/expiry/backend behavior is unchanged.
+- No schema changes.
+
 ## 1.6.0
 
 ### Temporary routing overrides
