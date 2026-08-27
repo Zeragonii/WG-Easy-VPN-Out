@@ -1,5 +1,62 @@
 {% extends "base.html" %}
 {% block title %}VPN Clients · VPN Router
+{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+  <div>
+    <h1 style="margin-bottom:.35rem;">VPN Clients</h1>
+    <p class="muted" style="margin-top:0;">Outbound VPN profiles, runtime state, and automatic retry recovery.</p>
+  </div>
+  <a class="button-link" href="{{ url_for('vpn_profiles.new') }}">+ Add VPN Client</a>
+</div>
+<div class="card">
+{% if profiles %}
+<div class="table-wrap"><table>
+<thead><tr><th>Friendly name</th><th>Provider</th><th>Endpoint</th><th>Protocol</th><th>Interface</th><th>Status</th><th>Policy</th><th>Automatic connection</th></tr></thead>
+<tbody>
+{% for profile in profiles %}
+{% set rt = runtime[profile.id] %}
+<tr>
+<td><a href="{{ url_for('vpn_profiles.detail', profile_id=profile.id) }}">{{ profile.name }}</a></td>
+<td>{{ intelligence[profile.id].provider }}</td>
+<td><code>{{ intelligence[profile.id].endpoint }}</code>{% if intelligence[profile.id].raw.region_hint %}<div class="muted">{{ intelligence[profile.id].raw.region_hint }}</div>{% endif %}</td>
+<td><span class="pill">{{ profile.type_label }}</span>{% if intelligence[profile.id].raw.transport %} · {{ intelligence[profile.id].raw.transport }}{% endif %}</td>
+<td><code>{{ rt.interface_name }}</code></td>
+<td id="runtime-state-{{ profile.id }}">
+{% set display_state = runtime_display[profile.id] %}
+{% if display_state == "connected" %}<span class="status-good">● Connected</span>
+{% elif display_state == "connecting" %}<span class="status-warn">◐ Connecting</span>
+{% elif display_state == "failed" %}<span class="status-bad">● Failed</span>
+{% elif display_state == "stale" %}<span class="status-warn">◐ Stale</span>
+{% else %}<span class="muted">○ Offline</span>{% endif %}
+</td>
+<td>
+{% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}
+<div class="muted" id="assignment-count-{{ profile.id }}" style="margin-top:.25rem;">{{ consumer_counts.get(profile.id, 0) }} assignment{% if consumer_counts.get(profile.id, 0) != 1 %}s{% endif %}</div>
+{% if profile.connection_policy == "on_demand" %}
+  {% set demand = on_demand_states.get(profile.id) %}
+  <div class="status-warn vpn-idle-countdown"
+       id="idle-countdown-{{ profile.id }}"
+       style="margin-top:.25rem;font-size:.8rem;{% if not demand or demand.idle_remaining_seconds is none %}display:none;{% endif %}"
+       data-profile-id="{{ profile.id }}"
+       data-remaining="{{ demand.idle_remaining_seconds if demand and demand.idle_remaining_seconds is not none else '' }}">
+    {% if demand and demand.idle_remaining_seconds is not none %}
+      Auto-stop in {{ demand.idle_remaining_seconds }}s
+    {% endif %}
+  </div>
+{% else %}
+  <div class="muted" style="margin-top:.25rem;font-size:.8rem;">Auto-stop disabled</div>
+{% endif %}
+</td>
+<td>{% if profile.enabled %}<span class="status-good">● Allowed</span>{% else %}<span class="muted">○ Disabled</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+{% else %}
+<p class="muted" style="margin:0;">No VPN client profiles have been created yet.</p>
+{% endif %}
+</div>
+
 <script>
 (() => {
   const endpoint = "{{ url_for('vpn_profiles.runtime_summary') }}";
@@ -82,61 +139,4 @@
   refresh();
 })();
 </script>
-
-{% endblock %}
-{% block content %}
-<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
-  <div>
-    <h1 style="margin-bottom:.35rem;">VPN Clients</h1>
-    <p class="muted" style="margin-top:0;">Outbound VPN profiles, runtime state, and automatic retry recovery.</p>
-  </div>
-  <a class="button-link" href="{{ url_for('vpn_profiles.new') }}">+ Add VPN Client</a>
-</div>
-<div class="card">
-{% if profiles %}
-<div class="table-wrap"><table>
-<thead><tr><th>Friendly name</th><th>Provider</th><th>Endpoint</th><th>Protocol</th><th>Interface</th><th>Status</th><th>Policy</th><th>Automatic connection</th></tr></thead>
-<tbody>
-{% for profile in profiles %}
-{% set rt = runtime[profile.id] %}
-<tr>
-<td><a href="{{ url_for('vpn_profiles.detail', profile_id=profile.id) }}">{{ profile.name }}</a></td>
-<td>{{ intelligence[profile.id].provider }}</td>
-<td><code>{{ intelligence[profile.id].endpoint }}</code>{% if intelligence[profile.id].raw.region_hint %}<div class="muted">{{ intelligence[profile.id].raw.region_hint }}</div>{% endif %}</td>
-<td><span class="pill">{{ profile.type_label }}</span>{% if intelligence[profile.id].raw.transport %} · {{ intelligence[profile.id].raw.transport }}{% endif %}</td>
-<td><code>{{ rt.interface_name }}</code></td>
-<td id="runtime-state-{{ profile.id }}">
-{% set display_state = runtime_display[profile.id] %}
-{% if display_state == "connected" %}<span class="status-good">● Connected</span>
-{% elif display_state == "connecting" %}<span class="status-warn">◐ Connecting</span>
-{% elif display_state == "failed" %}<span class="status-bad">● Failed</span>
-{% elif display_state == "stale" %}<span class="status-warn">◐ Stale</span>
-{% else %}<span class="muted">○ Offline</span>{% endif %}
-</td>
-<td>
-{% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}
-<div class="muted" id="assignment-count-{{ profile.id }}" style="margin-top:.25rem;">{{ consumer_counts.get(profile.id, 0) }} assignment{% if consumer_counts.get(profile.id, 0) != 1 %}s{% endif %}</div>
-{% if profile.connection_policy == "on_demand" %}
-  {% set demand = on_demand_states.get(profile.id) %}
-  <div class="status-warn vpn-idle-countdown"
-       id="idle-countdown-{{ profile.id }}"
-       style="margin-top:.25rem;font-size:.8rem;{% if not demand or demand.idle_remaining_seconds is none %}display:none;{% endif %}"
-       data-profile-id="{{ profile.id }}"
-       data-remaining="{{ demand.idle_remaining_seconds if demand and demand.idle_remaining_seconds is not none else '' }}">
-    {% if demand and demand.idle_remaining_seconds is not none %}
-      Auto-stop in {{ demand.idle_remaining_seconds }}s
-    {% endif %}
-  </div>
-{% else %}
-  <div class="muted" style="margin-top:.25rem;font-size:.8rem;">Auto-stop disabled</div>
-{% endif %}
-</td>
-<td>{% if profile.enabled %}<span class="status-good">● Allowed</span>{% else %}<span class="muted">○ Disabled</span>{% endif %}</td>
-</tr>
-{% endfor %}
-</tbody></table></div>
-{% else %}
-<p class="muted" style="margin:0;">No VPN client profiles have been created yet.</p>
-{% endif %}
-</div>
 {% endblock %}

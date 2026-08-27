@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.5c
+
+### VPN Clients live countdown template hotfix
+
+- Fixed the VPN Clients countdown JavaScript being accidentally embedded inside
+  the Jinja page-title block, where it was rendered as title content instead of
+  executable page JavaScript.
+- The countdown script now lives inside the page content block and executes
+  normally in the browser.
+- Existing bulk lifecycle polling remains every 2 seconds.
+- Visible countdowns continue to animate locally between backend syncs.
+- No runtime, lifecycle, routing or schema changes.
+
 ## 1.8.5b
 
 ### Live On-demand countdown + policy clarity hotfix

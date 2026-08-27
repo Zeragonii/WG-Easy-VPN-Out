@@ -1445,3 +1445,13 @@ page responsive and remains practical with large profile libraries.
 Profiles using the Always policy now explicitly display `Auto-stop disabled`.
 
 No schema, routing or lifecycle timing changes.
+
+## v1.8.5c
+
+### VPN Clients live countdown template hotfix
+
+Fixed the VPN Clients countdown JavaScript being inserted into the Jinja title
+block instead of the page content. The live countdown now executes normally and
+updates without a page refresh.
+
+No schema, routing or lifecycle changes.

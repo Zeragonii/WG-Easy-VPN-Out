@@ -545,6 +545,23 @@ def main():
         if required_fragment not in vpn_detail_template:
             fail(f"v1.8.5b live detail countdown is missing: {required_fragment}")
 
+    vpn_index_template = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    title_start = vpn_index_template.find("{% block title %}")
+    title_end = vpn_index_template.find("{% endblock %}", title_start)
+    countdown_script = vpn_index_template.find("setInterval(renderAllCountdowns, 250)")
+    content_start = vpn_index_template.find("{% block content %}")
+    content_end = vpn_index_template.rfind("{% endblock %}")
+
+    if countdown_script >= 0 and title_start <= countdown_script <= title_end:
+        fail("v1.8.5c countdown script is still embedded in the Jinja title block")
+
+    if not (
+        content_start >= 0
+        and countdown_script > content_start
+        and countdown_script < content_end
+    ):
+        fail("v1.8.5c countdown script is not inside the Jinja content block")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")
