@@ -470,6 +470,52 @@ def main():
     if 'app.extensions["preflight_jobs"] = PreflightJobManager(app, db)' not in init_source:
         fail("v1.8.4 PreflightJobManager is not registered")
 
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "on_demand_states =",
+        "manager.public_state(profile.id)",
+        "on_demand_states=on_demand_states",
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"v1.8.5 On-demand list state is missing: {required_fragment}")
+
+    vpn_index_template = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "vpn-idle-countdown",
+        "Auto-stop in",
+        "idle_remaining_seconds",
+    ):
+        if required_fragment not in vpn_index_template:
+            fail(f"v1.8.5 VPN list countdown is missing: {required_fragment}")
+
+    vpn_detail_template = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'id="idle-countdown"',
+        "data.on_demand",
+        "idle_remaining_seconds",
+        "Auto-stop in",
+    ):
+        if required_fragment not in vpn_detail_template:
+            fail(f"v1.8.5 VPN detail countdown is missing: {required_fragment}")
+
+    vpn_runtime_source = (ROOT / "app/services/vpn_runtime.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Could not delete WireGuard interface",
+        "still exists after stop request",
+        '["ip", "link", "delete", iface]',
+    ):
+        if required_fragment not in vpn_runtime_source:
+            fail(f"v1.8.5a WireGuard stop verification is missing: {required_fragment}")
+
+    on_demand_source = (ROOT / "app/services/on_demand.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "stopped = self.runtime.status(",
+        "Automatic stop failed for profile",
+        "Keep the original idle timestamp",
+    ):
+        if required_fragment not in on_demand_source:
+            fail(f"v1.8.5a On-demand stop hardening is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

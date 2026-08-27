@@ -41,6 +41,11 @@ def index():
     from flask import current_app
     manager = current_app.extensions.get("on_demand_vpn")
     consumer_counts = manager.consumer_counts() if manager else {}
+    on_demand_states = (
+        {profile.id: manager.public_state(profile.id) for profile in profiles}
+        if manager
+        else {}
+    )
 
     runtime_display = {}
     intelligence = {}
@@ -79,6 +84,7 @@ def index():
         runtime=runtime,
         runtime_display=runtime_display,
         consumer_counts=consumer_counts,
+        on_demand_states=on_demand_states,
         intelligence=intelligence,
     )
 

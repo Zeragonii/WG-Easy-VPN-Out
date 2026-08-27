@@ -43,6 +43,7 @@
 <p>Exit IP: <code id="runtime-exit">—</code></p>
 <div id="runtime-error" class="error-box" style="{% if not runtime.last_error or runtime_display_state == "standby" %}display:none;{% endif %}">{% if runtime_display_state != "standby" %}{{ runtime.last_error or "" }}{% endif %}</div>
 <div id="retry-status" class="muted" style="margin:.65rem 0;"></div>
+<div id="idle-countdown" class="status-warn" style="margin:.35rem 0;display:none;"></div>
 <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
 <form method="post" action="{{ url_for('vpn_profiles.connect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" style="width:auto;">Connect</button></form>
 <form method="post" action="{{ url_for('vpn_profiles.disconnect', profile_id=profile.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button-link secondary" type="submit">Disconnect</button></form>
@@ -108,6 +109,7 @@
   const exitIp = document.getElementById("runtime-exit");
   const errorBox = document.getElementById("runtime-error");
   const retryStatus = document.getElementById("retry-status");
+  const idleCountdown = document.getElementById("idle-countdown");
   const log = document.getElementById("runtime-log");
 
   function fmt(seconds) {
@@ -145,6 +147,21 @@
       } else {
         errorBox.textContent = "";
         errorBox.style.display = "none";
+      }
+
+      const demand = data.on_demand || {};
+      if (
+        demand.idle_remaining_seconds !== null
+        && demand.idle_remaining_seconds !== undefined
+      ) {
+        idleCountdown.textContent =
+          demand.idle_remaining_seconds > 0
+            ? `Auto-stop in ${demand.idle_remaining_seconds}s`
+            : "Stopping…";
+        idleCountdown.style.display = "";
+      } else {
+        idleCountdown.textContent = "";
+        idleCountdown.style.display = "none";
       }
 
       const retry = data.retry || {};

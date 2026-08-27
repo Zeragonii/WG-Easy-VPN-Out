@@ -206,7 +206,30 @@ class OnDemandVPNManager:
 
             started = self._idle_since.setdefault(profile.id, now)
             if now - started >= self.idle_grace_seconds:
-                self.runtime.stop(profile)
+                try:
+                    self.runtime.stop(profile)
+                    stopped = self.runtime.status(
+                        profile,
+                        include_probe=False,
+                    )
+                    if stopped.state not in ("disconnected", "failed"):
+                        raise VPNRuntimeError(
+                            "VPN runtime still reports "
+                            f"{stopped.state} after automatic stop."
+                        )
+                except VPNRuntimeError as exc:
+                    # Keep the original idle timestamp so the next lifecycle
+                    # tick retries shutdown immediately instead of starting a
+                    # fresh 60-second grace period.
+                    self._error(profile.id, exc)
+                    self.app.logger.warning(
+                        "Automatic stop failed for profile %s (%s): %s",
+                        profile.id,
+                        profile.name,
+                        exc,
+                    )
+                    continue
+
                 self._record(profile.id, "stop")
                 self._idle_since.pop(profile.id, None)
                 changed = True

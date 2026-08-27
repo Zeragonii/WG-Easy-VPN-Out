@@ -406,7 +406,20 @@ class VPNRuntimeService:
         self._remove_probe_route(profile)
 
         if self._interface_exists(iface):
-            self._run(["ip", "link", "delete", iface], timeout=4)
+            result = self._run(
+                ["ip", "link", "delete", iface],
+                timeout=4,
+            )
+            if result.returncode != 0:
+                raise VPNRuntimeError(
+                    f"Could not delete WireGuard interface {iface}: "
+                    + (result.stderr or result.stdout).strip()
+                )
+
+        if self._interface_exists(iface):
+            raise VPNRuntimeError(
+                f"WireGuard interface {iface} still exists after stop request."
+            )
 
         self._pid_path(profile).unlink(missing_ok=True)
         self._meta_path(profile).unlink(missing_ok=True)

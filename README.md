@@ -1406,3 +1406,27 @@ Results are process-local and survive page navigation, but are intentionally
 not persisted across application restarts.
 
 No schema or routing-policy changes.
+
+## v1.8.5
+
+### On-demand auto-stop countdown
+
+On-demand VPN profiles now visibly count down their remaining idle grace period
+before automatic shutdown.
+
+The timer is shown on the VPN Clients list and the VPN profile detail view.
+It uses the lifecycle manager's existing timer and does not change shutdown
+behavior.
+
+No schema or routing changes.
+
+## v1.8.5a
+
+### WireGuard On-demand auto-stop hotfix
+
+WireGuard automatic shutdown now verifies that the runtime interface was
+actually removed. Failed shutdown attempts remain in the expired idle state and
+are retried on subsequent lifecycle ticks instead of being treated as a
+successful stop.
+
+No schema or routing-policy changes.

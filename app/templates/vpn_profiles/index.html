@@ -1,5 +1,28 @@
 {% extends "base.html" %}
-{% block title %}VPN Clients · VPN Router{% endblock %}
+{% block title %}VPN Clients · VPN Router
+<script>
+(() => {
+  const nodes = document.querySelectorAll(".vpn-idle-countdown");
+  if (!nodes.length) return;
+
+  function tick() {
+    nodes.forEach(node => {
+      let remaining = Number(node.dataset.remaining || "0");
+      if (!Number.isFinite(remaining)) return;
+
+      remaining = Math.max(0, remaining - 1);
+      node.dataset.remaining = String(remaining);
+      node.textContent = remaining > 0
+        ? `Auto-stop in ${remaining}s`
+        : "Stopping…";
+    });
+  }
+
+  window.setInterval(tick, 1000);
+})();
+</script>
+
+{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
   <div>
@@ -32,6 +55,16 @@
 <td>
 {% if profile.connection_policy == "on_demand" %}<span class="pill">On demand</span>{% else %}<span class="pill">Always</span>{% endif %}
 <div class="muted" style="margin-top:.25rem;">{{ consumer_counts.get(profile.id, 0) }} assignment{% if consumer_counts.get(profile.id, 0) != 1 %}s{% endif %}</div>
+{% if profile.connection_policy == "on_demand" %}
+  {% set demand = on_demand_states.get(profile.id) %}
+  {% if demand and demand.idle_remaining_seconds is not none %}
+    <div class="status-warn vpn-idle-countdown"
+         style="margin-top:.25rem;font-size:.8rem;"
+         data-remaining="{{ demand.idle_remaining_seconds }}">
+      Auto-stop in {{ demand.idle_remaining_seconds }}s
+    </div>
+  {% endif %}
+{% endif %}
 </td>
 <td>{% if profile.enabled %}<span class="status-good">● Allowed</span>{% else %}<span class="muted">○ Disabled</span>{% endif %}</td>
 </tr>

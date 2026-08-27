@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.8.5a
+
+### WireGuard On-demand auto-stop hotfix
+
+- Hardened automatic shutdown for outbound WireGuard profiles.
+- WireGuard stop now checks the result of `ip link delete`.
+- Stop verifies that `wg-vpn<ID>` is actually gone before reporting success.
+- On-demand lifecycle verifies runtime state after automatic shutdown.
+- Failed shutdown keeps the existing expired idle timer and retries on the next
+  lifecycle tick rather than silently starting a fresh grace period.
+- Shutdown failures are surfaced through On-demand state/logging.
+- OpenVPN lifecycle behavior is unchanged.
+- No schema or routing-policy changes.
+
+## 1.8.5
+
+### On-demand auto-stop countdown
+
+- Added a visible `Auto-stop in Ns` timer for On-demand VPN profiles that have
+  no effective consumers and are inside the idle grace period.
+- VPN Clients list shows the countdown beside the profile's assignment count.
+- VPN profile detail view shows the same timer using the existing runtime poll,
+  so it tracks the backend lifecycle state directly.
+- The list-page timer updates client-side once per second and changes to
+  `Stopping…` at zero.
+- Uses the existing On-demand manager idle grace timer; shutdown behavior and
+  timing are unchanged.
+- No schema, routing or VPN lifecycle changes.
+
 ## 1.8.4
 
 ### Asynchronous preflight jobs
