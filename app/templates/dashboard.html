@@ -59,6 +59,18 @@
   </section>
 
   <section class="card">
+    <h2>Traffic visibility</h2>
+    <p>
+      Moving traffic:
+      <strong id="dash-traffic-active">{{ status.traffic.totals.active_clients or 0 }}</strong>
+      / <span id="dash-traffic-clients">{{ status.traffic.totals.clients or 0 }}</span> clients
+    </p>
+    <p>RX: <strong id="dash-traffic-rx">{{ status.traffic.totals.rx_rate_display or "—" }}</strong></p>
+    <p>TX: <strong id="dash-traffic-tx">{{ status.traffic.totals.tx_rate_display or "—" }}</strong></p>
+    <a href="{{ url_for('traffic.index') }}" class="button-link">Open traffic view</a>
+  </section>
+
+  <section class="card">
     <h2>Outbound VPNs</h2>
     <p>Profiles: <strong>{{ status.operational.vpn_profiles }}</strong></p>
     <p>Auto-connect enabled: <strong>{{ status.operational.vpn_enabled }}</strong></p>
@@ -293,6 +305,18 @@
   const LIVE_POLL_MS = 10000;
   const liveUrl = "{{ url_for('main.dashboard_live') }}";
 
+  function updateTrafficSummary(traffic) {
+    const totals = (traffic && traffic.totals) || {};
+    const active = document.getElementById("dash-traffic-active");
+    const clients = document.getElementById("dash-traffic-clients");
+    const rx = document.getElementById("dash-traffic-rx");
+    const tx = document.getElementById("dash-traffic-tx");
+    if (active) active.textContent = totals.active_clients ?? 0;
+    if (clients) clients.textContent = totals.clients ?? 0;
+    if (rx) rx.textContent = totals.rx_rate_display || "—";
+    if (tx) tx.textContent = totals.tx_rate_display || "—";
+  }
+
   function stateHtml(vpn) {
     let value = "";
     if (vpn.state === "connected") {
@@ -392,6 +416,7 @@
       const data = await response.json();
       if (!response.ok || !data.ok) return;
 
+      updateTrafficSummary(data.traffic);
       for (const vpn of data.vpns || []) {
         renderVpn(vpn);
       }

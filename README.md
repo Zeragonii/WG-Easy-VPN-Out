@@ -41,6 +41,7 @@ Current functionality includes:
 - Routing-group-aware DNS visibility/leak testing.
 - VPN exit-IP visibility.
 - Routing health and recent transition history.
+- Live WG-Easy traffic visibility with per-client and per-route RX/TX rates.
 - OpenVPN retry/recovery with exponential backoff and connect timeout.
 - VPN connection policies:
   - **Always connected**
@@ -1304,3 +1305,15 @@ routing group's actual VPN egress without changing client routing behavior.
 - Override history now distinguishes Started, Replaced, Cancelled and Expired.
 - History timestamps use friendly relative-time display.
 - No schema or routing behavior changes.
+
+## v1.7.0
+
+### Deeper observability and traffic visibility
+
+- Added a dedicated Traffic page using WG-Easy WireGuard peer counters.
+- Successive samples derive live RX/TX rates without modifying the routing
+  dataplane.
+- Shows effective route/source and traffic per client, aggregate traffic by
+  effective route, and current consumers for each outbound VPN profile.
+- Main dashboard includes a compact live traffic summary.
+- Traffic history is not persisted; schema remains v6.

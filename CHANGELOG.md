@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.7.0
+
+### Deeper observability and traffic visibility
+
+- Added a dedicated **Traffic** view.
+- Added background WG-Easy peer-counter sampling with a configurable default
+  interval of 5 seconds.
+- Derives live RX/TX byte rates from successive WG-Easy cumulative peer
+  counter samples.
+- Shows per-client:
+  - connection state
+  - current effective routing group
+  - permanent / temporary-override / normal route source
+  - effective exit
+  - cumulative RX/TX counters
+  - derived RX/TX rates
+- Aggregates live traffic by current effective routing group.
+- Shows which clients are currently consuming each outbound VPN profile and
+  their aggregate live rates.
+- WAN-fallback traffic is not incorrectly counted as VPN consumption.
+- Added a compact live traffic summary to the main dashboard.
+- Added Traffic sample interval to Observability settings.
+- Metrics are intentionally in-memory; no traffic history or packet payloads
+  are persisted.
+- No schema changes; database remains v6.
+
 ## 1.6.4
 
 ### Final temporary-override UI hardening

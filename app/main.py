@@ -326,6 +326,20 @@ def system_status():
             }
         ),
         "operational": operational_status(),
+        "traffic": (
+            current_app.extensions.get("traffic_visibility").snapshot()
+            if current_app.extensions.get("traffic_visibility")
+            else {
+                "available": False,
+                "error": "Traffic visibility unavailable.",
+                "totals": {
+                    "clients": 0,
+                    "active_clients": 0,
+                    "rx_rate_display": "—",
+                    "tx_rate_display": "—",
+                },
+            }
+        ),
     }
 
 
@@ -347,6 +361,15 @@ def dashboard_live():
     return jsonify({
         "ok": True,
         "vpns": _vpn_snapshot(profiles),
+        "traffic": (
+            current_app.extensions.get("traffic_visibility").snapshot()
+            if current_app.extensions.get("traffic_visibility")
+            else {
+                "available": False,
+                "error": "Traffic visibility unavailable.",
+                "totals": {},
+            }
+        ),
         "update": (
             observability.update_state(refresh_if_stale=True)
             if observability

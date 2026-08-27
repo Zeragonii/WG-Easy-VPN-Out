@@ -312,6 +312,42 @@ def main():
     if "override-controls" in clients_template:
         fail("Legacy always-visible override controls remain in Clients UI")
 
+    traffic_source = (ROOT / "app/services/traffic_visibility.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "class TrafficVisibilityService",
+        "effective_assignments(self.db)",
+        "def sample_once",
+        "active_traffic",
+        "route_source",
+        "WAN fallback",
+    ):
+        if required_fragment not in traffic_source:
+            fail(f"v1.7.0 traffic visibility is missing: {required_fragment}")
+
+    traffic_routes = (ROOT / "app/traffic.py").read_text(encoding="utf-8")
+    if 'url_prefix="/traffic"' not in traffic_routes or "def api()" not in traffic_routes:
+        fail("v1.7.0 Traffic blueprint/API is missing")
+
+    traffic_template = (ROOT / "app/templates/traffic.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Effective route traffic",
+        "Outbound VPN consumers",
+        "Client traffic",
+        "traffic-rx-rate",
+        "traffic-vpns-body",
+    ):
+        if required_fragment not in traffic_template:
+            fail(f"v1.7.0 Traffic UI is missing: {required_fragment}")
+
+    init_source = (ROOT / "app/__init__.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "TrafficVisibilityService",
+        'app.extensions["traffic_visibility"]',
+        "app.register_blueprint(traffic_bp)",
+    ):
+        if required_fragment not in init_source:
+            fail(f"v1.7.0 traffic startup integration is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

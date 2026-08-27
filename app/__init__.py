@@ -46,6 +46,7 @@ def create_app():
     from .diagnostics import bp as diagnostics_bp
     from .setup import bp as setup_bp
     from .settings import bp as settings_bp
+    from .traffic import bp as traffic_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -56,6 +57,7 @@ def create_app():
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(setup_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(traffic_bp)
 
     @app.before_request
     def require_initial_setup():
@@ -151,10 +153,15 @@ def create_app():
     app.extensions["vpn_resilience"] = vpn_resilience
 
     from .services.observability import ObservabilityService
+    from .services.traffic_visibility import TrafficVisibilityService
 
     observability = ObservabilityService(app, db, VPNProfile)
     observability.start()
     app.extensions["observability"] = observability
+
+    traffic_visibility = TrafficVisibilityService(app, db)
+    traffic_visibility.start()
+    app.extensions["traffic_visibility"] = traffic_visibility
 
     app.extensions["background_services"] = [
         routing_reconciler,
@@ -162,6 +169,7 @@ def create_app():
         temporary_overrides,
         vpn_resilience,
         observability,
+        traffic_visibility,
     ]
 
     from .services.lifecycle import register_shutdown

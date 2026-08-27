@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Traffic visibility · VPN Router{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+  <div>
+    <h1 style="margin-bottom:.3rem;">Traffic visibility</h1>
+    <p class="muted" style="margin-top:0;">
+      Live WG-Easy peer counters and derived rates mapped onto each client's current effective route.
+    </p>
+  </div>
+  <div class="muted" id="traffic-sampled-at">
+    {% if traffic.sampled_at %}Sampled {{ traffic.sampled_at }}{% else %}Waiting for sample…{% endif %}
+  </div>
+</div>
+
+<div id="traffic-error" class="error-box" {% if traffic.available %}style="display:none;"{% endif %}>
+  <strong>Traffic data unavailable</strong>
+  <div id="traffic-error-text" style="margin-top:.35rem;">{{ traffic.error or "" }}</div>
+</div>
+
+<div class="grid">
+  <section class="card">
+    <h2>WG clients</h2>
+    <p>Total visible: <strong id="traffic-client-count">{{ traffic.totals.clients or 0 }}</strong></p>
+    <p>Moving traffic: <strong id="traffic-active-count">{{ traffic.totals.active_clients or 0 }}</strong></p>
+  </section>
+  <section class="card">
+    <h2>Receive</h2>
+    <p>Current rate: <strong id="traffic-rx-rate">{{ traffic.totals.rx_rate_display or "—" }}</strong></p>
+    <p>Cumulative peer counters: <span id="traffic-rx-total">{{ traffic.totals.rx_total_display or "—" }}</span></p>
+  </section>
+  <section class="card">
+    <h2>Transmit</h2>
+    <p>Current rate: <strong id="traffic-tx-rate">{{ traffic.totals.tx_rate_display or "—" }}</strong></p>
+    <p>Cumulative peer counters: <span id="traffic-tx-total">{{ traffic.totals.tx_total_display or "—" }}</span></p>
+  </section>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-bottom:.25rem;">Effective route traffic</h2>
+  <div class="muted">
+    Rates are live. Cumulative totals are the WG-Easy counters for clients currently on each route,
+    not historical accounting for that route.
+  </div>
+  <div class="table-wrap" style="margin-top:.8rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Route</th>
+          <th>Effective exit</th>
+          <th>Clients</th>
+          <th>Active</th>
+          <th>RX rate</th>
+          <th>TX rate</th>
+          <th>RX total</th>
+          <th>TX total</th>
+        </tr>
+      </thead>
+      <tbody id="traffic-groups-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-bottom:.25rem;">Outbound VPN consumers</h2>
+  <div class="muted">Clients currently exiting through each VPN profile. WAN fallback clients are not counted as VPN consumers.</div>
+  <div class="table-wrap" style="margin-top:.8rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>VPN profile</th>
+          <th>Consumers</th>
+          <th>Active now</th>
+          <th>RX rate</th>
+          <th>TX rate</th>
+          <th>Clients</th>
+        </tr>
+      </thead>
+      <tbody id="traffic-vpns-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <h2 style="margin-bottom:.25rem;">Client traffic</h2>
+  <div class="muted">RX/TX values are the counters reported by WG-Easy for each WireGuard peer.</div>
+  <div class="table-wrap" style="margin-top:.8rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Connection</th>
+          <th>Effective route</th>
+          <th>Source</th>
+          <th>RX rate</th>
+          <th>TX rate</th>
+          <th>RX total</th>
+          <th>TX total</th>
+        </tr>
+      </thead>
+      <tbody id="traffic-clients-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(() => {
+  const POLL_MS = 5000;
+  const apiUrl = "{{ url_for('traffic.api') }}";
+
+  function esc(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  function connectionHtml(state) {
+    if (state === "online") return '<span class="status-good">● Online</span>';
+    if (state === "recent") return '<span class="status-warn">◐ Recent</span>';
+    if (state === "offline") return '<span class="muted">○ Offline</span>';
+    return '<span class="muted">○ Never</span>';
+  }
+
+  function routeStateHtml(row) {
+    if (row.state === "ready") return '<span class="status-good">● Ready</span>';
+    if (row.state === "fallback") return '<span class="status-warn">◐ Fallback</span>';
+    if (row.state === "blocked") return '<span class="status-bad">● Blocked</span>';
+    return '<span class="muted">○ Unknown</span>';
+  }
+
+  function render(snapshot) {
+    const totals = snapshot.totals || {};
+    document.getElementById("traffic-client-count").textContent = totals.clients ?? 0;
+    document.getElementById("traffic-active-count").textContent = totals.active_clients ?? 0;
+    document.getElementById("traffic-rx-rate").textContent = totals.rx_rate_display || "—";
+    document.getElementById("traffic-tx-rate").textContent = totals.tx_rate_display || "—";
+    document.getElementById("traffic-rx-total").textContent = totals.rx_total_display || "—";
+    document.getElementById("traffic-tx-total").textContent = totals.tx_total_display || "—";
+    document.getElementById("traffic-sampled-at").textContent =
+      snapshot.sampled_at ? `Sampled ${new Date(snapshot.sampled_at).toLocaleTimeString()}` : "Waiting for sample…";
+
+    const errorBox = document.getElementById("traffic-error");
+    document.getElementById("traffic-error-text").textContent = snapshot.error || "";
+    errorBox.style.display = snapshot.available ? "none" : "";
+
+    const groups = document.getElementById("traffic-groups-body");
+    groups.innerHTML = (snapshot.groups || []).map(row => `
+      <tr>
+        <td><strong>${esc(row.name)}</strong><div style="font-size:.8rem;">${routeStateHtml(row)}</div></td>
+        <td>${esc(row.effective_exit)}</td>
+        <td>${row.clients}</td>
+        <td>${row.active_clients}</td>
+        <td><strong>${esc(row.rx_rate_display)}</strong></td>
+        <td><strong>${esc(row.tx_rate_display)}</strong></td>
+        <td>${esc(row.rx_total_display)}</td>
+        <td>${esc(row.tx_total_display)}</td>
+      </tr>
+    `).join("") || '<tr><td colspan="8" class="muted">No traffic data yet.</td></tr>';
+
+    const vpns = document.getElementById("traffic-vpns-body");
+    vpns.innerHTML = (snapshot.vpn_profiles || []).map(row => `
+      <tr>
+        <td><strong>${esc(row.name)}</strong></td>
+        <td>${row.consumers}</td>
+        <td>${row.active_consumers}</td>
+        <td>${esc(row.rx_rate_display)}</td>
+        <td>${esc(row.tx_rate_display)}</td>
+        <td>${(row.client_names || []).map(esc).join(", ") || '<span class="muted">—</span>'}</td>
+      </tr>
+    `).join("") || '<tr><td colspan="6" class="muted">No VPN profiles configured.</td></tr>';
+
+    const clients = document.getElementById("traffic-clients-body");
+    clients.innerHTML = (snapshot.clients || []).map(row => `
+      <tr>
+        <td><strong>${esc(row.name)}</strong><div class="muted" style="font-size:.8rem;"><code>${esc(row.ipv4_address)}</code></div></td>
+        <td>${connectionHtml(row.connection_state)}</td>
+        <td>
+          <strong>${esc(row.routing_group_name)}</strong>
+          <div class="muted" style="font-size:.8rem;">${esc(row.effective_exit)}</div>
+        </td>
+        <td>${
+          row.route_source === "override"
+            ? '<span class="status-warn">Override</span>'
+            : row.route_source === "permanent"
+              ? '<span class="muted">Permanent</span>'
+              : '<span class="muted">Normal</span>'
+        }</td>
+        <td><strong>${esc(row.rx_rate_display)}</strong></td>
+        <td><strong>${esc(row.tx_rate_display)}</strong></td>
+        <td>${esc(row.rx_total_display)}</td>
+        <td>${esc(row.tx_total_display)}</td>
+      </tr>
+    `).join("") || '<tr><td colspan="8" class="muted">No WG-Easy clients visible.</td></tr>';
+  }
+
+  async function refresh() {
+    try {
+      const response = await fetch(apiUrl, {
+        headers: { "Accept": "application/json" },
+        cache: "no-store"
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      render(data.traffic);
+    } catch (error) {
+      document.getElementById("traffic-error").style.display = "";
+      document.getElementById("traffic-error-text").textContent =
+        error.message || "Traffic refresh failed.";
+    }
+  }
+
+  render({{ traffic | tojson }});
+  setInterval(refresh, POLL_MS);
+})();
+</script>
+{% endblock %}
