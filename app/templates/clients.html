@@ -310,6 +310,30 @@
     return permanentRouteLabel(client);
   }
 
+  function renderEffectiveRoute(row, client) {
+    const cell = row.querySelector(".effective-route");
+    if (!cell) return;
+
+    if (client.override) {
+      cell.innerHTML =
+        `<strong>${groupName(client.override.routing_group_id)}</strong>` +
+        '<div class="status-warn" style="font-size:.8rem;">Temporary override active</div>';
+      return;
+    }
+
+    if (
+      client.routing_group_id !== null
+      && client.routing_group_id !== undefined
+    ) {
+      cell.innerHTML =
+        `<strong>${groupName(client.routing_group_id)}</strong>` +
+        '<div class="muted" style="font-size:.8rem;">Permanent assignment</div>';
+      return;
+    }
+
+    cell.innerHTML = '<span class="muted">Normal routing</span>';
+  }
+
   function updateModalFromClient(client) {
     currentOverrideClient = client;
     overrideModalClient.textContent = client.name;

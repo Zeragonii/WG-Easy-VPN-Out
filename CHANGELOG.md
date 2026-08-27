@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.2
+
+### WG-Easy Clients UI hotfix
+
+- Fixed `renderEffectiveRoute is not defined` on the WG-Easy Clients page.
+- Restored the `renderEffectiveRoute()` helper removed during the v1.6.1
+  override-modal cleanup.
+- Effective-route rendering now safely handles:
+  - active temporary override
+  - permanent assignment
+  - normal/unassigned routing
+- Added release validation to ensure the helper exists whenever the Clients UI
+  calls it.
+- No schema, routing, expiry or override-backend behavior changes.
+
 ## 1.6.1
 
 ### Temporary override UI cleanup

@@ -266,6 +266,11 @@ def main():
             fail(f"Temporary override expiry handling is missing: {required_fragment}")
 
     clients_template = (ROOT / "app/templates/clients.html").read_text(encoding="utf-8")
+    if "renderEffectiveRoute(row, client)" in clients_template:
+        if "function renderEffectiveRoute(row, client)" not in clients_template:
+            fail(
+                "Clients UI calls renderEffectiveRoute() without defining it"
+            )
     for required_fragment in (
         'id="override-modal-backdrop"',
         'class="inline-button override-open"',

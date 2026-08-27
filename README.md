@@ -1277,3 +1277,11 @@ routing group's actual VPN egress without changing client routing behavior.
 - Modal shows permanent/effective route, current override, live countdown and
   apply/replace/cancel actions.
 - No schema or routing behavior changes.
+
+## v1.6.2
+
+### WG-Easy Clients UI hotfix
+
+- Restored the missing `renderEffectiveRoute()` client-side helper.
+- Fixed the WG-Easy Clients page error introduced by the v1.6.1 UI cleanup.
+- No schema or routing behavior changes.
