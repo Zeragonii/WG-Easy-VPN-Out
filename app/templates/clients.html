@@ -334,14 +334,24 @@
     cell.innerHTML = '<span class="muted">Normal routing</span>';
   }
 
-  function updateModalFromClient(client) {
+  function updateModalFromClient(client, preserveForm = false) {
+    const selectedGroup = overrideGroup.value;
+    const selectedDuration = overrideDuration.value;
+
     currentOverrideClient = client;
     overrideModalClient.textContent = client.name;
     overridePermanent.textContent = permanentRouteLabel(client);
     overrideEffective.textContent = effectiveRouteLabel(client);
+
     overrideGroup.innerHTML = overrideGroupOptions(
-      client.override ? client.override.routing_group_id : null
+      preserveForm
+        ? (selectedGroup || null)
+        : (client.override ? client.override.routing_group_id : null)
     );
+
+    if (preserveForm && selectedDuration) {
+      overrideDuration.value = selectedDuration;
+    }
 
     if (client.override) {
       overrideActiveBox.style.display = "";
@@ -360,11 +370,14 @@
       overrideActiveCountdown.dataset.expiresAt = "";
       overrideApply.textContent = "Apply override";
     }
-    overrideModalStatus.textContent = "";
+
+    if (!preserveForm) {
+      overrideModalStatus.textContent = "";
+    }
   }
 
   function openOverrideModal(client) {
-    updateModalFromClient(client);
+    updateModalFromClient(client, false);
     overrideBackdrop.style.display = "flex";
     document.body.style.overflow = "hidden";
     setTimeout(() => overrideGroup.focus(), 0);
@@ -613,7 +626,7 @@
         && String(currentOverrideClient.id) === id
         && overrideBackdrop.style.display !== "none"
       ) {
-        updateModalFromClient(client);
+        updateModalFromClient(client, true);
       }
     }
 

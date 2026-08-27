@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.3
+
+### Override modal polling hotfix
+
+- Fixed the 5-second WG-Easy client poll resetting the Override Route dropdown
+  in an open temporary-override modal.
+- Modal polling refresh now updates live client/effective-route/override state
+  while preserving unsaved route and duration selections.
+- Opening the modal fresh still initializes controls from the currently active
+  override, if any.
+- No schema, routing, expiry or override-backend behavior changes.
+
 ## 1.6.2
 
 ### WG-Easy Clients UI hotfix

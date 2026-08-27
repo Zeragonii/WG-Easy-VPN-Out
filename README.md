@@ -1285,3 +1285,13 @@ routing group's actual VPN egress without changing client routing behavior.
 - Restored the missing `renderEffectiveRoute()` client-side helper.
 - Fixed the WG-Easy Clients page error introduced by the v1.6.1 UI cleanup.
 - No schema or routing behavior changes.
+
+## v1.6.3
+
+### Override modal polling hotfix
+
+- Polling refreshes no longer reset unsaved Override Route/Duration selections
+  in an open modal.
+- Live backend state still refreshes normally while the form selection remains
+  intact.
+- No schema or routing behavior changes.
