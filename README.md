@@ -1317,3 +1317,14 @@ routing group's actual VPN egress without changing client routing behavior.
   effective route, and current consumers for each outbound VPN profile.
 - Main dashboard includes a compact live traffic summary.
 - Traffic history is not persisted; schema remains v6.
+
+## v1.7.1
+
+### Faster asynchronous traffic refresh
+
+- Traffic counter sampling now defaults to 1 second.
+- Traffic page refreshes its lightweight in-memory snapshot every 1 second,
+  independently of the 5-second WG-Easy Clients refresh.
+- Traffic sample interval remains configurable; minimum supported interval is
+  0.5 seconds.
+- No schema or routing behavior changes.

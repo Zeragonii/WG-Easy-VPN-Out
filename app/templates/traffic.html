@@ -105,7 +105,10 @@
 
 <script>
 (() => {
-  const POLL_MS = 5000;
+  // Traffic visibility is intentionally decoupled from the heavier
+  // WG-Easy Clients page refresh. This page only reads the lightweight
+  // in-memory traffic snapshot, so it can update much more frequently.
+  const POLL_MS = 1000;
   const apiUrl = "{{ url_for('traffic.api') }}";
 
   function esc(value) {

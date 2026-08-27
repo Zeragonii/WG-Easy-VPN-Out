@@ -313,6 +313,9 @@ def main():
         fail("Legacy always-visible override controls remain in Clients UI")
 
     traffic_source = (ROOT / "app/services/traffic_visibility.py").read_text(encoding="utf-8")
+    if "return max(0.5, value)" not in traffic_source:
+        fail("v1.7.1 traffic sampler must support the faster independent cadence")
+
     for required_fragment in (
         "class TrafficVisibilityService",
         "effective_assignments(self.db)",
@@ -329,6 +332,9 @@ def main():
         fail("v1.7.0 Traffic blueprint/API is missing")
 
     traffic_template = (ROOT / "app/templates/traffic.html").read_text(encoding="utf-8")
+    if "const POLL_MS = 1000;" not in traffic_template:
+        fail("v1.7.1 Traffic page must refresh its snapshot every second")
+
     for required_fragment in (
         "Effective route traffic",
         "Outbound VPN consumers",

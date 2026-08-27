@@ -67,7 +67,7 @@ class TrafficVisibilityService:
             "available": False,
             "error": "Waiting for first traffic sample.",
             "sampled_at": None,
-            "sample_interval_seconds": 5.0,
+            "sample_interval_seconds": 1.0,
             "clients": [],
             "groups": [],
             "vpn_profiles": [],
@@ -89,8 +89,8 @@ class TrafficVisibilityService:
                 )
             )
         except Exception:
-            value = 5.0
-        return max(2.0, value)
+            value = 1.0
+        return max(0.5, value)
 
     def _wg_easy(self):
         settings = SettingsService(self.db, AppSetting)

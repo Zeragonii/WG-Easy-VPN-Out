@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.1
+
+### Faster asynchronous traffic refresh
+
+- Decoupled Traffic-page refresh cadence from the slower WG-Easy Clients page.
+- Traffic visibility now samples WG-Easy peer counters every 1 second by
+  default instead of every 5 seconds.
+- Traffic page reads the in-memory traffic snapshot every 1 second.
+- WG-Easy Clients page keeps its existing 5-second discovery/presentation poll.
+- Traffic sampling remains a dedicated background service, so faster rate
+  updates do not block normal page requests or routing lifecycle work.
+- Traffic sample interval remains configurable under Observability settings.
+- Lower bound for traffic sampling is 0.5 seconds if manually configured.
+- No schema, routing, override or VPN lifecycle behavior changes.
+
 ## 1.7.0
 
 ### Deeper observability and traffic visibility
