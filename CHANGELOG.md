@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.7
+
+### VPN client creation usability
+
+- Added Connection policy selection to the Add VPN Client form.
+- New profiles can be created directly as On demand or Always connected.
+- New-profile form defaults to On demand.
+- Provider is now a reusable dropdown populated from distinct provider names
+  already stored on VPN profiles.
+- Added `+ Add New`, which reveals a free-text provider field.
+- New provider names automatically become reusable choices for future profiles.
+- Applied the same provider workflow to Edit VPN Client.
+- No schema, routing or lifecycle changes.
+
 ## 1.8.6
 
 ### v1.8 hardening release

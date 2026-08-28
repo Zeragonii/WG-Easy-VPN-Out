@@ -585,6 +585,31 @@ def main():
     if "ClientRouteOverride=ClientRouteOverride" not in backups_routes:
         fail("v1.8.6 backup routes do not pass ClientRouteOverride model")
 
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _provider_options()",
+        "def _provider_from_form()",
+        '"connection_policy": request.form.get("connection_policy", "on_demand")',
+        "connection_policy=policy",
+        "providers=providers",
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"v1.8.7 VPN creation/provider handling is missing: {required_fragment}")
+
+    vpn_form = (ROOT / "app/templates/vpn_profiles/form.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'name="provider_choice"',
+        'value="__new__"',
+        "+ Add New",
+        'id="provider-new-wrap"',
+        'name="connection_policy"',
+        'value="on_demand"',
+        'value="always"',
+        "syncProviderInput",
+    ):
+        if required_fragment not in vpn_form:
+            fail(f"v1.8.7 VPN form usability is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

@@ -1464,3 +1464,15 @@ WireGuard uptime now reports correctly, asynchronous preflight exposes live VPN 
 
 No schema or routing-policy changes.
 
+## v1.8.7
+
+### VPN client creation usability
+
+VPN clients can now choose their connection policy during creation. Provider
+metadata is also reusable through a dropdown of existing providers plus an
+`Add New` option for defining another provider name.
+
+This lays the groundwork for provider-based grouping and filtering in the
+larger VPN profile library without requiring a schema change.
+
+No schema, routing or lifecycle changes.

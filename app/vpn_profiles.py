@@ -31,6 +31,25 @@ def _profile_dir(vpn_type):
 def _read_config(profile):
     return (_profile_dir(profile.vpn_type) / profile.config_filename).read_text(encoding="utf-8", errors="replace")
 
+
+def _provider_options():
+    """Return distinct configured provider names for reusable form choices."""
+    values = db.session.execute(
+        db.select(VPNProfile.provider)
+        .where(VPNProfile.provider.is_not(None))
+        .distinct()
+        .order_by(VPNProfile.provider.asc())
+    ).scalars().all()
+    return [value.strip() for value in values if value and value.strip()]
+
+
+def _provider_from_form():
+    """Resolve provider dropdown selection, including the Add New sentinel."""
+    selected = request.form.get("provider_choice", "").strip()
+    if selected == "__new__":
+        return request.form.get("provider_new", "").strip()
+    return selected
+
 @bp.get("/")
 @login_required
 def index():
@@ -143,23 +162,50 @@ def runtime_summary():
 @bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new():
+    providers = _provider_options()
     supplied = {
         "name": request.form.get("name", ""),
-        "provider": request.form.get("provider", ""),
+        "provider": _provider_from_form() if request.method == "POST" else "",
+        "provider_choice": request.form.get("provider_choice", ""),
+        "provider_new": request.form.get("provider_new", ""),
+        "connection_policy": request.form.get("connection_policy", "on_demand"),
         "username": request.form.get("username", ""),
     }
+
+    def render_new():
+        return render_template(
+            "vpn_profiles/form.html",
+            profile=None,
+            supplied=supplied,
+            providers=providers,
+        )
+
     if request.method == "POST":
+        policy = supplied["connection_policy"].strip().lower()
+        if policy not in ("always", "on_demand"):
+            policy = "on_demand"
+        supplied["connection_policy"] = policy
+
+        if (
+            supplied["provider_choice"] == "__new__"
+            and not supplied["provider"].strip()
+        ):
+            flash("Enter a name for the new VPN provider.", "error")
+            return render_new()
+
         upload = request.files.get("config")
         if not supplied["name"].strip():
             flash("Friendly name is required.", "error")
-            return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+            return render_new()
         if not upload or not upload.filename:
             flash("Select a VPN configuration file.", "error")
-            return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+            return render_new()
+
         raw = upload.read()
         if len(raw) > 1024 * 1024:
             flash("Configuration files are limited to 1 MiB.", "error")
-            return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+            return render_new()
+
         content = raw.decode("utf-8", errors="replace")
         try:
             filename = safe_filename(upload.filename)
@@ -167,12 +213,12 @@ def new():
             stored_name = f"{safe_filename(supplied['name'].strip())}-{filename}"
         except VPNProfileValidationError as exc:
             flash(str(exc), "error")
-            return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+            return render_new()
 
         path = _profile_dir(vpn_type) / stored_name
         if path.exists():
             flash("A configuration with this stored filename already exists.", "error")
-            return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+            return render_new()
 
         profile = VPNProfile(
             name=supplied["name"].strip(),
@@ -182,8 +228,9 @@ def new():
             username=supplied["username"].strip() or None,
             password=encrypt_secret(request.form.get("password", "") or None),
             enabled=False,
-            connection_policy="always",
+            connection_policy=policy,
         )
+
         try:
             path.write_text(content, encoding="utf-8")
             db.session.add(profile)
@@ -192,12 +239,13 @@ def new():
             db.session.rollback()
             path.unlink(missing_ok=True)
             flash("A VPN profile with that friendly name already exists.", "error")
-            return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+            return render_new()
 
         flash(f"VPN profile '{profile.name}' created.", "success")
         return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
-    return render_template("vpn_profiles/form.html", profile=None, supplied=supplied)
+    return render_new()
+
 
 @bp.get("/<int:profile_id>")
 @login_required
@@ -372,29 +420,78 @@ def autoconnect(profile_id):
 @login_required
 def edit(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
+    providers = _provider_options()
+
     if request.method == "POST":
-        profile.name = request.form.get("name", "").strip()
-        profile.provider = request.form.get("provider", "").strip() or None
-        profile.username = request.form.get("username", "").strip() or None
-        policy = request.form.get("connection_policy", "always").strip().lower()
+        selected_provider = _provider_from_form()
+        supplied = {
+            "name": request.form.get("name", ""),
+            "provider": selected_provider,
+            "provider_choice": request.form.get("provider_choice", ""),
+            "provider_new": request.form.get("provider_new", ""),
+            "connection_policy": request.form.get(
+                "connection_policy",
+                profile.connection_policy,
+            ),
+            "username": request.form.get("username", ""),
+        }
+
+        if (
+            supplied["provider_choice"] == "__new__"
+            and not selected_provider
+        ):
+            flash("Enter a name for the new VPN provider.", "error")
+            return render_template(
+                "vpn_profiles/form.html",
+                profile=profile,
+                supplied=supplied,
+                providers=providers,
+            )
+
+        profile.name = supplied["name"].strip()
+        profile.provider = selected_provider or None
+        profile.username = supplied["username"].strip() or None
+
+        policy = supplied["connection_policy"].strip().lower()
         profile.connection_policy = (
             policy if policy in ("always", "on_demand") else "always"
         )
+
         password = request.form.get("password", "")
         if password:
             profile.password = encrypt_secret(password)
+
         if not profile.name:
             flash("Friendly name is required.", "error")
-            return render_template("vpn_profiles/form.html", profile=profile, supplied=None)
+            return render_template(
+                "vpn_profiles/form.html",
+                profile=profile,
+                supplied=supplied,
+                providers=providers,
+            )
+
         try:
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
             flash("A VPN profile with that friendly name already exists.", "error")
-            return render_template("vpn_profiles/form.html", profile=profile, supplied=None)
+            return render_template(
+                "vpn_profiles/form.html",
+                profile=profile,
+                supplied=supplied,
+                providers=providers,
+            )
+
         flash("VPN profile updated.", "success")
         return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
-    return render_template("vpn_profiles/form.html", profile=profile, supplied=None)
+
+    return render_template(
+        "vpn_profiles/form.html",
+        profile=profile,
+        supplied=None,
+        providers=providers,
+    )
+
 
 @bp.post("/<int:profile_id>/delete")
 @login_required
