@@ -5,7 +5,7 @@ from flask import Blueprint, current_app, flash, jsonify, redirect, render_templ
 from flask_login import login_required
 from sqlalchemy.exc import IntegrityError
 from . import db
-from .models import VPNProfile
+from .models import VPNProfile, RoutingGroup
 from .services.vpn_profiles import VPNProfileValidationError, safe_filename, validate_config
 from .services.vpn_runtime import VPNRuntimeError, VPNRuntimeService
 from .services.secrets import encrypt_secret
@@ -218,6 +218,11 @@ def new():
         "provider_choice": request.form.get("provider_choice", ""),
         "provider_new": request.form.get("provider_new", ""),
         "connection_policy": request.form.get("connection_policy", "on_demand"),
+        "create_routing_group": (
+            request.form.get("create_routing_group", "1")
+            if request.method == "POST"
+            else "1"
+        ),
         "username": request.form.get("username", ""),
     }
 
@@ -290,7 +295,56 @@ def new():
             flash("A VPN profile with that friendly name already exists.", "error")
             return render_new()
 
-        flash(f"VPN profile '{profile.name}' created.", "success")
+        routing_group_created = False
+        if supplied["create_routing_group"] == "1":
+            existing_group = db.session.execute(
+                db.select(RoutingGroup).where(RoutingGroup.name == profile.name)
+            ).scalar_one_or_none()
+
+            if existing_group is None:
+                group = RoutingGroup(
+                    name=profile.name,
+                    vpn_profile_id=profile.id,
+                    fallback_mode="block",
+                    dns_mode="inherit",
+                    dns_target=None,
+                )
+                db.session.add(group)
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    flash(
+                        "VPN profile was created, but its automatic routing "
+                        "group could not be created because that group name "
+                        "already exists.",
+                        "warning",
+                    )
+                else:
+                    routing_group_created = True
+                    try:
+                        RoutingEngine().rebuild(db, RoutingGroup)
+                    except RoutingEngineError as exc:
+                        flash(
+                            "Routing group was created, but routing rebuild "
+                            f"failed: {exc}",
+                            "warning",
+                        )
+            else:
+                flash(
+                    "VPN profile was created, but the automatic routing group "
+                    f"was skipped because '{profile.name}' already exists.",
+                    "warning",
+                )
+
+        if routing_group_created:
+            flash(
+                f"VPN profile '{profile.name}' and matching routing group created.",
+                "success",
+            )
+        else:
+            flash(f"VPN profile '{profile.name}' created.", "success")
+
         return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
     return render_new()

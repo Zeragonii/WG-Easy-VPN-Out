@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.8.8
+
+### Optional automatic routing-group creation
+
+- Added `Create matching routing group` to the Add VPN Client form.
+- The option is enabled by default and can be unticked.
+- When enabled, a routing group is created automatically using the VPN profile
+  name.
+- Automatically created groups use safe defaults:
+  - VPN profile as target
+  - kill-switch fallback (`block`)
+  - existing/client DNS (`inherit`)
+- Routing is rebuilt immediately after successful group creation.
+- If a routing group with the same name already exists, the VPN profile is
+  still created and the group creation is skipped with a warning.
+- No schema change.
+
 ## 1.8.7a
 
 ### VPN egress-health status hotfix

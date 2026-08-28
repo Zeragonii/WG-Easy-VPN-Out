@@ -1493,3 +1493,15 @@ continue to use transport state so an external exit-IP service cannot cause
 reconnect loops.
 
 No schema change.
+
+## v1.8.8
+
+### Automatic routing-group creation
+
+The Add VPN Client flow can now create a matching routing group at the same
+time. The option is enabled by default but remains optional.
+
+Automatically created groups use kill-switch fallback and existing/client DNS,
+providing a safe starting point while eliminating the extra manual setup step.
+
+No schema change.

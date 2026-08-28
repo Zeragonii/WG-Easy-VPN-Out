@@ -81,6 +81,23 @@
   </p>
 
   {% if not profile %}
+    <label style="display:flex;gap:.6rem;align-items:flex-start;">
+      <input
+        type="checkbox"
+        name="create_routing_group"
+        value="1"
+        style="width:auto;margin-top:.25rem;"
+        {% if not supplied or supplied.create_routing_group == "1" %}checked{% endif %}
+      >
+      <span>
+        <strong>Create matching routing group</strong><br>
+        <span class="muted">
+          Creates a routing group named after this VPN client using kill-switch
+          fallback and existing/client DNS. You can change those settings afterwards.
+        </span>
+      </span>
+    </label>
+
     <label>
       VPN configuration
       <input name="config" type="file" accept=".ovpn,.conf,text/plain" required>

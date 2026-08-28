@@ -632,6 +632,26 @@ def main():
         if required_fragment not in vpn_detail:
             fail(f"v1.8.7a VPN detail health state is missing: {required_fragment}")
 
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "RoutingGroup",
+        '"create_routing_group"',
+        'fallback_mode="block"',
+        'dns_mode="inherit"',
+        "RoutingEngine().rebuild",
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"v1.8.8 automatic routing-group creation is missing: {required_fragment}")
+
+    vpn_form = (ROOT / "app/templates/vpn_profiles/form.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'name="create_routing_group"',
+        "Create matching routing group",
+        "checked",
+    ):
+        if required_fragment not in vpn_form:
+            fail(f"v1.8.8 routing-group form option is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")
