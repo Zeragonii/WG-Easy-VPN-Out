@@ -50,6 +50,44 @@ def _provider_from_form():
         return request.form.get("provider_new", "").strip()
     return selected
 
+
+
+def _display_health_state(profile, runtime, observability):
+    """
+    Presentation-only VPN health.
+
+    Core runtime semantics intentionally remain transport-focused: for
+    WireGuard a recent handshake means the tunnel transport is established.
+    The UI additionally requires a successful cached exit-IP probe before it
+    presents that transport as fully Connected.
+    """
+    state = runtime.state
+    if state != "connected":
+        return state, None
+
+    if observability is None:
+        return "verifying", None
+
+    egress = observability.exit_ip_state(profile.id)
+    if not egress:
+        return "verifying", None
+
+    if egress.get("checking"):
+        return "verifying", egress.get("exit_ip")
+
+    # A cached disconnected observation predating the current runtime should
+    # not be treated as a failed current tunnel. Wait for a fresh probe.
+    if not egress.get("connected"):
+        return "verifying", None
+
+    if egress.get("probe_ok") is True and egress.get("exit_ip"):
+        return "connected", egress.get("exit_ip")
+
+    if egress.get("probe_ok") is False:
+        return "degraded", None
+
+    return "verifying", egress.get("exit_ip")
+
 @bp.get("/")
 @login_required
 def index():
@@ -59,6 +97,7 @@ def index():
 
     from flask import current_app
     manager = current_app.extensions.get("on_demand_vpn")
+    observability = current_app.extensions.get("observability")
     consumer_counts = manager.consumer_counts() if manager else {}
     on_demand_states = (
         {profile.id: manager.public_state(profile.id) for profile in profiles}
@@ -71,7 +110,11 @@ def index():
 
     for profile in profiles:
         rt = runtime[profile.id]
-        display_state = rt.state
+        display_state, _ = _display_health_state(
+            profile,
+            rt,
+            observability,
+        )
 
         # List semantics:
         # idle on-demand profiles are Offline, not Failed. A real failure is
@@ -122,6 +165,7 @@ def runtime_summary():
 
     svc = VPNRuntimeService()
     manager = current_app.extensions.get("on_demand_vpn")
+    observability = current_app.extensions.get("observability")
     consumer_counts = manager.consumer_counts() if manager else {}
 
     rows = []
@@ -129,7 +173,11 @@ def runtime_summary():
         runtime = svc.status(profile, include_probe=False)
         demand = manager.public_state(profile.id) if manager else None
 
-        display_state = runtime.state
+        display_state, verified_exit_ip = _display_health_state(
+            profile,
+            runtime,
+            observability,
+        )
         if (
             profile.enabled
             and profile.connection_policy == "on_demand"
@@ -142,6 +190,7 @@ def runtime_summary():
         rows.append({
             "id": profile.id,
             "state": display_state,
+            "verified_exit_ip": verified_exit_ip,
             "connection_policy": profile.connection_policy,
             "enabled": bool(profile.enabled),
             "consumer_count": consumer_counts.get(profile.id, 0),
@@ -260,9 +309,14 @@ def detail(profile_id):
     runtime = VPNRuntimeService().status(profile, include_probe=False)
     from flask import current_app
     manager = current_app.extensions.get("on_demand_vpn")
+    observability = current_app.extensions.get("observability")
     on_demand = manager.public_state(profile.id) if manager else None
     consumer_count = manager.consumer_counts().get(profile.id, 0) if manager else 0
-    runtime_display_state = runtime.state
+    runtime_display_state, verified_exit_ip = _display_health_state(
+        profile,
+        runtime,
+        observability,
+    )
     if (
         profile.enabled
         and profile.connection_policy == "on_demand"
@@ -288,6 +342,7 @@ def detail(profile_id):
         config_error=config_error,
         runtime=runtime,
         runtime_display_state=runtime_display_state,
+        verified_exit_ip=verified_exit_ip,
         on_demand=on_demand,
         consumer_count=consumer_count,
         intelligence=intelligence,
@@ -361,7 +416,7 @@ def disconnect(profile_id):
 @login_required
 def runtime(profile_id):
     profile = db.get_or_404(VPNProfile, profile_id)
-    status = VPNRuntimeService().status(profile, include_probe=True)
+    status = VPNRuntimeService().status(profile, include_probe=False)
 
     resilience = _resilience_manager()
     retry = resilience.public_state(profile.id) if resilience else {
@@ -374,9 +429,17 @@ def runtime(profile_id):
 
     from flask import current_app
     manager = current_app.extensions.get("on_demand_vpn")
+    observability = current_app.extensions.get("observability")
     on_demand = manager.public_state(profile.id) if manager else None
 
     payload = status.to_dict()
+    display_state, verified_exit_ip = _display_health_state(
+        profile,
+        status,
+        observability,
+    )
+    payload["state"] = display_state
+    payload["exit_ip"] = verified_exit_ip
     if (
         profile.enabled
         and profile.connection_policy == "on_demand"

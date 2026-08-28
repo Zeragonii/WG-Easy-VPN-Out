@@ -1476,3 +1476,20 @@ This lays the groundwork for provider-based grouping and filtering in the
 larger VPN profile library without requiring a schema change.
 
 No schema, routing or lifecycle changes.
+
+## v1.8.7a
+
+### VPN egress-health status hotfix
+
+VPN health display now distinguishes tunnel transport from verified internet
+egress. A recent WireGuard handshake is no longer enough for the UI to show a
+green `Connected` state: the background exit-IP probe must also have succeeded.
+
+Unverified tunnels display `Verifying egress`; failed exit probes display
+`Degraded · no verified egress`.
+
+This is presentation/observability hardening only. Core lifecycle and routing
+continue to use transport state so an external exit-IP service cannot cause
+reconnect loops.
+
+No schema change.

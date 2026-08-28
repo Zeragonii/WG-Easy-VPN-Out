@@ -610,6 +610,28 @@ def main():
         if required_fragment not in vpn_form:
             fail(f"v1.8.7 VPN form usability is missing: {required_fragment}")
 
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _display_health_state(",
+        '"verifying"',
+        '"degraded"',
+        'observability.exit_ip_state(profile.id)',
+        "status(profile, include_probe=False)",
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"v1.8.7a egress health presentation is missing: {required_fragment}")
+
+    vpn_index = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    vpn_detail = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Verifying egress",
+        "Degraded · no verified egress",
+    ):
+        if required_fragment not in vpn_index:
+            fail(f"v1.8.7a VPN list health state is missing: {required_fragment}")
+        if required_fragment not in vpn_detail:
+            fail(f"v1.8.7a VPN detail health state is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

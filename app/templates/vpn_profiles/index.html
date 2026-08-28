@@ -25,6 +25,8 @@
 <td id="runtime-state-{{ profile.id }}">
 {% set display_state = runtime_display[profile.id] %}
 {% if display_state == "connected" %}<span class="status-good">● Connected</span>
+{% elif display_state == "verifying" %}<span class="status-warn">◐ Verifying egress</span>
+{% elif display_state == "degraded" %}<span class="status-bad">● Degraded · no verified egress</span>
 {% elif display_state == "connecting" %}<span class="status-warn">◐ Connecting</span>
 {% elif display_state == "failed" %}<span class="status-bad">● Failed</span>
 {% elif display_state == "stale" %}<span class="status-warn">◐ Stale</span>
@@ -65,6 +67,8 @@
 
   function stateHtml(value) {
     if (value === "connected") return '<span class="status-good">● Connected</span>';
+    if (value === "verifying") return '<span class="status-warn">◐ Verifying egress</span>';
+    if (value === "degraded") return '<span class="status-bad">● Degraded · no verified egress</span>';
     if (value === "connecting") return '<span class="status-warn">◐ Connecting</span>';
     if (value === "failed") return '<span class="status-bad">● Failed</span>';
     if (value === "stale") return '<span class="status-warn">◐ Stale</span>';

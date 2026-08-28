@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.7a
+
+### VPN egress-health status hotfix
+
+- VPN Clients no longer presents a transport-only WireGuard handshake as a
+  fully healthy green `Connected` state.
+- Added presentation health states:
+  - `Verifying egress` when the tunnel transport is established but no current
+    exit-IP verification is available yet.
+  - `Degraded · no verified egress` when the tunnel is transport-connected but
+    the cached exit-IP probe failed.
+  - `Connected` only when transport is established and a public exit IP has
+    been successfully verified.
+- Core WireGuard runtime semantics remain handshake-based so an external IP
+  check service cannot trigger tunnel teardown/reconnect loops.
+- VPN profile detail polling now uses cached background observability instead
+  of running a direct public exit-IP curl every three seconds.
+- Routing, on-demand lifecycle and schema are unchanged.
+
 ## 1.8.7
 
 ### VPN client creation usability
