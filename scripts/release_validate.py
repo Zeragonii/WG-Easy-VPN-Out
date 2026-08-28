@@ -562,6 +562,29 @@ def main():
     ):
         fail("v1.8.5c countdown script is not inside the Jinja content block")
 
+    runtime_source = (ROOT / "app/services/vpn_runtime.py").read_text(encoding="utf-8")
+    if 'runtime_active = alive or (profile.vpn_type == "wireguard" and exists)' not in runtime_source:
+        fail("v1.8.6 WireGuard uptime hardening is missing")
+
+    preflight_source = (ROOT / "app/services/preflight.py").read_text(encoding="utf-8")
+    preflight_jobs_source = (ROOT / "app/services/preflight_jobs.py").read_text(encoding="utf-8")
+    diagnostics_template = (ROOT / "app/templates/diagnostics/index.html").read_text(encoding="utf-8")
+    for fragment in ("progress_callback", '"phase": "vpn_verification"', '"current": index', '"total": total_enabled'):
+        if fragment not in preflight_source:
+            fail(f"v1.8.6 preflight progress is missing: {fragment}")
+    if 'self._state["progress"]' not in preflight_jobs_source:
+        fail("v1.8.6 preflight job progress state is missing")
+    if "Verifying VPN ${progress.current} / ${progress.total}" not in diagnostics_template:
+        fail("v1.8.6 preflight progress UI is missing")
+
+    backups_source = (ROOT / "app/services/backups.py").read_text(encoding="utf-8")
+    backups_routes = (ROOT / "app/backups.py").read_text(encoding="utf-8")
+    for fragment in ("client_route_overrides", "ClientRouteOverride=None", 'data.setdefault("client_route_overrides", [])'):
+        if fragment not in backups_source:
+            fail(f"v1.8.6 route-override backup support is missing: {fragment}")
+    if "ClientRouteOverride=ClientRouteOverride" not in backups_routes:
+        fail("v1.8.6 backup routes do not pass ClientRouteOverride model")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

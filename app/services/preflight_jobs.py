@@ -30,7 +30,12 @@ class PreflightJobManager:
             "completed_at": None,
             "result": None,
             "error": None,
+            "progress": None,
         }
+
+    def _set_progress(self, progress):
+        with self._lock:
+            self._state["progress"] = dict(progress or {})
 
     def _run(self):
         try:
@@ -43,6 +48,7 @@ class PreflightJobManager:
                     VPNProfile,
                     RoutingGroup,
                     ClientAssignment,
+                    progress_callback=self._set_progress,
                 )
                 self.db.session.remove()
 
@@ -52,6 +58,7 @@ class PreflightJobManager:
                     "completed_at": _iso_now(),
                     "result": result,
                     "error": None,
+                    "progress": {"phase": "complete", "current": 0, "total": 0},
                 })
 
         except Exception as exc:
@@ -81,6 +88,7 @@ class PreflightJobManager:
                 "completed_at": None,
                 "result": None,
                 "error": None,
+                "progress": {"phase": "starting", "current": 0, "total": 0},
             }
 
             self._thread = threading.Thread(

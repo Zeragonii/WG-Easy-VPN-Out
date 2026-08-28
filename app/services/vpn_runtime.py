@@ -660,7 +660,8 @@ class VPNRuntimeService:
 
         uptime = None
         meta = self._read_meta(profile)
-        if alive and meta.get("started_at"):
+        runtime_active = alive or (profile.vpn_type == "wireguard" and exists)
+        if runtime_active and meta.get("started_at"):
             try:
                 dt = datetime.fromisoformat(meta["started_at"].replace("Z", "+00:00"))
                 uptime = max(0, int((datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds()))

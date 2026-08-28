@@ -41,7 +41,7 @@ def _data_root():
     return root
 
 
-def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, include_secret=False, AppSetting=None):
+def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, include_secret=False, AppSetting=None, ClientRouteOverride=None):
     profiles = db.session.execute(
         db.select(VPNProfile).order_by(VPNProfile.id.asc())
     ).scalars().all()
@@ -51,6 +51,11 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
     assignments = db.session.execute(
         db.select(ClientAssignment).order_by(ClientAssignment.id.asc())
     ).scalars().all()
+    overrides = []
+    if ClientRouteOverride is not None:
+        overrides = db.session.execute(
+            db.select(ClientRouteOverride).order_by(ClientRouteOverride.id.asc())
+        ).scalars().all()
 
     app_settings = []
     if AppSetting is not None:
@@ -96,6 +101,15 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
             "created_at": _iso(a.created_at),
             "updated_at": _iso(a.updated_at),
         } for a in assignments],
+        "client_route_overrides": [{
+            "id": o.id,
+            "external_id": o.external_id,
+            "client_name": o.client_name,
+            "ipv4_address": o.ipv4_address,
+            "routing_group_id": o.routing_group_id,
+            "expires_at": _iso(o.expires_at),
+            "created_at": _iso(o.created_at),
+        } for o in overrides],
     }
 
     manifest = {
@@ -110,6 +124,7 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
             "vpn_profiles": len(profiles),
             "routing_groups": len(groups),
             "client_assignments": len(assignments),
+            "client_route_overrides": len(overrides),
             "vpn_config_files": 0,
         },
     }
@@ -178,7 +193,8 @@ def _require_text(value, label, max_length, allow_empty=False):
 
 def _validate_backup_data(data, configs):
     data.setdefault("app_settings", [])
-    for key in ("app_settings", "vpn_profiles", "routing_groups", "client_assignments"):
+    data.setdefault("client_route_overrides", [])
+    for key in ("app_settings", "vpn_profiles", "routing_groups", "client_assignments", "client_route_overrides"):
         rows = data.get(key)
         if not isinstance(rows, list):
             raise BackupError(f"Backup data is missing '{key}'.")
@@ -188,6 +204,7 @@ def _validate_backup_data(data, configs):
     profiles = data["vpn_profiles"]
     groups = data["routing_groups"]
     assignments = data["client_assignments"]
+    overrides = data["client_route_overrides"]
 
     profile_ids = set()
     profile_names = set()
@@ -386,6 +403,35 @@ def _validate_backup_data(data, configs):
         external_ids.add(external_id)
         ipv4_addresses.add(str(parsed_ip))
 
+    override_ids = set()
+    override_external_ids = set()
+    for index, row in enumerate(overrides, 1):
+        if not isinstance(row, dict):
+            raise BackupError(f"Client route override row {index} is invalid.")
+        override_id = _require_int(row.get("id"), f"Client route override {index} ID")
+        external_id = _require_text(row.get("external_id"), f"Client route override {index} external ID", 255)
+        client_name = _require_text(row.get("client_name"), f"Client route override {index} name", 255)
+        ipv4 = _require_text(row.get("ipv4_address"), f"Client route override '{client_name}' IPv4 address", 64)
+        try:
+            ipaddress.IPv4Address(ipv4)
+        except ipaddress.AddressValueError as exc:
+            raise BackupError(f"Client route override '{client_name}' has invalid IPv4 address.") from exc
+        group_id = _require_int(row.get("routing_group_id"), f"Client route override '{client_name}' routing group ID")
+        if group_id not in group_ids:
+            raise BackupError(f"Client route override '{client_name}' references a missing routing group.")
+        expires_at = row.get("expires_at")
+        if expires_at is not None:
+            try:
+                datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            except (TypeError, ValueError) as exc:
+                raise BackupError(f"Client route override '{client_name}' has invalid expiry time.") from exc
+        if override_id in override_ids:
+            raise BackupError("Backup contains duplicate route override IDs.")
+        if external_id in override_external_ids:
+            raise BackupError("Backup contains duplicate route override client IDs.")
+        override_ids.add(override_id)
+        override_external_ids.add(external_id)
+
     unexpected_configs = set(configs) - config_keys
     if unexpected_configs:
         raise BackupError(
@@ -532,6 +578,7 @@ def restore_backup(
     RoutingGroup,
     ClientAssignment,
     AppSetting=None,
+    ClientRouteOverride=None,
 ):
     manifest, data, included_secret, configs = inspect_backup(raw)
     current_secret = os.getenv("SECRET_KEY", "")
@@ -614,6 +661,8 @@ def restore_backup(
                         ))
                     db.session.flush()
 
+            if ClientRouteOverride is not None:
+                db.session.query(ClientRouteOverride).delete()
             db.session.query(ClientAssignment).delete()
             db.session.query(RoutingGroup).delete()
             db.session.query(VPNProfile).delete()
@@ -661,6 +710,24 @@ def restore_backup(
                     routing_group_id=int(row["routing_group_id"]),
                 ))
             db.session.flush()
+
+            if ClientRouteOverride is not None:
+                for row in data.get("client_route_overrides", []):
+                    expires_at = row.get("expires_at")
+                    parsed_expiry = None
+                    if expires_at:
+                        parsed_expiry = datetime.fromisoformat(
+                            str(expires_at).replace("Z", "+00:00")
+                        ).replace(tzinfo=None)
+                    db.session.add(ClientRouteOverride(
+                        id=int(row["id"]),
+                        external_id=row["external_id"].strip(),
+                        client_name=row["client_name"].strip(),
+                        ipv4_address=str(ipaddress.IPv4Address(row["ipv4_address"])),
+                        routing_group_id=int(row["routing_group_id"]),
+                        expires_at=parsed_expiry,
+                    ))
+                db.session.flush()
 
             # Swap in verified staged files.
             for folder in (openvpn_dir, wireguard_dir):
@@ -721,5 +788,6 @@ def restore_backup(
         "profiles": len(data["vpn_profiles"]),
         "groups": len(data["routing_groups"]),
         "assignments": len(data["client_assignments"]),
+        "overrides": len(data.get("client_route_overrides", [])),
         "schema_version": manifest.get("schema_version", 1),
     }

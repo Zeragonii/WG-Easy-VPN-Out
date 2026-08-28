@@ -210,8 +210,18 @@
       const started = job.started_at
         ? new Date(job.started_at).toLocaleTimeString()
         : "just now";
+      const progress = job.progress || {};
+      let progressText = "Running checks";
+      if (progress.phase === "vpn_verification" && progress.total) {
+        progressText = `Verifying VPN ${progress.current} / ${progress.total}`;
+        if (progress.profile_name) progressText += ` · ${progress.profile_name}`;
+      } else if (progress.phase === "system_checks") {
+        progressText = "Running system checks";
+      } else if (progress.phase === "finalizing") {
+        progressText = "Finalizing results";
+      }
       summary.innerHTML =
-        `<span class="status-warn">◐ Running</span> · started ${started}. You may leave this page and return later.`;
+        `<span class="status-warn">◐ Running</span> · ${progressText} · started ${started}. You may leave this page and return later.`;
       return;
     }
 

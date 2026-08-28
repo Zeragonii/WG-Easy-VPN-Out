@@ -93,7 +93,7 @@ def _wait_for_connected(runtime, profile, timeout_seconds):
     )
 
 
-def _verify_enabled_vpn_profiles(app, db, profiles, runtime):
+def _verify_enabled_vpn_profiles(app, db, profiles, runtime, progress_callback=None):
     """
     Functionally verify enabled VPN profiles one at a time.
 
@@ -129,7 +129,17 @@ def _verify_enabled_vpn_profiles(app, db, profiles, runtime):
     started_temporarily = []
     already_connected = []
 
-    for profile in enabled:
+    total_enabled = len(enabled)
+    for index, profile in enumerate(enabled, 1):
+        if progress_callback:
+            progress_callback({
+                "phase": "vpn_verification",
+                "current": index,
+                "total": total_enabled,
+                "profile_id": profile.id,
+                "profile_name": profile.name,
+            })
+
         initial = runtime.status(profile, include_probe=False)
         temporary_start = initial.state != "connected"
 
@@ -217,8 +227,12 @@ def run_preflight(
     VPNProfile,
     RoutingGroup,
     ClientAssignment,
+    progress_callback=None,
 ):
     checks = []
+    if progress_callback:
+        progress_callback({"phase": "system_checks", "current": 0, "total": 0})
+
     data_root = Path(os.getenv("VPN_ROUTER_DATA_DIR", "/data"))
     runtime = VPNRuntimeService()
     engine = RoutingEngine()
@@ -409,6 +423,7 @@ def run_preflight(
         db,
         profiles,
         runtime,
+        progress_callback=progress_callback,
     )
 
     details = []
@@ -484,6 +499,9 @@ def run_preflight(
         "fail": sum(1 for c in checks if c.status == "fail"),
     }
     ready = summary["fail"] == 0
+
+    if progress_callback:
+        progress_callback({"phase": "finalizing", "current": 0, "total": 0})
 
     return {
         "ready": ready,

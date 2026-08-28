@@ -1455,3 +1455,12 @@ block instead of the page content. The live countdown now executes normally and
 updates without a page refresh.
 
 No schema, routing or lifecycle changes.
+
+## v1.8.6
+
+### v1.8 hardening release
+
+WireGuard uptime now reports correctly, asynchronous preflight exposes live VPN verification progress, and backups now preserve active temporary routing overrides with backward-compatible restore support for older archives.
+
+No schema or routing-policy changes.
+

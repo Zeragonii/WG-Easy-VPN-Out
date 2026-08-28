@@ -17,7 +17,7 @@ from flask_login import login_required
 
 from . import db
 from .main import application_version
-from .models import AppSetting, ClientAssignment, RoutingGroup, VPNProfile
+from .models import AppSetting, ClientAssignment, ClientRouteOverride, RoutingGroup, VPNProfile
 from .services.backups import BackupError, export_backup, inspect_backup, restore_backup
 from .services.routing import RoutingEngine, RoutingEngineError
 
@@ -65,6 +65,7 @@ def export():
             application_version(),
             include_secret=include_secret,
             AppSetting=AppSetting,
+            ClientRouteOverride=ClientRouteOverride,
         )
     except BackupError as exc:
         flash(str(exc), "error")
@@ -106,6 +107,7 @@ def inspect():
             "vpn_profiles": len(data["vpn_profiles"]),
             "routing_groups": len(data["routing_groups"]),
             "client_assignments": len(data["client_assignments"]),
+            "client_route_overrides": len(data.get("client_route_overrides", [])),
         },
         "secret": {
             "included": included_secret is not None,
@@ -141,6 +143,7 @@ def restore():
             RoutingGroup,
             ClientAssignment,
             AppSetting=AppSetting,
+            ClientRouteOverride=ClientRouteOverride,
         )
     except BackupError as exc:
         flash(str(exc), "error")
@@ -149,6 +152,14 @@ def restore():
         current_app.logger.exception("Backup restore failed.")
         flash(f"Restore failed safely: {exc}", "error")
         return redirect(url_for("backups.index"))
+
+    override_manager = current_app.extensions.get("temporary_routing_overrides")
+    if override_manager:
+        override_manager.expire_once()
+
+    on_demand = current_app.extensions.get("on_demand_vpn")
+    if on_demand:
+        on_demand.reconcile_once()
 
     try:
         RoutingEngine().rebuild(db, RoutingGroup)
@@ -184,7 +195,8 @@ def restore():
     msg = (
         f"Restore complete: {result['profiles']} VPN profile(s), "
         f"{result['groups']} routing group(s), "
-        f"{result['assignments']} client assignment(s)."
+        f"{result['assignments']} client assignment(s), "
+        f"{result['overrides']} active route override(s)."
     )
 
     if result["included_secret"] and not result["secret_matches"]:

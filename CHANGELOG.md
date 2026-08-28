@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.6
+
+### v1.8 hardening release
+
+- Fixed outbound WireGuard uptime reporting so active `wg-vpn<ID>` interfaces use runtime metadata just like OpenVPN processes.
+- Added live asynchronous preflight progress including current phase, profile name and `current / total` VPN verification progress.
+- Backup exports now include persisted temporary client route overrides.
+- Backup inspection validates override IDs, client IDs, IPv4 addresses, routing-group references and expiry timestamps.
+- Backup restore recreates route overrides, safely defaults older backups to zero overrides, expires already-stale overrides after restore and reconciles On-demand lifecycle before rebuilding routing.
+- Backup inspection/restore summaries now include override counts.
+- No database schema or routing-policy changes.
+
 ## 1.8.5c
 
 ### VPN Clients live countdown template hotfix
