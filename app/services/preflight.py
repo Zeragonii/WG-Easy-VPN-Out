@@ -377,6 +377,52 @@ def run_preflight(
                 or "Unable to verify WG-Easy advertised client DNS.",
             ))
 
+    # Optional targeted WAN hairpin compatibility.
+    try:
+        hairpin = engine.hairpin_state(db)
+    except Exception as exc:
+        checks.append(CheckResult(
+            "wan_hairpin",
+            "Default WAN hairpin compatibility",
+            "warn",
+            f"Could not inspect hairpin compatibility state: {str(exc)[-300:]}",
+        ))
+    else:
+        if not hairpin.get("enabled"):
+            checks.append(CheckResult(
+                "wan_hairpin",
+                "Default WAN hairpin compatibility",
+                "pass",
+                "Hairpin compatibility is disabled by configuration.",
+            ))
+        elif hairpin.get("ready"):
+            checks.append(CheckResult(
+                "wan_hairpin",
+                "Default WAN hairpin compatibility",
+                "pass",
+                (
+                    f"Ready for public IPv4 {hairpin.get('public_ip')} via "
+                    f"{hairpin.get('interface')} "
+                    f"({hairpin.get('source')} detection)."
+                ),
+            ))
+        else:
+            checks.append(CheckResult(
+                "wan_hairpin",
+                "Default WAN hairpin compatibility",
+                "warn",
+                (
+                    "Hairpin compatibility is enabled but no usable public WAN "
+                    "IPv4 could be determined. Set a manual public IPv4 override "
+                    "in Settings if automatic detection is unavailable."
+                    + (
+                        f" Detail: {hairpin.get('error')}"
+                        if hairpin.get("error")
+                        else ""
+                    )
+                ),
+            ))
+
     # Background managers
     services = app.extensions.get("background_services", [])
     stopped = []

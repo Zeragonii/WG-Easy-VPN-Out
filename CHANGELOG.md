@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.9.0b
+
+### Targeted WAN hairpin NAT compatibility
+
+- Added optional WAN hairpin compatibility for WG-Easy clients routed through
+  Default WAN or a VPN group's WAN fallback path.
+- The generated nftables rule masquerades only traffic whose destination is
+  this site's own public IPv4 address.
+- Ordinary Default-WAN traffic retains the original WG client source address.
+- VPN-routed traffic is unchanged.
+- Hairpin compatibility is enabled by default.
+- Public WAN IPv4 can be:
+  - auto-detected through a cached IPv4-only public-IP lookup; or
+  - manually overridden in Settings.
+- Auto-detection is cached for 10 minutes so routing reconciliation does not
+  generate repeated external requests.
+- Settings changes trigger an immediate routing rebuild.
+- Preflight reports hairpin readiness without making it release-blocking.
+- Diagnostics now reports enabled/ready state, public IPv4 source, WAN
+  interface and gateway.
+- No schema change; remains v7.
+
 ## 1.9.0a
 
 ### WG-Easy IPv6 DNS compatibility warning

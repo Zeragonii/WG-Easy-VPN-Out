@@ -215,6 +215,7 @@ def build_diagnostics(
             ])
 
     return {
+        "wan_hairpin": engine.hairpin_state(db),
         "wg_easy_dns": _wg_easy_dns_diagnostic(app, db),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "application_version": version,
@@ -309,6 +310,19 @@ def render_text(data):
         lines.append(
             f"{key}={item.get('value')} (source={item.get('source')})"
         )
+
+    hairpin = data.get("wan_hairpin") or {}
+    lines.extend(["", "Default WAN hairpin compatibility", "-" * 72])
+    lines.append(f"enabled={hairpin.get('enabled')}")
+    lines.append(f"ready={hairpin.get('ready')}")
+    lines.append(
+        f"public_ip={hairpin.get('public_ip') or '<unknown>'} "
+        f"(source={hairpin.get('source') or 'unknown'})"
+    )
+    lines.append(f"interface={hairpin.get('interface') or '<unknown>'}")
+    lines.append(f"gateway={hairpin.get('gateway') or '<none>'}")
+    if hairpin.get("error"):
+        lines.append("error=" + str(hairpin.get("error")))
 
     wg_dns = data.get("wg_easy_dns") or {}
     lines.extend(["", "WG-Easy client DNS", "-" * 72])

@@ -720,6 +720,35 @@ def main():
         if required_fragment not in diagnostics_source:
             fail(f"v1.9.0a DNS diagnostics are missing: {required_fragment}")
 
+    routing_source = (ROOT / "app/services/routing.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "wan_hairpin_enabled",
+        "wan_hairpin_public_ip",
+        "def hairpin_state(",
+        "_WAN_IP_CACHE_TTL = 600.0",
+        "ip daddr {public_ip}",
+        'mode in ("wan", "wan-fallback")',
+    ):
+        if required_fragment not in routing_source:
+            fail(f"v1.9.0b hairpin routing is missing: {required_fragment}")
+
+    settings_source = (ROOT / "app/services/settings.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "WAN_HAIRPIN_ENABLED",
+        "WAN_HAIRPIN_PUBLIC_IP",
+        "ipv4_optional",
+    ):
+        if required_fragment not in settings_source:
+            fail(f"v1.9.0b hairpin setting is missing: {required_fragment}")
+
+    diagnostics_source = (ROOT / "app/services/diagnostics.py").read_text(encoding="utf-8")
+    if "Default WAN hairpin compatibility" not in diagnostics_source:
+        fail("v1.9.0b hairpin diagnostics are missing")
+
+    preflight_source = (ROOT / "app/services/preflight.py").read_text(encoding="utf-8")
+    if "Default WAN hairpin compatibility" not in preflight_source:
+        fail("v1.9.0b hairpin preflight is missing")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

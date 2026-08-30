@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ipaddress
 import os
 
 from .secrets import decrypt_secret, encrypt_secret
@@ -24,6 +25,8 @@ DEFINITIONS = {
         SettingDefinition("wg_easy_password", "WG_EASY_PASSWORD", "", secret=True, label="WG-Easy password", section="WG-Easy"),
         SettingDefinition("wg_easy_verify_tls", "WG_EASY_VERIFY_TLS", "true", "bool", label="Verify TLS certificates", section="WG-Easy"),
         SettingDefinition("routing_reconcile_interval", "ROUTING_RECONCILE_INTERVAL", "3", "float", label="Routing reconciliation interval (seconds)", section="Routing"),
+        SettingDefinition("wan_hairpin_enabled", "WAN_HAIRPIN_ENABLED", "true", "bool", label="Enable WAN hairpin compatibility for routed WG clients", section="Routing"),
+        SettingDefinition("wan_hairpin_public_ip", "WAN_HAIRPIN_PUBLIC_IP", "", "ipv4_optional", label="Public WAN IPv4 override (blank = auto-detect)", section="Routing"),
         SettingDefinition("vpn_retry_check_interval", "VPN_RETRY_CHECK_INTERVAL", "2", "float", label="Retry check interval (seconds)", section="VPN resilience"),
         SettingDefinition("vpn_retry_base_seconds", "VPN_RETRY_BASE_SECONDS", "5", "float", label="Initial retry delay (seconds)", section="VPN resilience"),
         SettingDefinition("vpn_retry_max_seconds", "VPN_RETRY_MAX_SECONDS", "300", "float", label="Maximum retry delay (seconds)", section="VPN resilience"),
@@ -58,6 +61,10 @@ def _coerce(definition, value):
             return int(value)
         if definition.value_type == "float":
             return float(value)
+        if definition.value_type == "ipv4_optional":
+            if not value:
+                return ""
+            return str(ipaddress.IPv4Address(value))
         return value
     except ValueError as exc:
         raise SettingsError(f"{definition.label or definition.key} has an invalid value.") from exc

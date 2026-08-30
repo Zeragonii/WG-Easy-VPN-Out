@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import json
 import ipaddress
 import subprocess
+import threading
+import time
 
 from .vpn_runtime import VPNRuntimeService
 
@@ -22,6 +24,14 @@ class GroupRuntime:
 class RoutingEngine:
     NFT_FAMILY = "inet"
     NFT_TABLE = "vpn_router"
+
+    # Auto-detected public IPv4 is process-cached so the 3-second routing
+    # reconciler never turns into a 3-second external HTTP poller.
+    _WAN_IP_CACHE_TTL = 600.0
+    _wan_ip_cache = None
+    _wan_ip_cache_at = 0.0
+    _wan_ip_cache_error = None
+    _wan_ip_lock = threading.Lock()
 
     def __init__(self):
         self.vpn_runtime = VPNRuntimeService()
@@ -77,6 +87,109 @@ class RoutingEngine:
         if not dev:
             raise RoutingEngineError("Could not determine host WAN interface.")
         return dev, gateway
+
+    @classmethod
+    def _detect_public_wan_ip(cls, force=False):
+        now = time.monotonic()
+        with cls._wan_ip_lock:
+            if (
+                not force
+                and cls._wan_ip_cache
+                and (now - cls._wan_ip_cache_at) < cls._WAN_IP_CACHE_TTL
+            ):
+                return cls._wan_ip_cache, "auto", None
+
+            result = subprocess.run(
+                [
+                    "curl",
+                    "--silent",
+                    "--show-error",
+                    "--fail",
+                    "--max-time",
+                    "5",
+                    "-4",
+                    "https://api.ipify.org",
+                ],
+                text=True,
+                capture_output=True,
+                timeout=7,
+                check=False,
+            )
+            if result.returncode != 0:
+                cls._wan_ip_cache_error = (
+                    result.stderr or result.stdout or "public IPv4 lookup failed"
+                ).strip()[-300:]
+                return None, "auto", cls._wan_ip_cache_error
+
+            candidate = (result.stdout or "").strip()
+            try:
+                parsed = str(ipaddress.IPv4Address(candidate))
+            except ipaddress.AddressValueError:
+                cls._wan_ip_cache_error = (
+                    f"Public IPv4 lookup returned invalid value: {candidate!r}"
+                )
+                return None, "auto", cls._wan_ip_cache_error
+
+            cls._wan_ip_cache = parsed
+            cls._wan_ip_cache_at = now
+            cls._wan_ip_cache_error = None
+            return parsed, "auto", None
+
+    def hairpin_state(self, db, refresh=False):
+        from ..models import AppSetting
+        from .settings import SettingsService
+
+        settings = SettingsService(db, AppSetting)
+        enabled = bool(settings.get("wan_hairpin_enabled"))
+        manual = str(settings.get("wan_hairpin_public_ip") or "").strip()
+        iface = None
+        gateway = None
+
+        try:
+            iface, gateway = self._main_default()
+        except RoutingEngineError as exc:
+            return {
+                "enabled": enabled,
+                "public_ip": manual or None,
+                "source": "manual" if manual else "auto",
+                "interface": None,
+                "gateway": None,
+                "ready": False,
+                "error": str(exc),
+            }
+
+        if not enabled:
+            return {
+                "enabled": False,
+                "public_ip": manual or None,
+                "source": "manual" if manual else "auto",
+                "interface": iface,
+                "gateway": gateway,
+                "ready": False,
+                "error": None,
+            }
+
+        if manual:
+            return {
+                "enabled": True,
+                "public_ip": manual,
+                "source": "manual",
+                "interface": iface,
+                "gateway": gateway,
+                "ready": True,
+                "error": None,
+            }
+
+        public_ip, source, error = self._detect_public_wan_ip(force=refresh)
+        return {
+            "enabled": True,
+            "public_ip": public_ip,
+            "source": source,
+            "interface": iface,
+            "gateway": gateway,
+            "ready": bool(public_ip and iface),
+            "error": error,
+        }
 
     def _connected_routes(self, iface: str):
         result = self._must(["ip", "-j", "-4", "route", "show", "dev", iface])
@@ -219,7 +332,7 @@ class RoutingEngine:
 
         return iface, gateway, "vpn"
 
-    def _nft_script(self, groups, effective_ifaces, assignments_by_group):
+    def _nft_script(self, groups, effective_ifaces, assignments_by_group, hairpin=None):
         lines = [
             f"delete table {self.NFT_FAMILY} {self.NFT_TABLE}",
             f"table {self.NFT_FAMILY} {self.NFT_TABLE} {{",
@@ -304,6 +417,25 @@ class RoutingEngine:
         ])
         for group in groups:
             iface, mode = effective_ifaces.get(group.id, ("", ""))
+
+            # Targeted hairpin compatibility for routed WG clients whose
+            # effective egress is WAN. Only traffic to this site's own public
+            # IPv4 is SNATed; ordinary WAN traffic retains the original
+            # 192.168.3.x client source address.
+            if (
+                hairpin
+                and hairpin.get("ready")
+                and mode in ("wan", "wan-fallback")
+                and iface
+            ):
+                safe_iface = iface.replace('"', "")
+                public_ip = hairpin["public_ip"]
+                lines.append(
+                    f'    ip saddr @group_{group.id}_v4 '
+                    f'ip daddr {public_ip} '
+                    f'oifname "{safe_iface}" masquerade'
+                )
+
             if group.vpn_profile_id and mode == "vpn" and iface:
                 safe_iface = iface.replace('"', "")
                 lines.append(
@@ -371,10 +503,12 @@ class RoutingEngine:
         # nft "delete table" fails if the table does not exist. Remove it
         # separately, ignoring that error, then atomically load a fresh table.
         self._run(["nft", "delete", "table", self.NFT_FAMILY, self.NFT_TABLE])
+        hairpin = self.hairpin_state(db)
         script = self._nft_script(
             groups,
             effective_ifaces,
             assignments_by_group,
+            hairpin=hairpin,
         )
         # Strip the leading delete from the generated transaction because the
         # best-effort delete above has already run.

@@ -1550,3 +1550,34 @@ cannot be discovered safely, the check reports that it could not verify the
 setting rather than guessing.
 
 No schema or routing changes.
+
+## v1.9.0b — WAN hairpin compatibility
+
+Some upstream routers do not perform NAT reflection correctly for a remotely
+routed WG-Easy subnet even though they hairpin ordinary LAN clients. This can
+make a locally hosted service fail only when its public hostname resolves
+directly to the site's own WAN IPv4.
+
+VPN Router can now selectively SNAT only that self-WAN traffic when a client's
+effective route is WAN:
+
+```text
+WG client → VPN Router → own public WAN IPv4
+                         ↓
+              targeted masquerade only
+```
+
+Ordinary Default-WAN Internet traffic still exposes the original WG client
+address to the upstream LAN router, and VPN exit traffic is unchanged.
+
+Settings:
+
+- **Enable WAN hairpin compatibility for routed WG clients** — enabled by
+  default.
+- **Public WAN IPv4 override** — leave blank for cached automatic detection, or
+  configure the public IPv4 explicitly to avoid the lookup.
+
+Automatic detection is cached for 10 minutes. Diagnostics and preflight expose
+the detected/manual public IPv4 and active WAN interface.
+
+Schema remains v7.

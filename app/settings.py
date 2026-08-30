@@ -46,7 +46,18 @@ def index():
             flash(str(exc), "error")
         else:
             _reload_runtime_settings()
-            flash("Settings saved. Runtime services reloaded where applicable.", "success")
+            routing_message = ""
+            try:
+                from .models import RoutingGroup
+                from .services.routing import RoutingEngine
+                RoutingEngine().rebuild(db, RoutingGroup)
+            except Exception as exc:
+                routing_message = f" Routing rebuild warning: {str(exc)[-250:]}"
+            flash(
+                "Settings saved. Runtime services reloaded where applicable."
+                + routing_message,
+                "success" if not routing_message else "warning",
+            )
             return redirect(url_for("settings.index"))
 
     display = {}

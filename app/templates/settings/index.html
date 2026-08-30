@@ -8,6 +8,14 @@
   {% for section, rows in sections.items() %}
   <section class="card" style="margin-bottom:1rem;">
     <h2>{{ section }}</h2>
+    {% if section == "Routing" %}
+      <p class="muted">
+        WAN hairpin compatibility selectively masquerades routed WG client
+        traffic only when it is trying to reach this site's own public IPv4.
+        Leave the public IP override blank to auto-detect it. Ordinary Default
+        WAN traffic keeps the original WG client source address.
+      </p>
+    {% endif %}
     {% for row in rows %}
       {% set d = row.definition %}
       {% if d.value_type == "bool" %}
