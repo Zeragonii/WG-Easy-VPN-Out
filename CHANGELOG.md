@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.9.1
+
+### Logarithmic live throughput gauges
+
+- Added a three-gauge speedometer strip to Traffic visibility:
+  - TX
+  - Total throughput
+  - RX
+- All three gauges stay on one horizontal row; narrow screens scroll the gauge
+  strip rather than stacking the dials.
+- Gauge movement uses a logarithmic mapping so low and moderate throughput
+  remains visually useful while still accommodating multi-gigabit links.
+- Each gauge has its own configurable maximum in Settings, expressed in Mbps,
+  making asymmetric links first-class.
+- The final 10% of each dial is shown as a redline zone.
+- Exceeding a gauge maximum pins the needle at maximum and applies a fast
+  redline wobble. The total gauge additionally displays "ABSOLUTELY SENDING IT".
+- Respects `prefers-reduced-motion`.
+- Uses the existing Traffic visibility snapshot and 1-second page refresh:
+  no new sampler, database schema, routing or network polling was added.
+- Schema remains v7.
+
 ## 1.9.0c
 
 ### VPN Clients location rendering hotfix

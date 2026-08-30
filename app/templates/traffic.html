@@ -18,6 +18,152 @@
   <div id="traffic-error-text" style="margin-top:.35rem;">{{ traffic.error or "" }}</div>
 </div>
 
+<style>
+  .traffic-gauge-card {
+    margin-top: 1rem;
+    overflow-x: auto;
+  }
+  .traffic-gauge-strip {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) minmax(290px, 1.18fr) minmax(240px, 1fr);
+    gap: 1rem;
+    min-width: 820px;
+    align-items: end;
+  }
+  .traffic-gauge {
+    text-align: center;
+    min-width: 0;
+  }
+  .traffic-gauge.total {
+    transform: translateY(-3px);
+  }
+  .traffic-gauge-title {
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    margin-bottom: .1rem;
+  }
+  .traffic-gauge svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 210px;
+    overflow: visible;
+  }
+  .gauge-track {
+    fill: none;
+    stroke: currentColor;
+    stroke-opacity: .18;
+    stroke-width: 12;
+    stroke-linecap: round;
+  }
+  .gauge-redline {
+    fill: none;
+    stroke: #dc3545;
+    stroke-width: 12;
+    stroke-linecap: round;
+    opacity: .82;
+  }
+  .gauge-tick {
+    stroke: currentColor;
+    stroke-opacity: .55;
+    stroke-width: 2;
+  }
+  .gauge-tick.major {
+    stroke-width: 3;
+    stroke-opacity: .8;
+  }
+  .gauge-label {
+    fill: currentColor;
+    opacity: .72;
+    font-size: 11px;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  .gauge-needle-group {
+    transform-origin: 150px 142px;
+    transition: transform .36s cubic-bezier(.2,.78,.22,1);
+  }
+  .gauge-needle {
+    stroke: currentColor;
+    stroke-width: 4;
+    stroke-linecap: round;
+  }
+  .gauge-hub {
+    fill: currentColor;
+  }
+  .traffic-gauge.over-limit .gauge-needle-group {
+    animation: traffic-redline-wobble .085s ease-in-out infinite alternate;
+  }
+  .traffic-gauge.over-limit .gauge-value,
+  .traffic-gauge.over-limit .gauge-over {
+    color: #dc3545;
+  }
+  .gauge-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin-top: -.5rem;
+  }
+  .traffic-gauge.total .gauge-value {
+    font-size: 1.55rem;
+  }
+  .gauge-meta {
+    font-size: .8rem;
+    margin-top: .15rem;
+  }
+  .gauge-over {
+    display: none;
+    font-weight: 800;
+    font-size: .72rem;
+    letter-spacing: .12em;
+    margin-top: .2rem;
+  }
+  .traffic-gauge.over-limit .gauge-over {
+    display: block;
+  }
+  @keyframes traffic-redline-wobble {
+    from { transform: rotate(var(--needle-angle)) translateX(-1.5px); }
+    to   { transform: rotate(var(--needle-angle)) translateX(1.5px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gauge-needle-group { transition: none; }
+    .traffic-gauge.over-limit .gauge-needle-group { animation: none; }
+  }
+</style>
+
+<section class="card traffic-gauge-card">
+  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:baseline;margin-bottom:.35rem;">
+    <div>
+      <h2 style="margin:0;">Live throughput</h2>
+      <div class="muted" style="font-size:.82rem;">Logarithmic gauges · independent configurable redlines</div>
+    </div>
+    <div class="muted" style="font-size:.78rem;">For teh lulz™</div>
+  </div>
+  <div class="traffic-gauge-strip">
+    <div class="traffic-gauge" id="traffic-gauge-tx">
+      <div class="traffic-gauge-title">TX</div>
+      <svg viewBox="0 0 300 190" aria-label="TX throughput gauge"></svg>
+      <div class="gauge-value" data-role="value">0 bps</div>
+      <div class="gauge-meta muted" data-role="max"></div>
+      <div class="gauge-over">REDLINE</div>
+    </div>
+    <div class="traffic-gauge total" id="traffic-gauge-total">
+      <div class="traffic-gauge-title">Total throughput</div>
+      <svg viewBox="0 0 300 190" aria-label="Total throughput gauge"></svg>
+      <div class="gauge-value" data-role="value">0 bps</div>
+      <div class="gauge-meta muted" data-role="max"></div>
+      <div class="gauge-over">ABSOLUTELY SENDING IT</div>
+    </div>
+    <div class="traffic-gauge" id="traffic-gauge-rx">
+      <div class="traffic-gauge-title">RX</div>
+      <svg viewBox="0 0 300 190" aria-label="RX throughput gauge"></svg>
+      <div class="gauge-value" data-role="value">0 bps</div>
+      <div class="gauge-meta muted" data-role="max"></div>
+      <div class="gauge-over">REDLINE</div>
+    </div>
+  </div>
+</section>
+
 <div class="grid">
   <section class="card">
     <h2>WG clients</h2>
@@ -110,6 +256,111 @@
   // in-memory traffic snapshot, so it can update much more frequently.
   const POLL_MS = 1000;
   const apiUrl = "{{ url_for('traffic.api') }}";
+  const GAUGE_CONFIG = {{ traffic_gauges | tojson }};
+  const GAUGE_START_DEG = -120;
+  const GAUGE_SWEEP_DEG = 240;
+
+  function rateMbps(bytesPerSecond) {
+    return Math.max(0, Number(bytesPerSecond || 0) * 8 / 1000000);
+  }
+
+  function formatBitsPerSecond(bytesPerSecond) {
+    const bps = Math.max(0, Number(bytesPerSecond || 0) * 8);
+    if (bps >= 1e9) return `${(bps / 1e9).toFixed(bps >= 10e9 ? 1 : 2)} Gbps`;
+    if (bps >= 1e6) return `${(bps / 1e6).toFixed(bps >= 100e6 ? 0 : 1)} Mbps`;
+    if (bps >= 1e3) return `${(bps / 1e3).toFixed(bps >= 100e3 ? 0 : 1)} Kbps`;
+    return `${Math.round(bps)} bps`;
+  }
+
+  function formatMbpsLabel(mbps) {
+    if (mbps >= 1000) {
+      const gbps = mbps / 1000;
+      return `${Number(gbps.toFixed(gbps >= 10 ? 0 : 1))}G`;
+    }
+    if (mbps >= 1) return `${Number(mbps.toFixed(mbps >= 100 ? 0 : 1))}M`;
+    return `${Math.round(mbps * 1000)}K`;
+  }
+
+  // log1p-style mapping keeps zero valid while making each additional order
+  // of magnitude consume progressively less dial travel.
+  function gaugeRatio(mbps, maxMbps) {
+    if (mbps <= 0 || maxMbps <= 0) return 0;
+    return Math.log10(1 + mbps) / Math.log10(1 + maxMbps);
+  }
+
+  function polar(cx, cy, radius, degrees) {
+    const radians = (degrees - 90) * Math.PI / 180;
+    return {
+      x: cx + radius * Math.cos(radians),
+      y: cy + radius * Math.sin(radians)
+    };
+  }
+
+  function arcPath(cx, cy, radius, startDeg, endDeg) {
+    const start = polar(cx, cy, radius, endDeg);
+    const end = polar(cx, cy, radius, startDeg);
+    const largeArc = endDeg - startDeg <= 180 ? 0 : 1;
+    return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y}`;
+  }
+
+  function createGauge(rootId, maxMbps) {
+    const root = document.getElementById(rootId);
+    const svg = root.querySelector("svg");
+    const cx = 150, cy = 142, radius = 105;
+
+    svg.innerHTML = `
+      <path class="gauge-track" d="${arcPath(cx, cy, radius, GAUGE_START_DEG, GAUGE_START_DEG + GAUGE_SWEEP_DEG)}"></path>
+      <path class="gauge-redline" d="${arcPath(cx, cy, radius, GAUGE_START_DEG + GAUGE_SWEEP_DEG * .90, GAUGE_START_DEG + GAUGE_SWEEP_DEG)}"></path>
+      <g data-role="ticks"></g>
+      <g class="gauge-needle-group" data-role="needle">
+        <line class="gauge-needle" x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 83}"></line>
+        <circle class="gauge-hub" cx="${cx}" cy="${cy}" r="8"></circle>
+      </g>
+    `;
+
+    const ticks = svg.querySelector('[data-role="ticks"]');
+    // Tick positions themselves are logarithmic. This creates intuitive labels
+    // whether the ceiling is 100 Mbps, 1 Gbps, 2.5 Gbps or 10+ Gbps.
+    const fractions = [0, .2, .4, .6, .8, 1];
+    fractions.forEach((fraction, index) => {
+      const angle = GAUGE_START_DEG + GAUGE_SWEEP_DEG * fraction;
+      const outer = polar(cx, cy, radius - 1, angle);
+      const inner = polar(cx, cy, radius - (index === 0 || index === fractions.length - 1 ? 17 : 12), angle);
+      const labelPoint = polar(cx, cy, radius - 31, angle);
+      const value = Math.pow(1 + maxMbps, fraction) - 1;
+
+      ticks.insertAdjacentHTML("beforeend", `
+        <line class="gauge-tick ${index === 0 || index === fractions.length - 1 ? "major" : ""}"
+              x1="${inner.x}" y1="${inner.y}" x2="${outer.x}" y2="${outer.y}"></line>
+        <text class="gauge-label" x="${labelPoint.x}" y="${labelPoint.y}">${formatMbpsLabel(value)}</text>
+      `);
+    });
+
+    root.querySelector('[data-role="max"]').textContent =
+      `Gauge max ${maxMbps >= 1000 ? `${Number((maxMbps / 1000).toFixed(2))} Gbps` : `${Number(maxMbps.toFixed(1))} Mbps`}`;
+
+    return { root, needle: svg.querySelector('[data-role="needle"]'), maxMbps };
+  }
+
+  const gauges = {
+    tx: createGauge("traffic-gauge-tx", Number(GAUGE_CONFIG.tx_max_mbps)),
+    total: createGauge("traffic-gauge-total", Number(GAUGE_CONFIG.total_max_mbps)),
+    rx: createGauge("traffic-gauge-rx", Number(GAUGE_CONFIG.rx_max_mbps))
+  };
+
+  function updateGauge(gauge, bytesPerSecond) {
+    const mbps = rateMbps(bytesPerSecond);
+    const ratio = gaugeRatio(mbps, gauge.maxMbps);
+    const clamped = Math.min(1, Math.max(0, ratio));
+    const angle = GAUGE_START_DEG + clamped * GAUGE_SWEEP_DEG;
+    const over = mbps > gauge.maxMbps;
+
+    gauge.root.classList.toggle("over-limit", over);
+    gauge.needle.style.setProperty("--needle-angle", `${angle}deg`);
+    gauge.needle.style.transform = `rotate(${angle}deg)`;
+    gauge.root.querySelector('[data-role="value"]').textContent =
+      formatBitsPerSecond(bytesPerSecond);
+  }
 
   function esc(value) {
     return String(value ?? "")
@@ -141,6 +392,14 @@
     document.getElementById("traffic-tx-rate").textContent = totals.tx_rate_display || "—";
     document.getElementById("traffic-rx-total").textContent = totals.rx_total_display || "—";
     document.getElementById("traffic-tx-total").textContent = totals.tx_total_display || "—";
+
+    updateGauge(gauges.tx, totals.tx_rate || 0);
+    updateGauge(gauges.rx, totals.rx_rate || 0);
+    updateGauge(
+      gauges.total,
+      Number(totals.rx_rate || 0) + Number(totals.tx_rate || 0)
+    );
+
     document.getElementById("traffic-sampled-at").textContent =
       snapshot.sampled_at ? `Sampled ${new Date(snapshot.sampled_at).toLocaleTimeString()}` : "Waiting for sample…";
 

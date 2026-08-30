@@ -1589,3 +1589,22 @@ profile intelligence rows. The controller now always supplies normalized
 location metadata and the template handles partial data defensively.
 
 No schema or routing changes.
+
+## v1.9.1 — Logarithmic throughput gauges
+
+Traffic visibility now includes three live speedometer-style gauges on one
+horizontal row:
+
+**TX | Total throughput | RX**
+
+The needles use a logarithmic mapping, allowing the same dial to remain useful
+from light traffic into multi-gigabit throughput. TX, total and RX each have an
+independent configurable maximum under **Settings → Traffic visibility**, so
+asymmetric connections can use realistic scales.
+
+The last 10% of each dial is the redline. If live throughput exceeds its
+configured gauge maximum, the needle pins at the stop and wobbles at redline.
+The center Total gauge celebrates appropriately.
+
+The gauges consume the existing in-memory traffic snapshot; they add no new
+network probes or backend sampling load. Schema remains v7.

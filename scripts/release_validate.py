@@ -762,6 +762,42 @@ def main():
         if required_fragment not in vpn_index:
             fail(f"v1.9.0c defensive location rendering is missing: {required_fragment}")
 
+    traffic_routes = (ROOT / "app/traffic.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _gauge_config()",
+        "traffic_gauge_tx_max_mbps",
+        "traffic_gauge_total_max_mbps",
+        "traffic_gauge_rx_max_mbps",
+        "traffic_gauges=_gauge_config()",
+    ):
+        if required_fragment not in traffic_routes:
+            fail(f"v1.9.1 traffic gauge route/config is missing: {required_fragment}")
+
+    traffic_template = (ROOT / "app/templates/traffic.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "traffic-gauge-tx",
+        "traffic-gauge-total",
+        "traffic-gauge-rx",
+        "function gaugeRatio",
+        "Math.log10(1 + mbps)",
+        "traffic-redline-wobble",
+        "ABSOLUTELY SENDING IT",
+        "prefers-reduced-motion",
+        "Number(totals.rx_rate || 0) + Number(totals.tx_rate || 0)",
+    ):
+        if required_fragment not in traffic_template:
+            fail(f"v1.9.1 traffic gauge UI is missing: {required_fragment}")
+
+    settings_source = (ROOT / "app/services/settings.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "TRAFFIC_GAUGE_TX_MAX_MBPS",
+        "TRAFFIC_GAUGE_TOTAL_MAX_MBPS",
+        "TRAFFIC_GAUGE_RX_MAX_MBPS",
+        'section="Traffic visibility"',
+    ):
+        if required_fragment not in settings_source:
+            fail(f"v1.9.1 traffic gauge setting is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")
