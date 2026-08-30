@@ -1608,3 +1608,11 @@ The center Total gauge celebrates appropriately.
 
 The gauges consume the existing in-memory traffic snapshot; they add no new
 network probes or backend sampling load. Schema remains v7.
+
+## v1.9.1a — Traffic gauge spacing hotfix
+
+Corrects the vertical spacing between the live throughput gauge card and the
+summary cards beneath it so the Traffic page follows the same card rhythm as
+the rest of the interface.
+
+No functional, routing, sampling or schema changes.

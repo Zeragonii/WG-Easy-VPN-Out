@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.1a
+
+### Traffic gauge spacing hotfix
+
+- Fixed inconsistent vertical spacing between the live throughput gauge card
+  and the summary cards below it.
+- Gauge layout, logarithmic scaling, redline animation, settings and traffic
+  sampling are unchanged.
+- Purely cosmetic hotfix; schema remains v7.
+
 ## 1.9.1
 
 ### Logarithmic live throughput gauges

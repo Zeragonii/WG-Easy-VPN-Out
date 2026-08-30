@@ -798,6 +798,10 @@ def main():
         if required_fragment not in settings_source:
             fail(f"v1.9.1 traffic gauge setting is missing: {required_fragment}")
 
+    traffic_template = (ROOT / "app/templates/traffic.html").read_text(encoding="utf-8")
+    if "margin-bottom: 1rem;" not in traffic_template:
+        fail("v1.9.1a traffic gauge spacing hotfix is missing")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")
