@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.9.0
+
+### Local VPN location intelligence
+
+- Added structured VPN location intelligence with country, region/state and
+  optional city.
+- Added local MaxMind-compatible MMDB lookup using `maxminddb`; no per-profile
+  geolocation web API calls are required.
+- Supported default database locations:
+  - `/data/geoip/GeoLite2-City.mmdb`
+  - `/data/geoip/GeoIP2-City.mmdb`
+  - `/data/geoip/GeoLite2-Country.mmdb`
+  - `/data/geoip/GeoIP2-Country.mmdb`
+- Added optional `VPN_ROUTER_GEOIP_DB` path override.
+- Location precedence:
+  - manual override
+  - verified exit-IP GeoIP
+  - VPN endpoint-IP GeoIP
+  - existing provider/config region hint
+  - unknown
+- Automatic and manual values are stored separately so user corrections do not
+  destroy detected evidence.
+- Successful observability/preflight exit-IP probes enrich profile location.
+- Literal endpoint IPs are enriched on creation/startup when a local database
+  is available.
+- VPN Clients now includes a Location column with provenance.
+- Profile detail shows effective location, automatic detection and source.
+- Add/Edit VPN Client supports manual Country, Region/State and City overrides.
+- Backup/restore now preserves all location metadata.
+- Schema advances to v7.
 ## 1.8.8
 
 ### Optional automatic routing-group creation

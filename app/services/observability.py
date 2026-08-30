@@ -409,6 +409,27 @@ class ObservabilityService:
                         last_checked=_iso_now(),
                         error=None,
                     )
+                    geoip = self.app.extensions.get("geoip")
+                    if geoip and geoip.available():
+                        try:
+                            from .geoip import apply_detected_location
+                            changed = apply_detected_location(
+                                self.db,
+                                profile,
+                                geoip,
+                                exit_ip,
+                                "exit_geoip",
+                            )
+                            if changed:
+                                self.db.session.commit()
+                        except Exception as exc:
+                            self.db.session.rollback()
+                            self.app.logger.warning(
+                                "GeoIP enrichment failed for profile %s (%s): %s",
+                                profile.id,
+                                profile.name,
+                                exc,
+                            )
                 else:
                     self._set_exit_state(
                         profile.id,

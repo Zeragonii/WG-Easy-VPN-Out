@@ -28,11 +28,56 @@ class VPNProfile(db.Model):
     password = db.Column(db.String(255), nullable=True)
     enabled = db.Column(db.Boolean, nullable=False, default=False)
     connection_policy = db.Column(db.String(16), nullable=False, default="always")
+    detected_country_code = db.Column(db.String(8), nullable=True)
+    detected_country_name = db.Column(db.String(120), nullable=True)
+    detected_region = db.Column(db.String(120), nullable=True)
+    detected_city = db.Column(db.String(120), nullable=True)
+    detected_location_source = db.Column(db.String(32), nullable=True)
+    detected_location_ip = db.Column(db.String(64), nullable=True)
+    manual_country = db.Column(db.String(120), nullable=True)
+    manual_region = db.Column(db.String(120), nullable=True)
+    manual_city = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
     @property
     def type_label(self):
         return "OpenVPN" if self.vpn_type == "openvpn" else "WireGuard"
+
+
+    @property
+    def has_manual_location(self):
+        return bool(self.manual_country or self.manual_region or self.manual_city)
+
+    @property
+    def effective_country(self):
+        return self.manual_country or self.detected_country_name
+
+    @property
+    def effective_region(self):
+        return self.manual_region or self.detected_region
+
+    @property
+    def effective_city(self):
+        return self.manual_city or self.detected_city
+
+    @property
+    def effective_location_source(self):
+        if self.has_manual_location:
+            return "manual"
+        return self.detected_location_source
+
+    @property
+    def location_label(self):
+        parts = [
+            value
+            for value in (
+                self.effective_country,
+                self.effective_region,
+                self.effective_city,
+            )
+            if value
+        ]
+        return " · ".join(parts) if parts else "Unknown"
 
 
 class RoutingGroup(db.Model):

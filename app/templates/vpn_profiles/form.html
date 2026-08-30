@@ -119,6 +119,41 @@
     authentication is taken from the imported config.
   </p>
 
+  <fieldset style="border:0;padding:0;margin:1rem 0;">
+    <legend><strong>Location override</strong></legend>
+    <p class="muted">
+      Optional. Manual values override automatic local GeoIP/config detection
+      without deleting the detected location.
+    </p>
+    <label>
+      Country
+      <input
+        name="manual_country"
+        maxlength="120"
+        placeholder="e.g. Canada"
+        value="{{ supplied.manual_country if supplied and supplied.manual_country is defined else (profile.manual_country if profile and profile.manual_country else '') }}"
+      >
+    </label>
+    <label>
+      Region / state
+      <input
+        name="manual_region"
+        maxlength="120"
+        placeholder="e.g. Ontario"
+        value="{{ supplied.manual_region if supplied and supplied.manual_region is defined else (profile.manual_region if profile and profile.manual_region else '') }}"
+      >
+    </label>
+    <label>
+      City
+      <input
+        name="manual_city"
+        maxlength="120"
+        placeholder="Optional"
+        value="{{ supplied.manual_city if supplied and supplied.manual_city is defined else (profile.manual_city if profile and profile.manual_city else '') }}"
+      >
+    </label>
+  </fieldset>
+
   <label>
     Username
     <input

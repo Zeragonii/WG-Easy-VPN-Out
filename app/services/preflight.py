@@ -196,6 +196,21 @@ def _verify_enabled_vpn_profiles(app, db, profiles, runtime, progress_callback=N
 
             verified.append(f"{profile.name} → {exit_ip}")
 
+            geoip = app.extensions.get("geoip")
+            if geoip and geoip.available():
+                try:
+                    from .geoip import apply_detected_location
+                    if apply_detected_location(
+                        db,
+                        profile,
+                        geoip,
+                        exit_ip,
+                        "exit_geoip",
+                    ):
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
         except Exception as exc:
             failures.append(f"{profile.name}: {str(exc)[-400:]}")
 

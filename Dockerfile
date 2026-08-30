@@ -27,7 +27,7 @@ COPY VERSION /app/VERSION
 COPY entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \
-    && mkdir -p /data/openvpn /data/wireguard /data/backups
+    && mkdir -p /data/openvpn /data/wireguard /data/backups /data/geoip
 
 VOLUME ["/data"]
 

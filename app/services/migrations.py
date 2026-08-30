@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 
 
 class MigrationError(RuntimeError):
@@ -172,6 +172,31 @@ def _migration_6_temporary_routing_overrides(connection):
     """)
 
 
+def _migration_7_profile_location_intelligence(connection):
+    columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(vpn_profiles)"
+        ).fetchall()
+    }
+    additions = (
+        ("detected_country_code", "VARCHAR(8)"),
+        ("detected_country_name", "VARCHAR(120)"),
+        ("detected_region", "VARCHAR(120)"),
+        ("detected_city", "VARCHAR(120)"),
+        ("detected_location_source", "VARCHAR(32)"),
+        ("detected_location_ip", "VARCHAR(64)"),
+        ("manual_country", "VARCHAR(120)"),
+        ("manual_region", "VARCHAR(120)"),
+        ("manual_city", "VARCHAR(120)"),
+    )
+    for name, sql_type in additions:
+        if name not in columns:
+            connection.execute(
+                f"ALTER TABLE vpn_profiles ADD COLUMN {name} {sql_type}"
+            )
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
@@ -179,6 +204,7 @@ MIGRATIONS = (
     Migration(4, "routing-group-dns-policy", _migration_4_dns_policy),
     Migration(5, "vpn-connection-policy", _migration_5_connection_policy),
     Migration(6, "temporary-routing-overrides", _migration_6_temporary_routing_overrides),
+    Migration(7, "vpn-profile-location-intelligence", _migration_7_profile_location_intelligence),
 )
 
 

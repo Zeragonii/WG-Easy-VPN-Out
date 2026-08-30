@@ -77,7 +77,39 @@
   </div>
   <div><div class="muted">Endpoint</div><code>{{ intelligence.endpoint }}</code></div>
   <div><div class="muted">Protocol / transport</div><strong>{{ intelligence.raw.protocol or profile.type_label }}</strong>{% if intelligence.raw.transport %} · {{ intelligence.raw.transport }}{% endif %}</div>
-  <div><div class="muted">Region hint</div><strong>{{ intelligence.raw.region_hint or "—" }}</strong></div>
+  <div>
+    <div class="muted">Effective location</div>
+    <strong>
+      {% if intelligence.location.country %}{{ intelligence.location.country }}{% else %}—{% endif %}
+      {% if intelligence.location.region %} · {{ intelligence.location.region }}{% endif %}
+      {% if intelligence.location.city %} · {{ intelligence.location.city }}{% endif %}
+    </strong>
+    <div class="muted">
+      Source:
+      {% if intelligence.location.source == "manual" %}Manual override
+      {% elif intelligence.location.source == "exit_geoip" %}Verified exit IP · local GeoIP
+      {% elif intelligence.location.source == "endpoint_geoip" %}VPN endpoint IP · local GeoIP
+      {% elif intelligence.location.source == "config_hint" %}Provider/config hint
+      {% else %}Unknown{% endif %}
+    </div>
+  </div>
+  <div>
+    <div class="muted">Automatic detection</div>
+    <strong>
+      {{ profile.detected_country_name or "—" }}
+      {% if profile.detected_region %} · {{ profile.detected_region }}{% endif %}
+      {% if profile.detected_city %} · {{ profile.detected_city }}{% endif %}
+    </strong>
+    {% if profile.detected_location_ip %}
+      <div class="muted">
+        {{ profile.detected_location_source or "detected" }} ·
+        <code>{{ profile.detected_location_ip }}</code>
+      </div>
+    {% elif not intelligence.geoip_status.available %}
+      <div class="muted">Local GeoIP database not configured.</div>
+    {% endif %}
+  </div>
+  <div><div class="muted">Config region hint</div><strong>{{ intelligence.raw.region_hint or "—" }}</strong></div>
   <div><div class="muted">Authentication</div><strong>{{ intelligence.raw.auth_mode or "—" }}</strong></div>
   <div><div class="muted">TLS mode</div><strong>{{ intelligence.raw.tls_mode or "—" }}</strong></div>
   <div><div class="muted">Cipher declaration</div><code>{{ intelligence.raw.cipher or "—" }}</code></div>

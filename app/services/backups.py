@@ -77,6 +77,15 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
             "password": p.password,
             "enabled": bool(p.enabled),
             "connection_policy": p.connection_policy,
+            "detected_country_code": p.detected_country_code,
+            "detected_country_name": p.detected_country_name,
+            "detected_region": p.detected_region,
+            "detected_city": p.detected_city,
+            "detected_location_source": p.detected_location_source,
+            "detected_location_ip": p.detected_location_ip,
+            "manual_country": p.manual_country,
+            "manual_region": p.manual_region,
+            "manual_city": p.manual_city,
             "created_at": _iso(p.created_at),
             "updated_at": _iso(p.updated_at),
         } for p in profiles],
@@ -261,6 +270,26 @@ def _validate_backup_data(data, configs):
             raise BackupError(
                 f"VPN profile '{name}' has invalid connection policy."
             )
+
+        for field, limit in (
+            ("detected_country_code", 8),
+            ("detected_country_name", 120),
+            ("detected_region", 120),
+            ("detected_city", 120),
+            ("detected_location_source", 32),
+            ("detected_location_ip", 64),
+            ("manual_country", 120),
+            ("manual_region", 120),
+            ("manual_city", 120),
+        ):
+            value = row.get(field)
+            if value is not None:
+                _require_text(
+                    value,
+                    f"VPN profile '{name}' {field}",
+                    limit,
+                    True,
+                )
 
         folded = name.casefold()
         if profile_id in profile_ids:
@@ -679,6 +708,15 @@ def restore_backup(
                     password=row.get("password"),
                     enabled=bool(row.get("enabled")),
                     connection_policy=row.get("connection_policy", "always"),
+                    detected_country_code=row.get("detected_country_code"),
+                    detected_country_name=row.get("detected_country_name"),
+                    detected_region=row.get("detected_region"),
+                    detected_city=row.get("detected_city"),
+                    detected_location_source=row.get("detected_location_source"),
+                    detected_location_ip=row.get("detected_location_ip"),
+                    manual_country=row.get("manual_country"),
+                    manual_region=row.get("manual_region"),
+                    manual_city=row.get("manual_city"),
                 ))
             db.session.flush()
 

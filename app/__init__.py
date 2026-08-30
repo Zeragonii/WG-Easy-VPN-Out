@@ -94,11 +94,45 @@ def create_app():
 
         _bootstrap_or_prepare_setup(app, settings)
 
+        from .services.geoip import GeoIPService
+        geoip = GeoIPService()
+        app.extensions["geoip"] = geoip
+        if geoip.available():
+            app.logger.info("Local GeoIP database ready: %s", geoip.status().get("path"))
+        else:
+            app.logger.info(
+                "Local GeoIP database not configured; location enrichment remains optional."
+            )
+
         from .services.secrets import migrate_legacy_profile_passwords
 
         migrated = migrate_legacy_profile_passwords(db, VPNProfile)
         if migrated:
             app.logger.info("Encrypted %s legacy VPN password(s).", migrated)
+
+        if geoip.available():
+            from .services.profile_intelligence import inspect_profile
+            from .services.geoip import apply_detected_location
+            for profile in db.session.execute(
+                db.select(VPNProfile).order_by(VPNProfile.id.asc())
+            ).scalars().all():
+                try:
+                    folder = "openvpn" if profile.vpn_type == "openvpn" else "wireguard"
+                    content = (
+                        data_dir / folder / profile.config_filename
+                    ).read_text(encoding="utf-8", errors="replace")
+                    intelligence = inspect_profile(profile, content)
+                    if intelligence.endpoint_is_ip and intelligence.endpoint_host:
+                        apply_detected_location(
+                            db,
+                            profile,
+                            geoip,
+                            intelligence.endpoint_host,
+                            "endpoint_geoip",
+                        )
+                except OSError:
+                    continue
+            db.session.commit()
 
     from .models import ClientAssignment, RoutingGroup, VPNProfile
     from .services.vpn_startup import restore_enabled_profiles

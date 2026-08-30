@@ -249,8 +249,8 @@ def main():
             fail(f"Final v1.5 hardening is missing: {required_fragment}")
 
     migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
-    if "CURRENT_SCHEMA_VERSION = 6" not in migrations_source:
-        fail("v1.6.0 requires schema v6")
+    if "CURRENT_SCHEMA_VERSION = 7" not in migrations_source:
+        fail("v1.9.0 requires schema v7")
     if "temporary-routing-overrides" not in migrations_source:
         fail("v1.6.0 temporary override migration is missing")
 
@@ -651,6 +651,46 @@ def main():
     ):
         if required_fragment not in vpn_form:
             fail(f"v1.8.8 routing-group form option is missing: {required_fragment}")
+
+    migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
+    if "CURRENT_SCHEMA_VERSION = 7" not in migrations_source:
+        fail("v1.9.0 schema version is not v7")
+    if "vpn-profile-location-intelligence" not in migrations_source:
+        fail("v1.9.0 location migration is missing")
+
+    geoip_source = (ROOT / "app/services/geoip.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "class GeoIPService",
+        "endpoint_geoip",
+        "exit_geoip",
+        "def effective_location",
+        "VPN_ROUTER_GEOIP_DB",
+    ):
+        if required_fragment not in geoip_source:
+            fail(f"v1.9.0 local GeoIP service is missing: {required_fragment}")
+
+    vpn_form = (ROOT / "app/templates/vpn_profiles/form.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'name="manual_country"',
+        'name="manual_region"',
+        'name="manual_city"',
+        "Location override",
+    ):
+        if required_fragment not in vpn_form:
+            fail(f"v1.9.0 manual location UI is missing: {required_fragment}")
+
+    vpn_detail = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Effective location",
+        "Automatic detection",
+        "Verified exit IP · local GeoIP",
+    ):
+        if required_fragment not in vpn_detail:
+            fail(f"v1.9.0 location detail UI is missing: {required_fragment}")
+
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    if "maxminddb==3.1.1" not in requirements:
+        fail("v1.9.0 maxminddb dependency is missing")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:

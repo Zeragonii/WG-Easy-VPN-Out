@@ -218,6 +218,9 @@ def new():
         "provider_choice": request.form.get("provider_choice", ""),
         "provider_new": request.form.get("provider_new", ""),
         "connection_policy": request.form.get("connection_policy", "on_demand"),
+        "manual_country": request.form.get("manual_country", ""),
+        "manual_region": request.form.get("manual_region", ""),
+        "manual_city": request.form.get("manual_city", ""),
         "create_routing_group": (
             request.form.get("create_routing_group", "1")
             if request.method == "POST"
@@ -283,6 +286,9 @@ def new():
             password=encrypt_secret(request.form.get("password", "") or None),
             enabled=False,
             connection_policy=policy,
+            manual_country=supplied["manual_country"].strip() or None,
+            manual_region=supplied["manual_region"].strip() or None,
+            manual_city=supplied["manual_city"].strip() or None,
         )
 
         try:
@@ -294,6 +300,28 @@ def new():
             path.unlink(missing_ok=True)
             flash("A VPN profile with that friendly name already exists.", "error")
             return render_new()
+
+        geoip = current_app.extensions.get("geoip")
+        if geoip and geoip.available():
+            try:
+                from .services.geoip import apply_detected_location
+                meta = inspect_profile(profile, content)
+                if meta.endpoint_is_ip and meta.endpoint_host:
+                    if apply_detected_location(
+                        db,
+                        profile,
+                        geoip,
+                        meta.endpoint_host,
+                        "endpoint_geoip",
+                    ):
+                        db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                current_app.logger.warning(
+                    "Initial GeoIP enrichment failed for profile %s: %s",
+                    profile.id,
+                    exc,
+                )
 
         routing_group_created = False
         if supplied["create_routing_group"] == "1":
@@ -384,10 +412,20 @@ def detail(profile_id):
         intelligence_raw = inspect_profile(profile, _read_config(profile))
     except OSError:
         intelligence_raw = inspect_profile(profile, "")
+    from .services.geoip import effective_location
     intelligence = {
         "raw": intelligence_raw,
         "provider": display_provider(profile, intelligence_raw),
         "endpoint": endpoint_label(intelligence_raw),
+        "location": effective_location(
+            profile,
+            intelligence_raw.region_hint,
+        ),
+        "geoip_status": (
+            current_app.extensions.get("geoip").status()
+            if current_app.extensions.get("geoip")
+            else {"available": False, "path": None, "error": None}
+        ),
     }
     return render_template(
         "vpn_profiles/detail.html",
@@ -550,6 +588,9 @@ def edit(profile_id):
                 "connection_policy",
                 profile.connection_policy,
             ),
+            "manual_country": request.form.get("manual_country", ""),
+            "manual_region": request.form.get("manual_region", ""),
+            "manual_city": request.form.get("manual_city", ""),
             "username": request.form.get("username", ""),
         }
 
@@ -568,6 +609,9 @@ def edit(profile_id):
         profile.name = supplied["name"].strip()
         profile.provider = selected_provider or None
         profile.username = supplied["username"].strip() or None
+        profile.manual_country = supplied["manual_country"].strip() or None
+        profile.manual_region = supplied["manual_region"].strip() or None
+        profile.manual_city = supplied["manual_city"].strip() or None
 
         policy = supplied["connection_policy"].strip().lower()
         profile.connection_policy = (

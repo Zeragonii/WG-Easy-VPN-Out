@@ -1505,3 +1505,32 @@ Automatically created groups use kill-switch fallback and existing/client DNS,
 providing a safe starting point while eliminating the extra manual setup step.
 
 No schema change.
+
+## v1.9.0 — Local location intelligence
+
+VPN profiles can now carry structured country, region/state and optional city
+metadata. Automatic location detection is performed entirely on-box using a
+MaxMind-compatible MMDB database.
+
+Place a compatible database at one of:
+
+- `/data/geoip/GeoLite2-City.mmdb`
+- `/data/geoip/GeoIP2-City.mmdb`
+- `/data/geoip/GeoLite2-Country.mmdb`
+- `/data/geoip/GeoIP2-Country.mmdb`
+
+or set `VPN_ROUTER_GEOIP_DB` to another mounted MMDB path.
+
+The application does not download or redistribute GeoLite/GeoIP data. Obtain
+the database separately under its provider's terms and keep it updated as part
+of your deployment.
+
+Location precedence is:
+
+`Manual override → verified exit-IP GeoIP → endpoint-IP GeoIP → config/provider hint → Unknown`
+
+Automatic detection is preserved separately from manual overrides, so users can
+correct virtual/mis-geolocated VPN exits without losing the original observed
+metadata.
+
+Schema v7.
