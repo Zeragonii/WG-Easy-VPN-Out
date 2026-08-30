@@ -749,6 +749,19 @@ def main():
     if "Default WAN hairpin compatibility" not in preflight_source:
         fail("v1.9.0b hairpin preflight is missing")
 
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    if '"location": effective_location(' not in vpn_profiles_source:
+        fail("v1.9.0c VPN profile index does not always provide location metadata")
+
+    vpn_index = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        '.get("location", {})',
+        'location.get("country")',
+        'location.get("source")',
+    ):
+        if required_fragment not in vpn_index:
+            fail(f"v1.9.0c defensive location rendering is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

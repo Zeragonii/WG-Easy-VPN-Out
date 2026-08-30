@@ -1581,3 +1581,11 @@ Automatic detection is cached for 10 minutes. Diagnostics and preflight expose
 the detected/manual public IPv4 and active WAN interface.
 
 Schema remains v7.
+
+## v1.9.0c — VPN Clients location rendering hotfix
+
+Fixes a VPN Clients page 500 error caused by a missing location object in some
+profile intelligence rows. The controller now always supplies normalized
+location metadata and the template handles partial data defensively.
+
+No schema or routing changes.

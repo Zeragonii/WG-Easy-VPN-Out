@@ -134,10 +134,15 @@ def index():
             meta = inspect_profile(profile, _read_config(profile))
         except OSError:
             meta = inspect_profile(profile, "")
+        from .services.geoip import effective_location
         intelligence[profile.id] = {
             "raw": meta,
             "provider": display_provider(profile, meta),
             "endpoint": endpoint_label(meta),
+            "location": effective_location(
+                profile,
+                meta.region_hint,
+            ),
         }
 
     return render_template(

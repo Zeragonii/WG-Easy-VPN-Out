@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.0c
+
+### VPN Clients location rendering hotfix
+
+- Fixed a 500 error on the VPN Clients page introduced by v1.9.0 location
+  intelligence.
+- The index controller now always includes a normalized `location` object for
+  every VPN profile intelligence row.
+- The template now uses defensive dictionary access so a missing/partial
+  location payload cannot crash the page.
+- No routing, hairpin, GeoIP, lifecycle or schema changes.
+
 ## 1.9.0b
 
 ### Targeted WAN hairpin NAT compatibility

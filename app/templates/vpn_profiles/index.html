@@ -20,14 +20,14 @@
 <td><a href="{{ url_for('vpn_profiles.detail', profile_id=profile.id) }}">{{ profile.name }}</a></td>
 <td>{{ intelligence[profile.id].provider }}</td>
 <td>
-  {% set location = intelligence[profile.id].location %}
-  {% if location.country or location.region or location.city %}
-    {{ location.country or "" }}{% if location.region %} · {{ location.region }}{% endif %}{% if location.city %} · {{ location.city }}{% endif %}
+  {% set location = intelligence[profile.id].get("location", {}) %}
+  {% if location.get("country") or location.get("region") or location.get("city") %}
+    {{ location.get("country") or "" }}{% if location.get("region") %} · {{ location.get("region") }}{% endif %}{% if location.get("city") %} · {{ location.get("city") }}{% endif %}
     <div class="muted" style="font-size:.8rem;">
-      {% if location.source == "manual" %}Manual
-      {% elif location.source == "exit_geoip" %}Exit GeoIP
-      {% elif location.source == "endpoint_geoip" %}Endpoint GeoIP
-      {% elif location.source == "config_hint" %}Config
+      {% if location.get("source") == "manual" %}Manual
+      {% elif location.get("source") == "exit_geoip" %}Exit GeoIP
+      {% elif location.get("source") == "endpoint_geoip" %}Endpoint GeoIP
+      {% elif location.get("source") == "config_hint" %}Config
       {% endif %}
     </div>
   {% else %}<span class="muted">Unknown</span>{% endif %}
