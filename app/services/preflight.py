@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+import ipaddress
 import os
 from pathlib import Path
 import shutil
@@ -314,6 +315,67 @@ def run_preflight(
             else "Missing: " + ", ".join(missing)
         ),
     ))
+
+    # WG-Easy advertised DNS vs IPv4-only policy routing.
+    try:
+        from ..models import AppSetting
+        from .wg_easy import WGEasyService
+        settings = SettingsService(db, AppSetting)
+        wg_easy = WGEasyService(
+            base_url=str(settings.get("wg_easy_url")),
+            username=str(settings.get("wg_easy_username")),
+            password=str(settings.get("wg_easy_password")),
+            verify_tls=bool(settings.get("wg_easy_verify_tls")),
+        )
+        dns_info = wg_easy.get_advertised_dns()
+    except Exception as exc:
+        checks.append(CheckResult(
+            "wg_easy_dns",
+            "WG-Easy client DNS compatibility",
+            "warn",
+            "Could not inspect WG-Easy advertised client DNS: "
+            + str(exc)[-300:],
+        ))
+    else:
+        dns_values = dns_info.get("dns") or []
+        ipv6_dns = []
+        for value in dns_values:
+            try:
+                if ipaddress.ip_address(value).version == 6:
+                    ipv6_dns.append(value)
+            except ValueError:
+                pass
+
+        if ipv6_dns:
+            checks.append(CheckResult(
+                "wg_easy_dns",
+                "WG-Easy client DNS compatibility",
+                "warn",
+                (
+                    "WG-Easy is advertising IPv6 DNS resolver(s): "
+                    + ", ".join(ipv6_dns)
+                    + ". VPN Router currently applies policy routing and DNS "
+                      "enforcement to IPv4 only, so these resolvers may time out "
+                      "or bypass expected DNS policy. Prefer IPv4 DNS resolvers "
+                      "unless end-to-end IPv6 routing is configured."
+                ),
+            ))
+        elif dns_info.get("status") == "detected":
+            checks.append(CheckResult(
+                "wg_easy_dns",
+                "WG-Easy client DNS compatibility",
+                "pass",
+                "Advertised client DNS is IPv4-only: "
+                + ", ".join(dns_values),
+            ))
+        else:
+            checks.append(CheckResult(
+                "wg_easy_dns",
+                "WG-Easy client DNS compatibility",
+                "warn",
+                dns_info.get("detail")
+                or "Unable to verify WG-Easy advertised client DNS.",
+            ))
 
     # Background managers
     services = app.extensions.get("background_services", [])

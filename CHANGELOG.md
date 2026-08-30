@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.9.0a
+
+### WG-Easy IPv6 DNS compatibility warning
+
+- Added best-effort inspection of DNS resolvers advertised in WG-Easy client
+  configurations.
+- Preflight now warns when WG-Easy advertises IPv6 DNS while VPN Router is
+  operating with its current IPv4-only policy-routing/DNS enforcement model.
+- Diagnostics now includes a dedicated `WG-Easy client DNS` section.
+- The warning explains that IPv6 resolvers may time out or bypass expected DNS
+  policy and recommends IPv4 resolvers unless end-to-end IPv6 routing exists.
+- WG-Easy v15 API response shapes vary, so inspection tries multiple compatible
+  client-config representations and reports `unable to verify` rather than
+  assuming a value when DNS cannot be discovered.
+- No routing, nftables, lifecycle, GeoIP or schema changes.
+
 ## 1.9.0
 
 ### Local VPN location intelligence

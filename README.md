@@ -1534,3 +1534,19 @@ correct virtual/mis-geolocated VPN exits without losing the original observed
 metadata.
 
 Schema v7.
+
+## v1.9.0a — WG-Easy IPv6 DNS warning
+
+VPN Router currently applies its policy-routing and DNS enforcement model to
+IPv4. Preflight and diagnostics now attempt to inspect DNS resolvers advertised
+to WG-Easy clients and warn when an IPv6 resolver is present.
+
+This catches configurations such as Cloudflare's
+`2606:4700:4700::1111`, which can otherwise leave a client apparently
+connected while DNS queries time out on an IPv4-only routed path.
+
+WG-Easy v15 has changed API representations between releases. If advertised DNS
+cannot be discovered safely, the check reports that it could not verify the
+setting rather than guessing.
+
+No schema or routing changes.

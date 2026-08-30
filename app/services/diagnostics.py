@@ -48,6 +48,44 @@ def _safe_env():
     return {name: os.getenv(name) for name in names if os.getenv(name) is not None}
 
 
+
+
+def _wg_easy_dns_diagnostic(app, db):
+    try:
+        from ..models import AppSetting
+        from .settings import SettingsService
+        from .wg_easy import WGEasyService
+        settings = SettingsService(db, AppSetting)
+        service = WGEasyService(
+            base_url=str(settings.get("wg_easy_url")),
+            username=str(settings.get("wg_easy_username")),
+            password=str(settings.get("wg_easy_password")),
+            verify_tls=bool(settings.get("wg_easy_verify_tls")),
+        )
+        info = service.get_advertised_dns()
+    except Exception as exc:
+        return {
+            "status": "unknown",
+            "dns": [],
+            "ipv6_dns": [],
+            "detail": str(exc)[-300:],
+        }
+
+    import ipaddress
+    ipv6 = []
+    for value in info.get("dns") or []:
+        try:
+            if ipaddress.ip_address(value).version == 6:
+                ipv6.append(value)
+        except ValueError:
+            pass
+
+    return {
+        **info,
+        "ipv6_dns": ipv6,
+    }
+
+
 def build_diagnostics(
     db,
     VPNProfile,
@@ -177,6 +215,7 @@ def build_diagnostics(
             ])
 
     return {
+        "wg_easy_dns": _wg_easy_dns_diagnostic(app, db),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "application_version": version,
         "system": {
@@ -270,6 +309,21 @@ def render_text(data):
         lines.append(
             f"{key}={item.get('value')} (source={item.get('source')})"
         )
+
+    wg_dns = data.get("wg_easy_dns") or {}
+    lines.extend(["", "WG-Easy client DNS", "-" * 72])
+    if wg_dns.get("dns"):
+        lines.append("advertised=" + ", ".join(wg_dns.get("dns") or []))
+    else:
+        lines.append("advertised=<unknown>")
+    if wg_dns.get("ipv6_dns"):
+        lines.append(
+            "WARNING: IPv6 resolver(s) advertised while VPN Router policy "
+            "routing is IPv4-only: "
+            + ", ".join(wg_dns.get("ipv6_dns") or [])
+        )
+    if wg_dns.get("detail"):
+        lines.append("detail=" + str(wg_dns.get("detail")))
 
     lines.extend(["", "Background services", "-" * 72])
     for service in data.get("services", []):

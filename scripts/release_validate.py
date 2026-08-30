@@ -692,6 +692,34 @@ def main():
     if "maxminddb==3.1.1" not in requirements:
         fail("v1.9.0 maxminddb dependency is missing")
 
+    wg_easy_source = (ROOT / "app/services/wg_easy.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def get_advertised_dns(",
+        "def _extract_dns_values(",
+        "/configuration",
+        "/config",
+    ):
+        if required_fragment not in wg_easy_source:
+            fail(f"v1.9.0a WG-Easy DNS inspection is missing: {required_fragment}")
+
+    preflight_source = (ROOT / "app/services/preflight.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "WG-Easy client DNS compatibility",
+        "IPv6 DNS resolver",
+        "get_advertised_dns",
+    ):
+        if required_fragment not in preflight_source:
+            fail(f"v1.9.0a DNS compatibility preflight is missing: {required_fragment}")
+
+    diagnostics_source = (ROOT / "app/services/diagnostics.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "WG-Easy client DNS",
+        "_wg_easy_dns_diagnostic",
+        "ipv6_dns",
+    ):
+        if required_fragment not in diagnostics_source:
+            fail(f"v1.9.0a DNS diagnostics are missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+import ipaddress
+import re
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -235,6 +237,76 @@ def _normalise_client(raw: dict[str, Any], index: int) -> WGEasyClient:
     )
 
 
+def _extract_dns_values(value: Any) -> list[str]:
+    """
+    Extract DNS resolver addresses from common WG-Easy API/config shapes.
+
+    This intentionally tolerates multiple v15 response formats because WG-Easy
+    has changed its API representation between releases.
+    """
+    found: list[str] = []
+
+    def add(candidate):
+        if candidate is None:
+            return
+        if isinstance(candidate, (list, tuple, set)):
+            for item in candidate:
+                add(item)
+            return
+        text = str(candidate).strip()
+        if not text:
+            return
+        for token in re.split(r"[\s,]+", text):
+            token = token.strip().strip("[]")
+            if not token:
+                continue
+            try:
+                parsed = str(ipaddress.ip_address(token))
+            except ValueError:
+                continue
+            if parsed not in found:
+                found.append(parsed)
+
+    if isinstance(value, str):
+        # WireGuard client configuration.
+        for raw in value.splitlines():
+            line = raw.strip()
+            if line.lower().startswith("dns") and "=" in line:
+                add(line.split("=", 1)[1])
+        return found
+
+    if isinstance(value, dict):
+        for key, item in value.items():
+            lowered = str(key).lower().replace("-", "_")
+            if lowered in {
+                "dns",
+                "dnsserver",
+                "dnsservers",
+                "dns_server",
+                "dns_servers",
+            }:
+                add(item)
+            elif lowered in {
+                "configuration",
+                "config",
+                "clientconfiguration",
+                "client_configuration",
+            }:
+                for dns in _extract_dns_values(item):
+                    add(dns)
+            elif isinstance(item, (dict, list, tuple)):
+                for dns in _extract_dns_values(item):
+                    add(dns)
+        return found
+
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            for dns in _extract_dns_values(item):
+                add(dns)
+
+    return found
+
+
 class WGEasyService:
     def __init__(
         self,
@@ -258,6 +330,98 @@ class WGEasyService:
                 "WG-Easy API credentials are not configured. "
                 "Set WG_EASY_USERNAME and WG_EASY_PASSWORD."
             )
+
+    def _get(self, path: str):
+        self._validate_config()
+        url = f"{self.base_url}{path}"
+        try:
+            response = requests.get(
+                url,
+                auth=HTTPBasicAuth(self.username, self.password),
+                timeout=self.timeout,
+                verify=self.verify_tls,
+                headers={"Accept": "application/json, text/plain;q=0.9, */*;q=0.8"},
+            )
+        except requests.RequestException as exc:
+            raise WGEasyConnectionError(
+                f"Could not connect to WG-Easy at {self.base_url}."
+            ) from exc
+
+        if response.status_code in (401, 403):
+            raise WGEasyAuthenticationError(
+                "WG-Easy rejected the API credentials."
+            )
+        return response
+
+    def get_advertised_dns(self) -> dict:
+        """
+        Best-effort discovery of DNS values embedded in a generated client config.
+
+        WG-Easy v15 has changed API response shapes over time, so try a small
+        compatibility set and return 'unknown' instead of failing preflight
+        when no supported representation is exposed.
+        """
+        clients = self.get_clients()
+        if not clients:
+            return {
+                "status": "unknown",
+                "dns": [],
+                "detail": "WG-Easy has no clients to inspect.",
+            }
+
+        client_id = clients[0].external_id
+        candidates = (
+            f"/api/client/{client_id}/configuration",
+            f"/api/client/{client_id}/config",
+            f"/api/client/{client_id}",
+        )
+
+        attempted = []
+        for path in candidates:
+            try:
+                response = self._get(path)
+            except WGEasyError as exc:
+                attempted.append(f"{path}: {exc}")
+                continue
+
+            attempted.append(f"{path}: HTTP {response.status_code}")
+            if response.status_code == 404:
+                continue
+            if response.status_code >= 400:
+                continue
+
+            payload = None
+            content_type = response.headers.get("Content-Type", "")
+            if "json" in content_type.lower():
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = response.text
+            else:
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = response.text
+
+            dns = _extract_dns_values(payload)
+            if dns:
+                return {
+                    "status": "detected",
+                    "dns": dns,
+                    "client_id": str(client_id),
+                    "source_path": path,
+                    "detail": "Advertised DNS extracted from a WG-Easy client configuration.",
+                }
+
+        return {
+            "status": "unknown",
+            "dns": [],
+            "client_id": str(client_id),
+            "detail": (
+                "WG-Easy did not expose advertised client DNS through a supported "
+                "API representation. Checked: " + "; ".join(attempted)
+            ),
+        }
 
     def get_clients(self) -> list[WGEasyClient]:
         self._validate_config()
