@@ -811,13 +811,25 @@ def main():
             fail(f"v1.9.2 README release navigation is missing: {required_fragment}")
     release_script = ROOT / "scripts/extract_release_notes.py"
     if not release_script.exists(): fail("v1.9.2 release-note extraction script is missing")
-    release_workflow = ROOT / ".github/workflows/release.yml"
-    if not release_workflow.exists(): fail("v1.9.2 GitHub Release workflow is missing")
-    else:
-        release_workflow_text = release_workflow.read_text(encoding="utf-8")
-        for required_fragment in ('"v*"', "Verify tag matches VERSION", "scripts/extract_release_notes.py", "gh release create", "--verify-tag"):
-            if required_fragment not in release_workflow_text:
-                fail(f"v1.9.2 GitHub Release workflow is missing: {required_fragment}")
+    publish_workflow = ROOT / ".github/workflows/publish.yml"
+    publish_workflow_text = publish_workflow.read_text(encoding="utf-8")
+    for required_fragment in (
+        "name: Build, publish and release",
+        "contents: write",
+        "Read release version",
+        "scripts/extract_release_notes.py",
+        "Check release state",
+        "Create version tag",
+        "Verify existing tag points at this commit",
+        "gh release create",
+        "release_exists",
+        "ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}",
+    ):
+        if required_fragment not in publish_workflow_text:
+            fail(f"v1.9.2a consolidated release workflow is missing: {required_fragment}")
+
+    if (ROOT / ".github/workflows/release.yml").exists():
+        fail("v1.9.2a must not retain the dead tag-triggered release.yml workflow")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:

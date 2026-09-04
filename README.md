@@ -294,6 +294,7 @@ duplicating historical patch notes.
 - [CHANGELOG.md](CHANGELOG.md) contains the complete searchable version
   history in the repository.
 
-Every `v*` tag is published as a GitHub Release. Its release body is generated
-from the matching version section in `CHANGELOG.md`, keeping the changelog as
-the single source of truth for release notes.
+On each push to `main`, the release workflow reads `VERSION`, validates the
+tree, publishes the container, creates the matching `v<VERSION>` tag when
+needed, and creates the GitHub Release from that version's `CHANGELOG.md`
+section. The changelog remains the single source of truth for release notes.
