@@ -37,6 +37,7 @@ DEFINITIONS = {
         SettingDefinition("traffic_gauge_tx_max_mbps", "TRAFFIC_GAUGE_TX_MAX_MBPS", "1000", "float", label="Traffic TX gauge maximum (Mbps)", section="Traffic visibility"),
         SettingDefinition("traffic_gauge_total_max_mbps", "TRAFFIC_GAUGE_TOTAL_MAX_MBPS", "1000", "float", label="Traffic total-throughput gauge maximum (Mbps)", section="Traffic visibility"),
         SettingDefinition("traffic_gauge_rx_max_mbps", "TRAFFIC_GAUGE_RX_MAX_MBPS", "1000", "float", label="Traffic RX gauge maximum (Mbps)", section="Traffic visibility"),
+        SettingDefinition("background_particles_enabled", "BACKGROUND_PARTICLES_ENABLED", "true", "bool", label="Enable animated particle background", section="Appearance"),
         SettingDefinition("dns_leak_probe_interval", "DNS_LEAK_PROBE_INTERVAL", "900", "float", label="DNS leak probe interval (seconds, 0 = manual only)", section="Observability"),
         SettingDefinition("update_check_cache_seconds", "UPDATE_CHECK_CACHE_SECONDS", "900", "float", label="Update-check cache (seconds)", section="Observability"),
         SettingDefinition("update_version_url", "UPDATE_VERSION_URL", "https://raw.githubusercontent.com/Zeragonii/WG-Easy-VPN-Out/main/VERSION", label="Version URL", section="Observability"),

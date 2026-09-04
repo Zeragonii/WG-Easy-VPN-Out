@@ -16,6 +16,13 @@
         WAN traffic keeps the original WG client source address.
       </p>
     {% endif %}
+    {% if section == "Appearance" %}
+      <p class="muted">
+        The animated particle background is purely cosmetic. Disable it here
+        for a completely static interface. It is also automatically suppressed
+        when the browser requests reduced motion.
+      </p>
+    {% endif %}
     {% for row in rows %}
       {% set d = row.definition %}
       {% if d.value_type == "bool" %}

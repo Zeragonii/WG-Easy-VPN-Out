@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.9.3
+
+### Optional interactive particle background
+
+- Added an animated network-style particle canvas behind the application UI.
+- Particles drift slowly and draw proximity links to nearby particles.
+- Pointer movement gently repels nearby particles for subtle interaction.
+- Added **Settings → Appearance → Enable animated particle background**.
+- The effect is enabled by default and can be disabled persistently.
+- Browsers requesting `prefers-reduced-motion` automatically suppress the
+  animation even when the setting is enabled.
+- The canvas is fixed behind the interface and uses `pointer-events: none`, so
+  it cannot interfere with navigation or controls.
+- Particle density is capped and scales with viewport area.
+- Animation pauses while the browser tab is hidden.
+- The implementation is bundled directly with VPN Router; no CDN or external
+  JavaScript dependency is required at runtime.
+- No application schema migration, routing, VPN or traffic behavior changes.
+
 ## 1.9.2c
 
 ### GHCR lowercase image-name hotfix

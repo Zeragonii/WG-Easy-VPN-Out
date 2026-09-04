@@ -218,6 +218,7 @@ def main():
         "## Basic startup guide",
         "## Routing and DNS behavior",
         "## Data and backups",
+        "## Interface appearance",
         "## Security notes",
         "## Releases and changelog",
     ):
@@ -864,6 +865,36 @@ def main():
 
     if "ghcr.io/${{ github.repository }}" in publish_text:
         fail("v1.9.2c publish workflow still uses github.repository directly for GHCR tags")
+
+    settings_source = (ROOT / "app/services/settings.py").read_text(encoding="utf-8")
+    if "background_particles_enabled" not in settings_source:
+        fail("v1.9.3 particle-background setting is missing")
+
+    init_source = (ROOT / "app/__init__.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def inject_ui_preferences",
+        "background_particles_enabled",
+    ):
+        if required_fragment not in init_source:
+            fail(f"v1.9.3 global appearance preference injection is missing: {required_fragment}")
+
+    base_template = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'id="particle-background"',
+        "background_particles_enabled",
+        "requestAnimationFrame(draw)",
+        "LINK_DISTANCE",
+        "MOUSE_RADIUS",
+        'pointer-events: none',
+        "prefers-reduced-motion: reduce",
+        'document.addEventListener("visibilitychange"',
+    ):
+        if required_fragment not in base_template:
+            fail(f"v1.9.3 particle background is missing: {required_fragment}")
+
+    settings_template = (ROOT / "app/templates/settings/index.html").read_text(encoding="utf-8")
+    if 'section == "Appearance"' not in settings_template:
+        fail("v1.9.3 Appearance settings help text is missing")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:

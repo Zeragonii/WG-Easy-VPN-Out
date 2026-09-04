@@ -59,6 +59,23 @@ def create_app():
     app.register_blueprint(settings_bp)
     app.register_blueprint(traffic_bp)
 
+    @app.context_processor
+    def inject_ui_preferences():
+        from .models import AppSetting
+        from .services.settings import SettingsService
+        try:
+            particles_enabled = bool(
+                SettingsService(db, AppSetting).get(
+                    "background_particles_enabled"
+                )
+            )
+        except Exception:
+            # A rendering preference should never be able to take the app down.
+            particles_enabled = False
+        return {
+            "background_particles_enabled": particles_enabled,
+        }
+
     @app.before_request
     def require_initial_setup():
         from flask import request, redirect, url_for

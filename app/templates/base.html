@@ -21,9 +21,23 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      min-height: 100vh;
       font-family: system-ui, -apple-system, Segoe UI, sans-serif;
       background: var(--bg);
       color: var(--text);
+      position: relative;
+    }
+    #particle-background {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+    header, main {
+      position: relative;
+      z-index: 1;
     }
     header {
       border-bottom: 1px solid var(--border);
@@ -119,6 +133,9 @@
   </style>
 </head>
 <body>
+{% if background_particles_enabled %}
+<canvas id="particle-background" aria-hidden="true"></canvas>
+{% endif %}
 <header>
   <div class="brand-row">
     <strong>VPN Router</strong>
@@ -150,5 +167,191 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
+{% if background_particles_enabled %}
+<script>
+(() => {
+  const canvas = document.getElementById("particle-background");
+  if (!canvas) return;
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (reducedMotion.matches) {
+    canvas.remove();
+    return;
+  }
+
+  const ctx = canvas.getContext("2d", { alpha: true });
+  if (!ctx) {
+    canvas.remove();
+    return;
+  }
+
+  const particles = [];
+  const mouse = { x: null, y: null };
+  const MAX_DPR = 2;
+  const LINK_DISTANCE = 135;
+  const MOUSE_RADIUS = 155;
+  const BASE_SPEED = 0.18;
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+  let animationFrame = null;
+
+  function cssColor(name, fallback) {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+    return value || fallback;
+  }
+
+  function desiredParticleCount() {
+    // Deliberately modest: enough to look alive without turning a homelab UI
+    // into a GPU benchmark.
+    return Math.max(22, Math.min(82, Math.round((width * height) / 22000)));
+  }
+
+  function makeParticle() {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = BASE_SPEED * (0.55 + Math.random() * 0.9);
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 1.1 + Math.random() * 1.45,
+    };
+  }
+
+  function syncParticleCount() {
+    const target = desiredParticleCount();
+    while (particles.length < target) particles.push(makeParticle());
+    if (particles.length > target) particles.length = target;
+  }
+
+  function resize() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+
+    canvas.width = Math.max(1, Math.floor(width * dpr));
+    canvas.height = Math.max(1, Math.floor(height * dpr));
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    syncParticleCount();
+  }
+
+  function updateParticle(particle) {
+    particle.x += particle.vx;
+    particle.y += particle.vy;
+
+    if (particle.x < -10) particle.x = width + 10;
+    if (particle.x > width + 10) particle.x = -10;
+    if (particle.y < -10) particle.y = height + 10;
+    if (particle.y > height + 10) particle.y = -10;
+
+    if (mouse.x === null || mouse.y === null) return;
+
+    const dx = particle.x - mouse.x;
+    const dy = particle.y - mouse.y;
+    const distanceSq = dx * dx + dy * dy;
+    if (distanceSq <= 0 || distanceSq >= MOUSE_RADIUS * MOUSE_RADIUS) return;
+
+    const distance = Math.sqrt(distanceSq);
+    const force = (1 - distance / MOUSE_RADIUS) * 0.025;
+    particle.vx += (dx / distance) * force;
+    particle.vy += (dy / distance) * force;
+
+    // Keep pointer interaction playful rather than letting particles accelerate
+    // into escape velocity after several seconds of hovering.
+    const speed = Math.hypot(particle.vx, particle.vy);
+    const maxSpeed = 0.65;
+    if (speed > maxSpeed) {
+      particle.vx = (particle.vx / speed) * maxSpeed;
+      particle.vy = (particle.vy / speed) * maxSpeed;
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+
+    const accent = cssColor("--accent", "#5da9ff");
+    const text = cssColor("--text", "#eef1f4");
+
+    for (const particle of particles) updateParticle(particle);
+
+    ctx.lineWidth = 0.75;
+    for (let i = 0; i < particles.length; i += 1) {
+      const a = particles[i];
+
+      for (let j = i + 1; j < particles.length; j += 1) {
+        const b = particles[j];
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq > LINK_DISTANCE * LINK_DISTANCE) continue;
+
+        const distance = Math.sqrt(distanceSq);
+        const alpha = (1 - distance / LINK_DISTANCE) * 0.18;
+        ctx.strokeStyle = accent;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = text;
+    for (const particle of particles) {
+      ctx.globalAlpha = 0.36;
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    animationFrame = window.requestAnimationFrame(draw);
+  }
+
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(resize, 100);
+  }, { passive: true });
+
+  window.addEventListener("pointermove", event => {
+    mouse.x = event.clientX;
+    mouse.y = event.clientY;
+  }, { passive: true });
+
+  window.addEventListener("pointerleave", () => {
+    mouse.x = null;
+    mouse.y = null;
+  }, { passive: true });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = null;
+      }
+      return;
+    }
+    if (animationFrame === null) draw();
+  });
+
+  reducedMotion.addEventListener?.("change", event => {
+    if (!event.matches) return;
+    if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+    canvas.remove();
+  });
+
+  resize();
+  draw();
+})();
+</script>
+{% endif %}
 </body>
 </html>

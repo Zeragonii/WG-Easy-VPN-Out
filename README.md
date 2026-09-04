@@ -268,6 +268,14 @@ Built-in backup/restore can export the application configuration and may
 optionally include the `SECRET_KEY`. Treat backups containing the key as
 sensitive.
 
+## Interface appearance
+
+VPN Router includes an optional animated network-style particle background.
+The effect is enabled by default and can be disabled under
+**Settings → Appearance**. It is rendered locally with no third-party runtime
+dependency, sits behind the interface without receiving pointer events, pauses
+when the tab is hidden, and respects the browser's reduced-motion preference.
+
 ## Security notes
 
 VPN Router is intended as a trusted LAN administration service.
