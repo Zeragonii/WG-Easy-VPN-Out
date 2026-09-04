@@ -50,6 +50,52 @@
       border-radius: 10px;
       background: var(--panel2);
       overflow: hidden;
+      position: relative;
+    }
+
+    .clients-table tr.mobile-collapsed td:not(.client-primary) {
+      display: none;
+    }
+
+    .clients-table tr.mobile-collapsed td.client-primary {
+      border-bottom: 0;
+    }
+
+    .client-primary {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .client-primary-inner {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: .75rem;
+      align-items: center;
+    }
+
+    .client-primary-main {
+      min-width: 0;
+    }
+
+    .client-primary-summary {
+      display: flex;
+      gap: .45rem .7rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: .35rem;
+      font-size: .82rem;
+    }
+
+    .client-card-chevron {
+      display: inline-block;
+      color: var(--muted);
+      font-size: 1.15rem;
+      line-height: 1;
+      transition: transform .15s ease;
+    }
+
+    .clients-table tr:not(.mobile-collapsed) .client-card-chevron {
+      transform: rotate(90deg);
     }
 
     .clients-table td {
@@ -194,9 +240,37 @@
         {% for client in clients %}
         {% set assignment = assignments.get(client.external_id|string) %}
         <tr data-client-id="{{ client.external_id }}">
-          <td class="client-primary" data-label="Client">
-            <strong class="client-name">{{ client.name }}</strong>
-            <div class="muted client-id" style="font-size:.8rem;">ID {{ client.external_id }}</div>
+          <td class="client-primary" data-label="Client" role="button" tabindex="0" aria-expanded="false">
+            <div class="client-primary-inner">
+              <div class="client-primary-main">
+                <strong class="client-name">{{ client.name }}</strong>
+                <div class="muted client-id" style="font-size:.8rem;">ID {{ client.external_id }}</div>
+                <div class="client-primary-summary">
+                  <span class="client-summary-connection">
+                    {% if client.connection_state == "online" %}
+                      <span class="status-good">● Online</span>
+                    {% elif client.connection_state == "recent" %}
+                      <span class="status-warn">◐ Recently active</span>
+                    {% elif client.connection_state == "offline" %}
+                      <span class="muted">○ Offline</span>
+                    {% else %}
+                      <span class="muted">○ Never connected</span>
+                    {% endif %}
+                  </span>
+                  <span class="muted">→</span>
+                  <span class="client-summary-route">
+                    {% if override %}
+                      {{ override.routing_group.name }}
+                    {% elif assignment %}
+                      {{ assignment.routing_group.name }}
+                    {% else %}
+                      Normal routing
+                    {% endif %}
+                  </span>
+                </div>
+              </div>
+              <span class="client-card-chevron" aria-hidden="true">›</span>
+            </div>
           </td>
           <td data-label="IPv4"><code class="client-ip">{{ client.ipv4_address }}</code></td>
           <td class="client-connection" data-label="Connection">
@@ -729,6 +803,62 @@
     });
   }
 
+  function isMobileClientLayout() {
+    return window.matchMedia("(max-width: 760px)").matches;
+  }
+
+  function setClientCardExpanded(row, expanded) {
+    if (!row) return;
+    if (!isMobileClientLayout()) {
+      row.classList.remove("mobile-collapsed");
+      row.querySelector(".client-primary")?.setAttribute("aria-expanded", "true");
+      return;
+    }
+
+    row.classList.toggle("mobile-collapsed", !expanded);
+    row.querySelector(".client-primary")?.setAttribute(
+      "aria-expanded",
+      expanded ? "true" : "false"
+    );
+  }
+
+  function bindClientCardToggle(row) {
+    const primary = row.querySelector(".client-primary");
+    if (!primary || primary.dataset.cardToggleBound === "1") return;
+
+    primary.dataset.cardToggleBound = "1";
+
+    const toggle = () => {
+      if (!isMobileClientLayout()) return;
+      setClientCardExpanded(
+        row,
+        row.classList.contains("mobile-collapsed")
+      );
+    };
+
+    primary.addEventListener("click", event => {
+      if (event.target.closest("a,button,input,select,label")) return;
+      toggle();
+    });
+
+    primary.addEventListener("keydown", event => {
+      if (!isMobileClientLayout()) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggle();
+    });
+
+    setClientCardExpanded(row, false);
+  }
+
+  function refreshClientCardSummary(row, client) {
+    const connection = row.querySelector(".client-summary-connection");
+    const route = row.querySelector(".client-summary-route");
+
+    if (connection) connection.innerHTML = stateHtml(client.connection_state);
+    if (route) route.textContent = effectiveRouteLabel(client);
+  }
+
   function renderClients(clients) {
     const existing = new Map(
       [...body.querySelectorAll("tr[data-client-id]")].map(row => [
@@ -749,9 +879,19 @@
         row = document.createElement("tr");
         row.dataset.clientId = id;
         row.innerHTML = `
-          <td class="client-primary" data-label="Client">
-            <strong class="client-name"></strong>
-            <div class="muted client-id" style="font-size:.8rem;"></div>
+          <td class="client-primary" data-label="Client" role="button" tabindex="0" aria-expanded="false">
+            <div class="client-primary-inner">
+              <div class="client-primary-main">
+                <strong class="client-name"></strong>
+                <div class="muted client-id" style="font-size:.8rem;"></div>
+                <div class="client-primary-summary">
+                  <span class="client-summary-connection"></span>
+                  <span class="muted">→</span>
+                  <span class="client-summary-route"></span>
+                </div>
+              </div>
+              <span class="client-card-chevron" aria-hidden="true">›</span>
+            </div>
           </td>
           <td data-label="IPv4"><code class="client-ip"></code></td>
           <td class="client-connection" data-label="Connection"></td>
@@ -770,6 +910,8 @@
         `;
         body.appendChild(row);
       }
+
+      bindClientCardToggle(row);
 
       row.querySelector(".client-name").textContent = client.name;
       row.querySelector(".client-id").textContent = `ID ${id}`;
@@ -799,6 +941,7 @@
       bindRouteSelect(select);
 
       renderEffectiveRoute(row, client);
+      refreshClientCardSummary(row, client);
 
       const overrideButton = row.querySelector(".override-open");
       const overrideSummary = row.querySelector(".override-inline-summary");
@@ -862,6 +1005,25 @@
     }
   }
 
+  document.querySelectorAll("#clients-body tr[data-client-id]").forEach(row => {
+    bindClientCardToggle(row);
+
+    const connection = row.querySelector(".client-connection");
+    const summaryConnection = row.querySelector(".client-summary-connection");
+    if (connection && summaryConnection) {
+      summaryConnection.innerHTML = connection.innerHTML;
+    }
+
+    const effective = row.querySelector(".effective-route");
+    const summaryRoute = row.querySelector(".client-summary-route");
+    if (effective && summaryRoute) {
+      summaryRoute.textContent =
+        effective.querySelector("strong")?.textContent?.trim()
+        || effective.textContent.trim()
+        || "Normal routing";
+    }
+  });
+
   document.querySelectorAll(".route-select").forEach(select => {
     select.dataset.savedValue = select.value;
     bindRouteSelect(select);
@@ -909,6 +1071,16 @@
 
     updateOverrideEventTimes();
   }, 1000);
+
+  window.addEventListener("resize", () => {
+    document.querySelectorAll("#clients-body tr[data-client-id]").forEach(row => {
+      if (!isMobileClientLayout()) {
+        setClientCardExpanded(row, true);
+      } else if (!row.classList.contains("mobile-collapsed")) {
+        setClientCardExpanded(row, false);
+      }
+    });
+  }, { passive: true });
 
   refreshNow.addEventListener("click", refreshClients);
   setInterval(refreshClients, POLL_MS);

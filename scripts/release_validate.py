@@ -1108,6 +1108,19 @@ def main():
     if "user-inline-form" not in users_template or "ownership-inline-form" not in users_template:
         fail("v1.11.1 mobile Users forms are missing")
 
+    clients_template = (ROOT / "app/templates/clients.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "mobile-collapsed",
+        "client-primary-summary",
+        "client-card-chevron",
+        "function bindClientCardToggle",
+        "function refreshClientCardSummary",
+        'aria-expanded="false"',
+        'event.key !== "Enter"',
+    ):
+        if required_fragment not in clients_template:
+            fail(f"v1.11.1a collapsible mobile client cards are missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

@@ -281,9 +281,9 @@ against another user's WG-Easy client are rejected, and non-client
 administration remains administrator-only.
 
 The self-service **My VPN** interface is responsive: on phones each assigned
-WG-Easy device is presented as a touch-friendly card with full-width endpoint
-and temporary-override controls rather than a desktop table requiring sideways
-scrolling.
+WG-Easy device is presented as a compact, collapsed card showing connection
+state and effective endpoint. Tapping the card expands the full-width endpoint,
+traffic and temporary-override controls without requiring sideways scrolling.
 
 ## VPN Profile Library
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.11.1a
+
+### Collapsible mobile My VPN cards
+
+- Mobile WG-Easy client cards are now collapsed by default to keep the
+  self-service page compact when a user owns multiple devices.
+- Collapsed cards show the client name, live connection state and current
+  effective routing endpoint.
+- Tapping the card expands it to reveal IPv4, handshake age, RX/TX, permanent
+  route selector, effective route detail and temporary override controls.
+- Cards are keyboard accessible with Enter/Space and expose expanded state via
+  `aria-expanded`.
+- Desktop client-table behaviour is unchanged.
+- Schema remains v9.
+
 ## 1.11.1
 
 ### Mobile interface pass
