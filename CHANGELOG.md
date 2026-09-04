@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.10.1
+
+### Profile Library and Routing Groups UI refinement
+
+- Realigned the VPN Profile Library bulk-actions island so the master selection
+  checkbox occupies the same first-column position as individual profile
+  checkboxes.
+- Normalised bulk action, tag, apply-button and selected-count alignment into a
+  consistent horizontal control row on desktop.
+- Added a responsive two-column fallback for narrower displays.
+- Reworked Routing Group cards into native collapsible `<details>` islands.
+- Routing Groups are collapsed by default for a compact at-a-glance list.
+- Collapsed summaries show group name, fwmark/table, configured exit, effective
+  exit and live Ready/Fallback/Blocked state.
+- Expanding a group reveals all existing route detail, DNS visibility, routing
+  transitions, DNS test, edit and delete controls unchanged.
+- No routing-engine, VPN runtime, database or schema changes.
+
 ## 1.10.0
 
 ### VPN Profile Library

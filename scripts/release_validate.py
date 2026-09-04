@@ -984,6 +984,31 @@ def main():
         if required_fragment not in backups_source:
             fail(f"v1.10.0 profile-library backup support is missing: {required_fragment}")
 
+    vpn_index = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "bulk-action-grid",
+        "bulk-select-cell",
+        'id="select-visible"',
+        "bulk-selected-count",
+    ):
+        if required_fragment not in vpn_index:
+            fail(f"v1.10.1 bulk-actions alignment is missing: {required_fragment}")
+
+    routing_index = (ROOT / "app/templates/routing_groups/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        '<details class="card routing-group-card">',
+        '<summary class="routing-group-summary">',
+        "routing-group-chevron",
+        "Configured exit",
+        "Effective exit",
+        "routing-group-details",
+    ):
+        if required_fragment not in routing_index:
+            fail(f"v1.10.1 collapsed routing-group UI is missing: {required_fragment}")
+
+    if '<details class="card routing-group-card" open>' in routing_index:
+        fail("v1.10.1 routing groups must default collapsed")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

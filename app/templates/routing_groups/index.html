@@ -1,6 +1,62 @@
 {% extends "base.html" %}
 {% block title %}Routing Health · VPN Router{% endblock %}
 {% block content %}
+<style>
+  .routing-group-card {
+    margin-bottom: .7rem;
+    padding: 0;
+    overflow: hidden;
+  }
+  .routing-group-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: .85rem 1rem;
+    display: grid;
+    grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+  }
+  .routing-group-summary::-webkit-details-marker { display:none; }
+  .routing-group-summary::marker { display:none; }
+  .routing-group-summary:hover { background: color-mix(in srgb, var(--panel2) 55%, transparent); }
+  .routing-group-chevron {
+    display:inline-block;
+    width:1rem;
+    margin-right:.35rem;
+    color:var(--muted);
+    transition:transform .15s ease;
+  }
+  details[open] > .routing-group-summary .routing-group-chevron { transform:rotate(90deg); }
+  .routing-group-name {
+    font-weight:700;
+    min-width:0;
+  }
+  .routing-group-name-main {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .routing-group-summary-cell {
+    min-width:0;
+  }
+  .routing-group-summary-cell strong,
+  .routing-group-summary-cell code {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    display:block;
+  }
+  .routing-group-details {
+    border-top:1px solid var(--border);
+    padding:1rem;
+  }
+  @media (max-width: 850px) {
+    .routing-group-summary {
+      grid-template-columns:1fr auto;
+    }
+    .routing-group-summary .routing-summary-secondary { display:none; }
+  }
+</style>
 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
   <div>
     <h1 style="margin-bottom:.35rem;">Routing Group Health</h1>
@@ -20,16 +76,28 @@
 {% for group in groups %}
 {% set rt = runtime[group.id] %}
 {% set dns_state = dns[group.id] %}
-<section class="card" style="margin-bottom:1rem;">
-  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
-    <div>
-      <h2 style="margin:.1rem 0 .25rem;">{{ group.name }}</h2>
-      <div class="muted">
+<details class="card routing-group-card">
+  <summary class="routing-group-summary">
+    <div class="routing-group-name">
+      <div class="routing-group-name-main">
+        <span class="routing-group-chevron">›</span>{{ group.name }}
+      </div>
+      <div class="muted" style="font-size:.8rem;margin-top:.18rem;">
         {{ group.mark_hex }} · table {{ group.table_id or "—" }}
-        {% if group.vpn_profile_id %} · fallback {{ group.fallback_mode }}{% endif %}
       </div>
     </div>
-    <div>
+
+    <div class="routing-group-summary-cell routing-summary-secondary">
+      <div class="muted" style="font-size:.78rem;">Configured exit</div>
+      <strong>{{ group.target_label }}</strong>
+    </div>
+
+    <div class="routing-group-summary-cell routing-summary-secondary">
+      <div class="muted" style="font-size:.78rem;">Effective exit</div>
+      <strong>{{ rt.effective_exit }}</strong>
+    </div>
+
+    <div style="text-align:right;white-space:nowrap;">
       {% if rt.state == "ready" %}
         <span class="status-good">● Ready</span>
       {% elif rt.state == "fallback" %}
@@ -38,9 +106,10 @@
         <span class="status-bad">● Blocked</span>
       {% endif %}
     </div>
-  </div>
+  </summary>
 
-  <div class="grid" style="margin-top:1rem;">
+  <div class="routing-group-details">
+  <div class="grid">
     <div>
       <div class="muted">Configured exit</div>
       <strong>{{ group.target_label }}</strong>
@@ -146,7 +215,8 @@
       <button class="danger-button" type="submit">Delete</button>
     </form>
   </div>
-</section>
+  </div>
+</details>
 {% else %}
 <div class="card">
   <p class="muted" style="margin:0;">

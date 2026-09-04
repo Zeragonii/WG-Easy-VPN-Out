@@ -280,6 +280,10 @@ batch. Every file is passed through the same existing configuration validation
 and profile-intelligence path, imports start with automatic connection disabled,
 and matching kill-switch routing groups can be created automatically.
 
+Routing Groups use compact collapsed summaries by default so large profile
+libraries do not turn the routing page into an endless wall of cards. Expanding
+a group reveals the existing health, DNS, transition and management details.
+
 ## Interface appearance
 
 VPN Router includes an optional animated network-style particle background.
