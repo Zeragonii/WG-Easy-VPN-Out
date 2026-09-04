@@ -69,8 +69,15 @@
   <div id="preflight-results" style="margin-top:.8rem;"></div>
 </div>
 
-<div class="card" style="margin-top:1rem;">
-  <h2>VPN profiles</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">VPN profiles</div>
+      <div class="compact-summary-meta">Per-profile transport, addressing and retry state</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
   <div class="table-wrap">
     <table>
       <thead>
@@ -104,8 +111,15 @@
   </div>
 </div>
 
-<div class="card" style="margin-top:1rem;">
-  <h2>Routing groups</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Routing groups</div>
+      <div class="compact-summary-meta">Detailed group policy/routing inspection</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
   <div class="table-wrap">
     <table>
       <thead>
@@ -132,19 +146,21 @@
       </tbody>
     </table>
   </div>
-</div>
+    </div>
+</details>
+</details>
 
-<details class="card" style="margin-top:1rem;">
+<details class="compact-details">
   <summary><strong>IPv4 policy rules</strong></summary>
   <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.ip_rules or "—" }}</pre>
 </details>
 
-<details class="card" style="margin-top:1rem;">
+<details class="compact-details">
   <summary><strong>nftables vpn_router table</strong></summary>
   <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.nft_vpn_router or "—" }}</pre>
 </details>
 
-<details class="card" style="margin-top:1rem;">
+<details class="compact-details">
   <summary><strong>wg0 link state</strong></summary>
   <pre style="white-space:pre-wrap;overflow-wrap:anywhere;">{{ diagnostics.network.wg0 or "—" }}</pre>
 </details>

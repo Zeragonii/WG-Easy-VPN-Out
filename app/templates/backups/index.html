@@ -100,9 +100,16 @@
   </section>
 </div>
 
-<div class="card" style="margin-top:1rem;">
-  <h2>What is backed up?</h2>
-  <div class="grid">
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">What is backed up?</div>
+      <div class="compact-summary-meta">Included and excluded data</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
+    <div class="grid">
     <div>
       <strong>Included</strong>
       <p class="muted">
@@ -118,8 +125,9 @@
         state and other disposable runtime data.
       </p>
     </div>
+    </div>
   </div>
-</div>
+</details>
 
 <script>
 (() => {

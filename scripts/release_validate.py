@@ -220,6 +220,7 @@ def main():
         "## Data and backups",
         "## Multi-user self-service",
         "## VPN Profile Library",
+        "## Compact interface",
         "## Interface appearance",
         "## Security notes",
         "## Releases and changelog",
@@ -414,7 +415,7 @@ def main():
     detail_template = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
     if "WireGuard runtime activation follows after OpenVPN" in detail_template:
         fail("v1.8.0 detail page still claims WireGuard runtime is unsupported")
-    if "<h2>Runtime log</h2>" not in detail_template:
+    if "Runtime log" not in detail_template:
         fail("v1.8.0 VPN profile runtime log is not transport-neutral")
 
     preflight_source = (ROOT / "app/services/preflight.py").read_text(encoding="utf-8")
@@ -1120,6 +1121,57 @@ def main():
     ):
         if required_fragment not in clients_template:
             fail(f"v1.11.1a collapsible mobile client cards are missing: {required_fragment}")
+
+    base_template = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        ".compact-details",
+        ".compact-summary-title",
+        ".compact-summary-meta",
+        ".compact-summary-chevron",
+        ".compact-details-body",
+    ):
+        if required_fragment not in base_template:
+            fail(f"v1.12.0 compact UI design system is missing: {required_fragment}")
+
+    dashboard_template = (ROOT / "app/templates/dashboard.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Outbound VPN health",
+        "Routing group health",
+        "About this build",
+        'class="compact-details"',
+    ):
+        if required_fragment not in dashboard_template:
+            fail(f"v1.12.0 compact dashboard is missing: {required_fragment}")
+
+    settings_template = (ROOT / "app/templates/settings/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "{{ rows|length }} setting",
+        "WG-Easy connection test",
+        "Administrator account",
+        'class="compact-details"',
+    ):
+        if required_fragment not in settings_template:
+            fail(f"v1.12.0 compact settings UI is missing: {required_fragment}")
+
+    traffic_template = (ROOT / "app/templates/traffic.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Effective route traffic",
+        "Outbound VPN consumers",
+        "Client traffic",
+        'class="compact-details"',
+    ):
+        if required_fragment not in traffic_template:
+            fail(f"v1.12.0 compact traffic UI is missing: {required_fragment}")
+
+    vpn_detail = (ROOT / "app/templates/vpn_profiles/detail.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Profile intelligence",
+        "Runtime log",
+        "Configuration validation",
+        'class="compact-details"',
+    ):
+        if required_fragment not in vpn_detail:
+            fail(f"v1.12.0 compact VPN detail UI is missing: {required_fragment}")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:

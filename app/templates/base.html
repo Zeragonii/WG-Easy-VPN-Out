@@ -74,6 +74,94 @@
       border-radius: 12px;
       padding: 1rem;
     }
+
+    .compact-details {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-top: .75rem;
+      overflow: hidden;
+    }
+
+    .compact-details > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 52px;
+      padding: .72rem .9rem;
+      user-select: none;
+    }
+
+    .compact-details > summary::-webkit-details-marker { display: none; }
+    .compact-details > summary::marker { display: none; }
+
+    .compact-details > summary:hover {
+      background: color-mix(in srgb, var(--panel2) 55%, transparent);
+    }
+
+    .compact-summary-main {
+      min-width: 0;
+    }
+
+    .compact-summary-title {
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .compact-summary-meta {
+      color: var(--muted);
+      font-size: .78rem;
+      margin-top: .18rem;
+      overflow-wrap: anywhere;
+    }
+
+    .compact-summary-chevron {
+      color: var(--muted);
+      flex: 0 0 auto;
+      transition: transform .15s ease;
+    }
+
+    .compact-details[open] > summary .compact-summary-chevron {
+      transform: rotate(90deg);
+    }
+
+    .compact-details-body {
+      border-top: 1px solid var(--border);
+      padding: .9rem;
+    }
+
+    .compact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: .55rem;
+    }
+
+    .compact-stat {
+      padding: .6rem .7rem;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--panel2) 62%, transparent);
+    }
+
+    .compact-stat .muted {
+      font-size: .76rem;
+    }
+
+    .page-intro {
+      margin-bottom: .8rem;
+    }
+
+    .page-intro h1 {
+      margin-bottom: .25rem;
+    }
+
+    .secondary-note {
+      color: var(--muted);
+      font-size: .84rem;
+    }
     .muted { color: var(--muted); }
     .status-good { color: var(--good); }
     .status-warn { color: var(--warn); }

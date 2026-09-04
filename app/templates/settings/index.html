@@ -1,13 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Settings · VPN Router{% endblock %}
 {% block content %}
-<h1>Settings</h1>
-<p class="muted">Application settings are stored persistently in the database. Legacy environment values are used only to bootstrap settings that do not yet exist.</p>
+<div class="page-intro">
+  <h1>Settings</h1>
+  <p class="muted">Expand only the category you want to change. Settings are stored persistently in the database.</p>
+</div>
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% for section, rows in sections.items() %}
-  <section class="card" style="margin-bottom:1rem;">
-    <h2>{{ section }}</h2>
+  <details class="compact-details">
+    <summary>
+      <div class="compact-summary-main">
+        <div class="compact-summary-title">{{ section }}</div>
+        <div class="compact-summary-meta">{{ rows|length }} setting{% if rows|length != 1 %}s{% endif %}</div>
+      </div>
+      <span class="compact-summary-chevron">›</span>
+    </summary>
+    <div class="compact-details-body">
     {% if section == "Routing" %}
       <p class="muted">
         WAN hairpin compatibility selectively masquerades routed WG client
@@ -42,29 +51,58 @@
       {% endif %}
       <div class="muted" style="font-size:.78rem;margin-top:.2rem;">Source: {{ row.source }}</div>
     {% endfor %}
-  </section>
+    </div>
+  </details>
   {% endfor %}
-  <button type="submit">Save settings</button>
+  <button type="submit" style="margin-top:1rem;">Save settings</button>
 </form>
 
-<form method="post" action="{{ url_for('settings.test_wg_easy') }}" class="card" style="margin-top:1rem;">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h2>WG-Easy connection</h2>
-  <button type="submit" class="inline-button">Test saved connection</button>
-</form>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">WG-Easy connection test</div>
+      <div class="compact-summary-meta">Validate the currently saved API connection</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
+    <form method="post" action="{{ url_for('settings.test_wg_easy') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="inline-button">Test saved connection</button>
+    </form>
+  </div>
+</details>
 
-<form method="post" action="{{ url_for('settings.account') }}" class="card" style="margin-top:1rem;">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h2>Administrator account</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Administrator account</div>
+      <div class="compact-summary-meta">Change username or password</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
+    <form method="post" action="{{ url_for('settings.account') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Username<input name="username" value="{{ user.username if user else '' }}" required></label>
   <label>New password<input type="password" name="new_password" placeholder="Leave blank to keep current password"></label>
   <label>Confirm new password<input type="password" name="new_password_confirm"></label>
-  <button type="submit">Update administrator</button>
-</form>
+      <button type="submit">Update administrator</button>
+    </form>
+  </div>
+</details>
 
-<div class="card" style="margin-top:1rem;">
-  <h2>Deployment-level settings</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Deployment-level settings</div>
+      <div class="compact-summary-meta">Container/environment values</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
   <p class="muted">These remain environment/container settings because they are needed before the web application can serve this page:</p>
-  <code>SECRET_KEY</code> · <code>VPN_ROUTER_BIND</code> · <code>VPN_ROUTER_PORT</code> · <code>VPN_ROUTER_DATA_DIR</code> · <code>TZ</code>
-</div>
+    <code>SECRET_KEY</code> · <code>VPN_ROUTER_BIND</code> · <code>VPN_ROUTER_PORT</code> · <code>VPN_ROUTER_DATA_DIR</code> · <code>TZ</code>
+  </div>
+</details>
 {% endblock %}

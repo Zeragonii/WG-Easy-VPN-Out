@@ -183,8 +183,15 @@
   </section>
 </div>
 
-<div class="card" style="margin-top:1rem;">
-  <h2 style="margin-bottom:.25rem;">Effective route traffic</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Effective route traffic</div>
+      <div class="compact-summary-meta">Live rates aggregated by effective routing group</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
   <div class="muted">
     Rates are live. Cumulative totals are the WG-Easy counters for clients currently on each route,
     not historical accounting for that route.
@@ -206,10 +213,18 @@
       <tbody id="traffic-groups-body"></tbody>
     </table>
   </div>
-</div>
+  </div>
+</details>
 
-<div class="card" style="margin-top:1rem;">
-  <h2 style="margin-bottom:.25rem;">Outbound VPN consumers</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Outbound VPN consumers</div>
+      <div class="compact-summary-meta">Clients currently consuming each outbound VPN</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
   <div class="muted">Clients currently exiting through each VPN profile. WAN fallback clients are not counted as VPN consumers.</div>
   <div class="table-wrap" style="margin-top:.8rem;">
     <table>
@@ -226,10 +241,18 @@
       <tbody id="traffic-vpns-body"></tbody>
     </table>
   </div>
-</div>
+  </div>
+</details>
 
-<div class="card" style="margin-top:1rem;">
-  <h2 style="margin-bottom:.25rem;">Client traffic</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Client traffic</div>
+      <div class="compact-summary-meta">Per-peer live and cumulative WG-Easy counters</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
   <div class="muted">RX/TX values are the counters reported by WG-Easy for each WireGuard peer.</div>
   <div class="table-wrap" style="margin-top:.8rem;">
     <table>
@@ -248,7 +271,8 @@
       <tbody id="traffic-clients-body"></tbody>
     </table>
   </div>
-</div>
+  </div>
+</details>
 
 <script>
 (() => {

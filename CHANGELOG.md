@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.12.0
+
+### Compact, minimalist interface
+
+- Added a reusable compact-details design system for secondary/technical UI.
+- Changed the default information hierarchy across the application: headline
+  state and primary actions remain visible; inspection/detail content is
+  collapsed until requested.
+- Dashboard keeps health summary cards visible while collapsing detailed VPN
+  and routing inventories plus informational build prose.
+- Settings categories are collapsed by default and show a compact setting count
+  until expanded.
+- Traffic keeps live gauges and headline totals visible while collapsing route,
+  VPN-consumer and per-client traffic tables.
+- Diagnostics keeps its top summary and preflight workflow prominent while
+  collapsing deeper VPN/routing inventories and technical detail panels.
+- VPN profile detail keeps profile/runtime essentials visible while collapsing
+  profile intelligence, runtime logs and configuration-validation output.
+- Backup/Restore keeps the actual export/restore actions visible and collapses
+  explanatory backup-content documentation.
+- Users collapses explanatory self-service documentation while leaving account
+  and ownership management directly accessible.
+- Existing compact Routing Groups and mobile My VPN cards are retained.
+- Added consistent compact summary titles, metadata, chevrons and detail-body
+  spacing across desktop and mobile.
+- No routing, VPN runtime, authentication, database or schema changes.
+- Schema remains v9.
+
 ## 1.11.1a
 
 ### Collapsible mobile My VPN cards

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>System status</h1>
-<p class="muted">
-  Live health and routing overview for WG-Easy clients, outbound VPN tunnels,
-  policy-routing groups, and automatic recovery.
-</p>
+<div class="page-intro">
+  <h1>System status</h1>
+  <p class="muted">
+    Live health and routing overview for WG-Easy clients, outbound VPN tunnels,
+    policy-routing groups, and automatic recovery.
+  </p>
+</div>
 
 <div id="update-banner" class="card" style="margin-bottom:1rem;display:none;">
   <strong id="update-title">Update available</strong>
@@ -128,14 +130,19 @@
   </section>
 </div>
 
-<div class="card" style="margin-top:1rem;">
-  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
-    <div>
-      <h2 style="margin-bottom:.25rem;">Outbound VPN health</h2>
-      <div class="muted">Current tunnel state, addressing, uptime, and observed public exit.</div>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Outbound VPN health</div>
+      <div class="compact-summary-meta">{{ status.operational.vpn_connected }} connected · {{ status.operational.vpn_profiles }} profiles</div>
     </div>
-    <a href="{{ url_for('vpn_profiles.index') }}" class="button-link">Manage VPN profiles</a>
-  </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
+    <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+      <div class="muted">Current tunnel state, addressing, uptime, and observed public exit.</div>
+      <a href="{{ url_for('vpn_profiles.index') }}" class="button-link">Manage VPN profiles</a>
+    </div>
 
   <div class="table-wrap" style="margin-top:.8rem;">
     <table>
@@ -209,17 +216,22 @@
       </tbody>
     </table>
   </div>
-</div>
-
-<div class="card" style="margin-top:1rem;">
-  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
-    <div>
-      <h2 style="margin-bottom:.25rem;">Routing group health</h2>
-      <div class="muted">Configured policy versus the exit currently in effect.</div>
-    </div>
-    <a href="{{ url_for('routing_groups.index') }}" class="button-link">Manage routing groups</a>
   </div>
+</details>
 
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">Routing group health</div>
+      <div class="compact-summary-meta">{{ status.operational.routing_groups }} groups · {{ status.operational.client_assignments }} assigned clients</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
+    <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+      <div class="muted">Configured policy versus the exit currently in effect.</div>
+      <a href="{{ url_for('routing_groups.index') }}" class="button-link">Manage routing groups</a>
+    </div>
   <div class="table-wrap" style="margin-top:.8rem;">
     <table>
       <thead>
@@ -278,10 +290,19 @@
       </tbody>
     </table>
   </div>
-</div>
+  </div>
+</details>
 
-<div class="card" style="margin-top:1rem;">
-  <h2>Current feature set</h2>
+<details class="compact-details">
+  <summary>
+    <div class="compact-summary-main">
+      <div class="compact-summary-title">About this build</div>
+      <div class="compact-summary-meta">Feature summary and current milestone</div>
+    </div>
+    <span class="compact-summary-chevron">›</span>
+  </summary>
+  <div class="compact-details-body">
+    <h3 style="margin-top:0;">Current feature set</h3>
   <p>
     WG-Easy clients can be persistently assigned to routing groups targeting
     Default WAN or an outbound OpenVPN/WireGuard profile while private/local destinations
@@ -289,16 +310,15 @@
     block-on-failure or WAN fallback, and routing automatically follows tunnel
     connect/disconnect/reconnect events with retry recovery.
   </p>
-</div>
-
-<div class="card" style="margin-top:1rem;">
-  <h2>Current milestone</h2>
+    <hr style="border:0;border-top:1px solid var(--border);margin:1rem 0;">
+    <h3>Current milestone</h3>
   <p>
     Backup and restore is now available for portable VPN profiles, configuration
     files, routing groups and WG-Easy client assignments, with optional
     SECRET_KEY inclusion for fully portable encrypted credentials.
   </p>
-</div>
+  </div>
+</details>
 
 <script>
 (() => {

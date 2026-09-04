@@ -301,6 +301,14 @@ Routing Groups use compact collapsed summaries by default so large profile
 libraries do not turn the routing page into an endless wall of cards. Expanding
 a group reveals the existing health, DNS, transition and management details.
 
+## Compact interface
+
+VPN Router uses a summary-first interface. Operational state and primary
+actions remain visible, while deeper inspection data, technical inventories,
+logs, explanatory text and infrequently changed settings are collapsed by
+default. Expandable sections preserve the full information without making the
+normal workflow feel like a wall of admin panels.
+
 ## Interface appearance
 
 VPN Router includes an optional animated network-style particle background.

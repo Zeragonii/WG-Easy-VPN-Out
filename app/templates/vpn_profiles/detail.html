@@ -70,8 +70,15 @@
 </section>
 </div>
 
-<section class="card" style="margin-top:1rem;">
-<h2>Profile intelligence</h2>
+<details class="compact-details">
+<summary>
+  <div class="compact-summary-main">
+    <div class="compact-summary-title">Profile intelligence</div>
+    <div class="compact-summary-meta">{{ intelligence.provider }} · {{ intelligence.endpoint }}</div>
+  </div>
+  <span class="compact-summary-chevron">›</span>
+</summary>
+<div class="compact-details-body">
 <div class="grid-2">
   <div>
     <div class="muted">Provider</div>
@@ -122,22 +129,27 @@
   <div><div class="muted">Remote endpoints</div><strong>{{ intelligence.raw.remote_count }}</strong></div>
 </div>
 <p class="muted" style="margin-bottom:0;">Derived read-only from the imported VPN configuration. Provider-specific interpretation is handled by adapters and does not change routing or provider behavior.</p>
-</section>
+</div>
+</details>
 
-<section class="card" style="margin-top:1rem;">
-<h2>Runtime log</h2>
+<details class="compact-details">
+<summary><div class="compact-summary-main"><div class="compact-summary-title">Runtime log</div><div class="compact-summary-meta">Recent tunnel process output</div></div><span class="compact-summary-chevron">›</span></summary>
+<div class="compact-details-body">
 <pre id="runtime-log" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:var(--panel2);padding:.8rem;border-radius:8px;">{% if runtime.log_tail %}{{ runtime.log_tail|join('\n') }}{% else %}No runtime log yet.{% endif %}</pre>
-</section>
+</div>
+</details>
 
-<section class="card" style="margin-top:1rem;">
-<h2>Configuration validation</h2>
+<details class="compact-details">
+<summary><div class="compact-summary-main"><div class="compact-summary-title">Configuration validation</div><div class="compact-summary-meta">Parser result and warnings</div></div><span class="compact-summary-chevron">›</span></summary>
+<div class="compact-details-body">
 {% if config_error %}<div class="error-box">{{ config_error }}</div>
 {% elif validation %}
 <p class="status-good">● Configuration parsed successfully</p>
 {% if validation.summary %}<ul>{% for item in validation.summary %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
 {% if validation.warnings %}<h3>Warnings</h3><ul>{% for item in validation.warnings %}<li class="status-warn">{{ item }}</li>{% endfor %}</ul>{% endif %}
 {% endif %}
-</section>
+</div>
+</details>
 
 <script>
 (() => {
