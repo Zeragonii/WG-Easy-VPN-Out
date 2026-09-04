@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.9.2
+
+### GitHub Releases and README cleanup
+
+- Removed the duplicated version-by-version patch diary from `README.md`.
+- README now documents the current project only and links to:
+  - GitHub Releases for per-version release notes
+  - `CHANGELOG.md` for the complete repository history
+- Added `scripts/extract_release_notes.py` to extract one version section from
+  `CHANGELOG.md`.
+- Added a tag-triggered GitHub Actions release workflow.
+- Pushing a `v*` tag now:
+  1. checks that the tag matches `VERSION`,
+  2. validates the release tree,
+  3. extracts the matching changelog section,
+  4. creates the GitHub Release using that section as the release body.
+- `CHANGELOG.md` remains the single source of truth; no duplicate
+  `RELEASE_NOTES.md` needs to be maintained.
+- Existing container publishing behavior is unchanged.
+- No application, routing, traffic, VPN lifecycle or schema changes.
+
 ## 1.9.1a
 
 ### Traffic gauge spacing hotfix

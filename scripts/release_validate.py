@@ -219,17 +219,18 @@ def main():
         "## Routing and DNS behavior",
         "## Data and backups",
         "## Security notes",
-        "## Release and patch history",
+        "## Releases and changelog",
     ):
         if section not in readme_text:
             fail(f"README.md is missing current documentation section: {section}")
 
+    changelog_history_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     for historical_version in (
-        "v1.5.2", "v1.5.3", "v1.5.4", "v1.5.5",
-        "v1.5.6", "v1.5.7", "v1.5.8",
+        "1.5.2", "1.5.3", "1.5.4", "1.5.5",
+        "1.5.6", "1.5.7", "1.5.8",
     ):
-        if f"## {historical_version}" not in readme_text:
-            fail(f"README.md patch history is missing {historical_version}")
+        if f"## {historical_version}" not in changelog_history_text:
+            fail(f"CHANGELOG.md history is missing {historical_version}")
 
     clients_source = (ROOT / "app/clients.py").read_text(encoding="utf-8")
     for required_fragment in (
@@ -801,6 +802,22 @@ def main():
     traffic_template = (ROOT / "app/templates/traffic.html").read_text(encoding="utf-8")
     if "margin-bottom: 1rem;" not in traffic_template:
         fail("v1.9.1a traffic gauge spacing hotfix is missing")
+
+    readme_text_current = (ROOT / "README.md").read_text(encoding="utf-8")
+    if "## Release and patch history" in readme_text_current:
+        fail("README still contains the legacy duplicated release history")
+    for required_fragment in ("## Releases and changelog", "GitHub Releases", "CHANGELOG.md"):
+        if required_fragment not in readme_text_current:
+            fail(f"v1.9.2 README release navigation is missing: {required_fragment}")
+    release_script = ROOT / "scripts/extract_release_notes.py"
+    if not release_script.exists(): fail("v1.9.2 release-note extraction script is missing")
+    release_workflow = ROOT / ".github/workflows/release.yml"
+    if not release_workflow.exists(): fail("v1.9.2 GitHub Release workflow is missing")
+    else:
+        release_workflow_text = release_workflow.read_text(encoding="utf-8")
+        for required_fragment in ('"v*"', "Verify tag matches VERSION", "scripts/extract_release_notes.py", "gh release create", "--verify-tag"):
+            if required_fragment not in release_workflow_text:
+                fail(f"v1.9.2 GitHub Release workflow is missing: {required_fragment}")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
