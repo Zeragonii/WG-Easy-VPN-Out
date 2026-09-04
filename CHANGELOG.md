@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.10.1a
+
+### Routing Group status alignment hotfix
+
+- Fixed the compact Routing Group status labels appearing horizontally offset
+  from one another because shorter labels were right-aligned.
+- Ready, WAN fallback and Blocked now render inside the same fixed-width status
+  slot with left-aligned contents.
+- No routing, runtime, database or schema changes.
+
 ## 1.10.1
 
 ### Profile Library and Routing Groups UI refinement

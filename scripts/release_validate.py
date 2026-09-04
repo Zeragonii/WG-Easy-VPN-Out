@@ -1009,6 +1009,18 @@ def main():
     if '<details class="card routing-group-card" open>' in routing_index:
         fail("v1.10.1 routing groups must default collapsed")
 
+    routing_index = (ROOT / "app/templates/routing_groups/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        ".routing-group-status",
+        "width:7.4rem",
+        "text-align:left",
+        'status-good routing-group-status',
+        'status-warn routing-group-status',
+        'status-bad routing-group-status',
+    ):
+        if required_fragment not in routing_index:
+            fail(f"v1.10.1a routing-group status alignment fix is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

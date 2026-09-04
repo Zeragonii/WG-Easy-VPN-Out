@@ -50,6 +50,12 @@
     border-top:1px solid var(--border);
     padding:1rem;
   }
+  .routing-group-status {
+    display:inline-block;
+    width:7.4rem;
+    text-align:left;
+    white-space:nowrap;
+  }
   @media (max-width: 850px) {
     .routing-group-summary {
       grid-template-columns:1fr auto;
@@ -99,11 +105,11 @@
 
     <div style="text-align:right;white-space:nowrap;">
       {% if rt.state == "ready" %}
-        <span class="status-good">● Ready</span>
+        <span class="status-good routing-group-status">● Ready</span>
       {% elif rt.state == "fallback" %}
-        <span class="status-warn">◐ WAN fallback</span>
+        <span class="status-warn routing-group-status">◐ WAN fallback</span>
       {% else %}
-        <span class="status-bad">● Blocked</span>
+        <span class="status-bad routing-group-status">● Blocked</span>
       {% endif %}
     </div>
   </summary>
