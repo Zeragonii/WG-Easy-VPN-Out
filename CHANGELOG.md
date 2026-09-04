@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.2c
+
+### GHCR lowercase image-name hotfix
+
+- Fixed container publishing failing when the GitHub repository name contains
+  uppercase characters.
+- GHCR repository names must be lowercase.
+- The publish workflow now normalizes `GITHUB_REPOSITORY` to lowercase once and
+  exposes the resulting `ghcr.io/<owner>/<repo>` image name through a workflow
+  step output.
+- Docker metadata and all pushed image tags now reuse that normalized value.
+- Release/tag automation behavior is otherwise unchanged.
+- No application, routing, VPN, traffic or schema changes.
+
 ## 1.9.2b
 
 ### Historical GitHub Release backfill workflow

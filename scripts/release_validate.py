@@ -823,7 +823,7 @@ def main():
         "Verify existing tag points at this commit",
         "gh release create",
         "release_exists",
-        "ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}",
+        "${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}",
     ):
         if required_fragment not in publish_workflow_text:
             fail(f"v1.9.2a consolidated release workflow is missing: {required_fragment}")
@@ -848,6 +848,22 @@ def main():
         ):
             if required_fragment not in backfill_text:
                 fail(f"v1.9.2b release backfill workflow is missing: {required_fragment}")
+
+    publish_workflow = ROOT / ".github/workflows/publish.yml"
+    publish_text = publish_workflow.read_text(encoding="utf-8")
+    for required_fragment in (
+        "Normalize container image name",
+        "tr '[:upper:]' '[:lower:]'",
+        'echo "name=ghcr.io/${repository}" >> "${GITHUB_OUTPUT}"',
+        "${{ steps.image.outputs.name }}:latest",
+        "${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}",
+        "${{ steps.image.outputs.name }}:sha-${{ github.sha }}",
+    ):
+        if required_fragment not in publish_text:
+            fail(f"v1.9.2c GHCR lowercase image-name fix is missing: {required_fragment}")
+
+    if "ghcr.io/${{ github.repository }}" in publish_text:
+        fail("v1.9.2c publish workflow still uses github.repository directly for GHCR tags")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
