@@ -5,10 +5,10 @@ import os
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, render_template, request
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from . import db
-from .models import AppSetting, ClientAssignment, ClientRouteOverride, RouteOverrideEvent, RoutingGroup
+from .models import AppSetting, ClientAssignment, ClientRouteOverride, RouteOverrideEvent, RoutingGroup, UserClientAccess
 from .services.routing import RoutingEngine, RoutingEngineError
 from .services.routing_overrides import active_override_map, expiry_for
 from .services.settings import SettingsService
@@ -37,6 +37,35 @@ def _groups():
     return db.session.execute(
         db.select(RoutingGroup).order_by(RoutingGroup.name.asc())
     ).scalars().all()
+
+
+def _owned_external_ids():
+    if current_user.is_admin:
+        return None
+    values = db.session.execute(
+        db.select(UserClientAccess.external_id).where(
+            UserClientAccess.user_id == current_user.id
+        )
+    ).scalars().all()
+    return {str(value) for value in values}
+
+
+def _can_access_client(external_id):
+    if current_user.is_admin:
+        return True
+    return db.session.execute(
+        db.select(UserClientAccess.id).where(
+            UserClientAccess.user_id == current_user.id,
+            UserClientAccess.external_id == str(external_id),
+        )
+    ).scalar_one_or_none() is not None
+
+
+def _deny_client_access():
+    return jsonify({
+        "ok": False,
+        "error": "You do not have access to this WG-Easy client.",
+    }), 403
 
 
 def _assignment_map():
@@ -137,14 +166,25 @@ def index():
         clients = []
         error = str(exc)
 
+    owned_ids = _owned_external_ids()
+    if owned_ids is not None:
+        clients = [client for client in clients if str(client.external_id) in owned_ids]
+
     assignments = _assignment_map()
     groups = _groups()
     overrides = active_override_map(db)
     override_events = db.session.execute(
         db.select(RouteOverrideEvent)
         .order_by(RouteOverrideEvent.created_at.desc(), RouteOverrideEvent.id.desc())
-        .limit(12)
+        .limit(50)
     ).scalars().all()
+    if owned_ids is not None:
+        override_events = [
+            event for event in override_events
+            if str(event.external_id) in owned_ids
+        ][:12]
+    else:
+        override_events = override_events[:12]
 
     return render_template(
         "clients.html",
@@ -154,6 +194,7 @@ def index():
         overrides=overrides,
         override_events=override_events,
         error=error,
+        is_admin=current_user.is_admin,
     )
 
 
@@ -169,6 +210,10 @@ def api():
             "error": str(exc),
             "clients": [],
         }), 502
+
+    owned_ids = _owned_external_ids()
+    if owned_ids is not None:
+        clients = [client for client in clients if str(client.external_id) in owned_ids]
 
     assignments = _assignment_map()
     overrides = active_override_map(db)
@@ -189,6 +234,9 @@ def api():
 @bp.post("/<external_id>/routing-group")
 @login_required
 def set_routing_group(external_id):
+    if not _can_access_client(external_id):
+        return _deny_client_access()
+
     body = request.get_json(silent=True) or {}
     group_id = body.get("routing_group_id")
 
@@ -320,6 +368,9 @@ def _refresh_effective_routing():
 @bp.post("/<external_id>/override")
 @login_required
 def set_temporary_override(external_id):
+    if not _can_access_client(external_id):
+        return _deny_client_access()
+
     body = request.get_json(silent=True) or {}
 
     try:
@@ -444,6 +495,9 @@ def set_temporary_override(external_id):
 @bp.post("/<external_id>/override/cancel")
 @login_required
 def cancel_temporary_override(external_id):
+    if not _can_access_client(external_id):
+        return _deny_client_access()
+
     override = db.session.execute(
         db.select(ClientRouteOverride).where(
             ClientRouteOverride.external_id == str(external_id)

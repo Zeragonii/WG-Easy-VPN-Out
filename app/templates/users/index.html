@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Users · VPN Router{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:.35rem;">Users & client access</h1>
+<p class="muted" style="margin-top:0;">
+  Create self-service accounts and decide which WG-Easy client each person can manage.
+</p>
+
+<div class="grid">
+<section class="card">
+  <h2>Create user</h2>
+  <form method="post" action="{{ url_for('users.create') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Username<input name="username" maxlength="64" required></label>
+    <label>Password<input name="password" type="password" minlength="10" required autocomplete="new-password"></label>
+    <label style="display:flex;gap:.6rem;align-items:flex-start;">
+      <input type="checkbox" name="is_admin" value="1" style="width:auto;margin-top:.25rem;">
+      <span><strong>Administrator</strong><br><span class="muted">Full VPN Router access.</span></span>
+    </label>
+    <button type="submit" style="width:auto;margin-top:1rem;">Create user</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Self-service model</h2>
+  <p class="muted">
+    A self-service user sees only the WG-Easy client(s) assigned to them and can
+    switch those clients between routing groups you have already created.
+  </p>
+  <p class="muted">
+    VPN profiles, routing groups, traffic, settings, diagnostics, backups and
+    user administration stay administrator-only.
+  </p>
+</section>
+</div>
+
+<section class="card" style="margin-top:1rem;">
+<h2>Accounts</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>User</th><th>Role</th><th>Owned clients</th><th>Update</th><th></th></tr></thead>
+<tbody>
+{% for user in users %}
+<tr>
+  <td><strong>{{ user.username }}</strong>{% if user.id == current_user.id %} <span class="pill">You</span>{% endif %}</td>
+  <td>{% if user.is_admin %}<span class="status-good">Administrator</span>{% else %}Self-service{% endif %}</td>
+  <td>{{ user.client_access|length }}</td>
+  <td>
+    <form method="post" action="{{ url_for('users.update', user_id=user.id) }}" style="display:flex;gap:.45rem;align-items:end;flex-wrap:wrap;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label style="margin:0;min-width:150px;">Username<input name="username" maxlength="64" value="{{ user.username }}" required></label>
+      <label style="margin:0;min-width:180px;">New password<input name="password" type="password" minlength="10" placeholder="Leave unchanged"></label>
+      <label style="display:flex;gap:.35rem;align-items:center;margin:0 0 .55rem;">
+        <input type="checkbox" name="is_admin" value="1" style="width:auto;margin:0;" {% if user.is_admin %}checked{% endif %}> Admin
+      </label>
+      <button class="inline-button" type="submit">Save</button>
+    </form>
+  </td>
+  <td>
+    {% if user.id != current_user.id %}
+    <form method="post" action="{{ url_for('users.delete', user_id=user.id) }}" onsubmit="return confirm('Delete this user and remove their client ownership?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="danger-button" type="submit">Delete</button>
+    </form>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table></div>
+</section>
+
+<section class="card" style="margin-top:1rem;">
+<h2>WG-Easy client ownership</h2>
+{% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+{% if clients %}
+<div class="table-wrap"><table>
+<thead><tr><th>Client</th><th>IPv4</th><th>Self-service owner</th></tr></thead>
+<tbody>
+{% for client in clients %}
+{% set access = ownership.get(client.external_id|string) %}
+<tr>
+  <td><strong>{{ client.name }}</strong><div class="muted"><code>{{ client.external_id }}</code></div></td>
+  <td><code>{{ client.ipv4_address }}</code></td>
+  <td>
+    <form method="post" action="{{ url_for('users.ownership') }}" style="display:flex;gap:.5rem;align-items:center;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="external_id" value="{{ client.external_id }}">
+      <input type="hidden" name="client_name" value="{{ client.name }}">
+      <select name="user_id" style="margin:0;min-width:180px;">
+        <option value="">Unassigned</option>
+        {% for user in users %}
+          {% if not user.is_admin %}
+          <option value="{{ user.id }}" {% if access and access.user_id == user.id %}selected{% endif %}>{{ user.username }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <button class="inline-button" type="submit">Assign</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table></div>
+{% else %}
+<p class="muted">No WG-Easy clients are currently available.</p>
+{% endif %}
+</section>
+{% endblock %}

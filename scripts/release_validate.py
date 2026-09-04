@@ -218,6 +218,7 @@ def main():
         "## Basic startup guide",
         "## Routing and DNS behavior",
         "## Data and backups",
+        "## Multi-user self-service",
         "## VPN Profile Library",
         "## Interface appearance",
         "## Security notes",
@@ -252,8 +253,8 @@ def main():
             fail(f"Final v1.5 hardening is missing: {required_fragment}")
 
     migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
-    if "CURRENT_SCHEMA_VERSION = 8" not in migrations_source:
-        fail("v1.10.0 requires schema v8")
+    if "CURRENT_SCHEMA_VERSION = 9" not in migrations_source:
+        fail("v1.11.0 requires schema v9")
     if "temporary-routing-overrides" not in migrations_source:
         fail("v1.6.0 temporary override migration is missing")
 
@@ -656,8 +657,8 @@ def main():
             fail(f"v1.8.8 routing-group form option is missing: {required_fragment}")
 
     migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
-    if "CURRENT_SCHEMA_VERSION = 8" not in migrations_source:
-        fail("v1.10.0 schema version is not v8")
+    if "CURRENT_SCHEMA_VERSION = 9" not in migrations_source:
+        fail("v1.11.0 schema version is not v9")
     if "vpn-profile-location-intelligence" not in migrations_source:
         fail("v1.9.0 location migration is missing")
 
@@ -915,7 +916,7 @@ def main():
 
     migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
     for required_fragment in (
-        "CURRENT_SCHEMA_VERSION = 8",
+        "CURRENT_SCHEMA_VERSION = 9",
         "vpn-profile-library-metadata",
         'ADD COLUMN favorite BOOLEAN NOT NULL DEFAULT 0',
         "ADD COLUMN tags TEXT",
@@ -1020,6 +1021,64 @@ def main():
     ):
         if required_fragment not in routing_index:
             fail(f"v1.10.1a routing-group status alignment fix is missing: {required_fragment}")
+
+    migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "CURRENT_SCHEMA_VERSION = 9",
+        "user-client-self-service",
+        "UPDATE users SET is_admin = 1",
+        "CREATE TABLE IF NOT EXISTS user_client_access",
+    ):
+        if required_fragment not in migrations_source:
+            fail(f"v1.11.0 multi-user migration is missing: {required_fragment}")
+
+    models_source = (ROOT / "app/models.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "is_admin = db.Column",
+        "class UserClientAccess",
+        'db.ForeignKey("users.id")',
+    ):
+        if required_fragment not in models_source:
+            fail(f"v1.11.0 user model support is missing: {required_fragment}")
+
+    users_source = (ROOT / "app/users.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def admin_required",
+        "def create",
+        "def update",
+        "def ownership",
+        "Client ownership is only needed for self-service users.",
+    ):
+        if required_fragment not in users_source:
+            fail(f"v1.11.0 user administration is missing: {required_fragment}")
+
+    clients_source = (ROOT / "app/clients.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _owned_external_ids",
+        "def _can_access_client",
+        "You do not have access to this WG-Easy client.",
+        "UserClientAccess.user_id == current_user.id",
+    ):
+        if required_fragment not in clients_source:
+            fail(f"v1.11.0 client ownership enforcement is missing: {required_fragment}")
+
+    init_source = (ROOT / "app/__init__.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def enforce_user_scope",
+        'request.blueprint in {"auth", "clients"}',
+        "app.register_blueprint(users_bp)",
+    ):
+        if required_fragment not in init_source:
+            fail(f"v1.11.0 global self-service scope is missing: {required_fragment}")
+
+    users_template = (ROOT / "app/templates/users/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Users & client access",
+        "WG-Easy client ownership",
+        'name="user_id"',
+    ):
+        if required_fragment not in users_template:
+            fail(f"v1.11.0 Users UI is missing: {required_fragment}")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:

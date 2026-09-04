@@ -47,6 +47,7 @@ def create_app():
     from .setup import bp as setup_bp
     from .settings import bp as settings_bp
     from .traffic import bp as traffic_bp
+    from .users import bp as users_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -58,6 +59,20 @@ def create_app():
     app.register_blueprint(setup_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(traffic_bp)
+    app.register_blueprint(users_bp)
+
+    @app.before_request
+    def enforce_user_scope():
+        from flask import request, redirect, url_for
+        from flask_login import current_user
+
+        if not current_user.is_authenticated:
+            return None
+        if bool(getattr(current_user, "is_admin", False)):
+            return None
+        if request.blueprint in {"auth", "clients"} or request.endpoint == "static":
+            return None
+        return redirect(url_for("clients.index"))
 
     @app.context_processor
     def inject_ui_preferences():
@@ -257,7 +272,7 @@ def _bootstrap_or_prepare_setup(app, settings):
     username = os.getenv("ADMIN_USERNAME", "admin").strip() or "admin"
     password = os.getenv("ADMIN_PASSWORD", "")
     if password:
-        user = User(username=username)
+        user = User(username=username, is_admin=True)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()

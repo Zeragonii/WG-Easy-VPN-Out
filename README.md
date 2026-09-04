@@ -268,6 +268,18 @@ Built-in backup/restore can export the application configuration and may
 optionally include the `SECRET_KEY`. Treat backups containing the key as
 sensitive.
 
+## Multi-user self-service
+
+VPN Router supports administrator and self-service accounts. Administrators can
+assign discovered WG-Easy clients to individual self-service users from the
+**Users** page. A self-service user sees only their assigned client(s) and can
+switch those clients between routing groups/endpoints already configured by an
+administrator.
+
+Authorization is enforced server-side as well as in the UI: direct requests
+against another user's WG-Easy client are rejected, and non-client
+administration remains administrator-only.
+
 ## VPN Profile Library
 
 VPN Router's VPN Clients area is a profile library designed for installations

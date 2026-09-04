@@ -141,14 +141,19 @@
     <strong>VPN Router</strong>
     {% if current_user.is_authenticated %}
     <nav aria-label="Main navigation">
+      {% if current_user.is_admin %}
       <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-      <a href="{{ url_for('clients.index') }}">WG-Easy Clients</a>
+      {% endif %}
+      <a href="{{ url_for('clients.index') }}">{% if current_user.is_admin %}WG-Easy Clients{% else %}My VPN{% endif %}</a>
+      {% if current_user.is_admin %}
       <a href="{{ url_for('traffic.index') }}">Traffic</a>
       <a href="{{ url_for('vpn_profiles.index') }}">VPN Clients</a>
       <a href="{{ url_for('routing_groups.index') }}">Routing Groups</a>
+      <a href="{{ url_for('users.index') }}">Users</a>
       <a href="{{ url_for('backups.index') }}">Backup & Restore</a>
       <a href="{{ url_for('diagnostics.index') }}">Diagnostics</a>
       <a href="{{ url_for('settings.index') }}">Settings</a>
+      {% endif %}
     </nav>
     {% endif %}
   </div>

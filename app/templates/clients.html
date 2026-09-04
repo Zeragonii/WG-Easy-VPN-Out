@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}WG-Easy Clients · VPN Router{% endblock %}
 {% block content %}
-<h1>WG-Easy Clients</h1>
+<h1>{% if is_admin %}WG-Easy Clients{% else %}My VPN{% endif %}</h1>
+{% if not is_admin %}
+<p class="muted">Change the outbound endpoint for the WG-Easy client(s) assigned to your account.</p>
+{% endif %}
 <p class="muted">
   Live WG-Easy discovery with persistent outbound routing assignments.
 </p>

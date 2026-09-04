@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.11.0
+
+### Multi-user WG-Easy client self-service
+
+- Added administrator and self-service user roles.
+- Existing pre-v1.11 users are promoted to administrator during migration so
+  upgrades preserve current access.
+- Added **Users & client access** administration for creating users, resetting
+  passwords, changing roles and assigning discovered WG-Easy clients.
+- Each WG-Easy client can have one self-service owner.
+- Self-service users see only their assigned client(s) and can switch those
+  clients between administrator-created routing groups/endpoints.
+- Ownership is enforced server-side on client listing/API access, persistent
+  routing-group changes and temporary routing overrides.
+- Self-service navigation is reduced to **My VPN** and logout.
+- Initial setup and legacy bootstrap accounts are explicitly administrators.
+- Added database schema v9.
+- Core routing, nftables, VPN runtime and assignment semantics are unchanged.
+- User accounts/client ownership are intentionally not yet included in the
+  configuration backup format; that can be added after the authorization model
+  has had live testing.
+
 ## 1.10.1a
 
 ### Routing Group status alignment hotfix

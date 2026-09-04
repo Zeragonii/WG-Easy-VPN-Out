@@ -69,6 +69,7 @@ def index():
             db.session.add(user)
         else:
             user.username = username
+        user.is_admin = True
         user.set_password(password)
         db.session.commit()
 

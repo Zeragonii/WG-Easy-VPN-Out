@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 
 
 class MigrationError(RuntimeError):
@@ -216,6 +216,42 @@ def _migration_8_profile_library_metadata(connection):
 
 
 
+def _migration_9_user_client_self_service(connection):
+    user_columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(users)"
+        ).fetchall()
+    }
+    if "is_admin" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users "
+            "ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"
+        )
+        # Before v1.11 every account was effectively an administrator.
+        connection.execute("UPDATE users SET is_admin = 1")
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS user_client_access (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            external_id VARCHAR(255) NOT NULL UNIQUE,
+            client_name VARCHAR(255) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_user_client_access_user_id
+        ON user_client_access(user_id)
+    """)
+    connection.execute("""
+        CREATE INDEX IF NOT EXISTS ix_user_client_access_external_id
+        ON user_client_access(external_id)
+    """)
+
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
@@ -225,6 +261,7 @@ MIGRATIONS = (
     Migration(6, "temporary-routing-overrides", _migration_6_temporary_routing_overrides),
     Migration(7, "vpn-profile-location-intelligence", _migration_7_profile_location_intelligence),
     Migration(8, "vpn-profile-library-metadata", _migration_8_profile_library_metadata),
+    Migration(9, "user-client-self-service", _migration_9_user_client_self_service),
 )
 
 
