@@ -16,6 +16,31 @@
     >
   </label>
 
+  <label style="display:flex;gap:.6rem;align-items:flex-start;">
+    <input
+      type="checkbox"
+      name="favorite"
+      value="1"
+      style="width:auto;margin-top:.25rem;"
+      {% if (supplied and supplied.favorite == "1") or (not supplied and profile and profile.favorite) %}checked{% endif %}
+    >
+    <span>
+      <strong>Favourite profile</strong><br>
+      <span class="muted">Favourite profiles are kept at the top of the library by default.</span>
+    </span>
+  </label>
+
+  <label>
+    Tags
+    <input
+      name="tags"
+      maxlength="1000"
+      placeholder="e.g. uk, streaming, low-latency"
+      value="{{ supplied.tags if supplied and supplied.tags is defined else (profile.tags if profile and profile.tags else '') }}"
+    >
+  </label>
+  <p class="muted" style="margin-top:-.4rem;">Comma-separated. Up to 20 tags are retained per profile.</p>
+
   {% set current_provider = (
     supplied.provider if supplied
     else (profile.provider if profile and profile.provider else "")

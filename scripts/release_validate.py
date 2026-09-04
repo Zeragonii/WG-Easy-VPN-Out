@@ -218,6 +218,7 @@ def main():
         "## Basic startup guide",
         "## Routing and DNS behavior",
         "## Data and backups",
+        "## VPN Profile Library",
         "## Interface appearance",
         "## Security notes",
         "## Releases and changelog",
@@ -251,8 +252,8 @@ def main():
             fail(f"Final v1.5 hardening is missing: {required_fragment}")
 
     migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
-    if "CURRENT_SCHEMA_VERSION = 7" not in migrations_source:
-        fail("v1.9.0 requires schema v7")
+    if "CURRENT_SCHEMA_VERSION = 8" not in migrations_source:
+        fail("v1.10.0 requires schema v8")
     if "temporary-routing-overrides" not in migrations_source:
         fail("v1.6.0 temporary override migration is missing")
 
@@ -655,8 +656,8 @@ def main():
             fail(f"v1.8.8 routing-group form option is missing: {required_fragment}")
 
     migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
-    if "CURRENT_SCHEMA_VERSION = 7" not in migrations_source:
-        fail("v1.9.0 schema version is not v7")
+    if "CURRENT_SCHEMA_VERSION = 8" not in migrations_source:
+        fail("v1.10.0 schema version is not v8")
     if "vpn-profile-location-intelligence" not in migrations_source:
         fail("v1.9.0 location migration is missing")
 
@@ -911,6 +912,77 @@ def main():
     ):
         if required_fragment not in base_template:
             fail(f"v1.9.3a persistent particle state is missing: {required_fragment}")
+
+    migrations_source = (ROOT / "app/services/migrations.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "CURRENT_SCHEMA_VERSION = 8",
+        "vpn-profile-library-metadata",
+        'ADD COLUMN favorite BOOLEAN NOT NULL DEFAULT 0',
+        "ADD COLUMN tags TEXT",
+    ):
+        if required_fragment not in migrations_source:
+            fail(f"v1.10.0 profile-library migration is missing: {required_fragment}")
+
+    models_source = (ROOT / "app/models.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "favorite = db.Column",
+        "tags = db.Column",
+        "def tag_list",
+    ):
+        if required_fragment not in models_source:
+            fail(f"v1.10.0 profile-library model support is missing: {required_fragment}")
+
+    vpn_profiles_source = (ROOT / "app/vpn_profiles.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        "def _normalize_tags",
+        "def _unique_profile_name",
+        '@bp.post("/bulk")',
+        'def bulk_import()',
+        "request.files.getlist(\"configs\")",
+        "Imported VPN",
+        "profile.favorite",
+    ):
+        if required_fragment not in vpn_profiles_source:
+            fail(f"v1.10.0 profile-library controller is missing: {required_fragment}")
+
+    vpn_index = (ROOT / "app/templates/vpn_profiles/index.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "VPN Profile Library",
+        'id="library-search"',
+        'id="filter-provider"',
+        'id="filter-country"',
+        'id="filter-region"',
+        'id="filter-protocol"',
+        'id="filter-tag"',
+        'id="filter-favourite"',
+        'id="library-sort"',
+        'id="select-visible"',
+        'name="profile_ids"',
+        "function applyLibrary",
+    ):
+        if required_fragment not in vpn_index:
+            fail(f"v1.10.0 profile-library UI is missing: {required_fragment}")
+
+    import_template = (ROOT / "app/templates/vpn_profiles/import.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "Bulk import VPN profiles",
+        'name="configs"',
+        "multiple",
+        'name="create_routing_groups"',
+        "Shared OpenVPN credentials",
+    ):
+        if required_fragment not in import_template:
+            fail(f"v1.10.0 bulk-import UI is missing: {required_fragment}")
+
+    backups_source = (ROOT / "app/services/backups.py").read_text(encoding="utf-8")
+    for required_fragment in (
+        '"favorite": bool(p.favorite)',
+        '"tags": p.tags',
+        "favorite=bool(row.get(\"favorite\", False))",
+        'tags=row.get("tags")',
+    ):
+        if required_fragment not in backups_source:
+            fail(f"v1.10.0 profile-library backup support is missing: {required_fragment}")
 
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:

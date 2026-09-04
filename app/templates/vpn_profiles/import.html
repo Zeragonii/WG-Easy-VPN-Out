@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Bulk import VPN profiles · VPN Router{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+  <div>
+    <h1 style="margin-bottom:.35rem;">Bulk import VPN profiles</h1>
+    <p class="muted" style="margin-top:0;">
+      Import up to 200 OpenVPN/WireGuard configs in one batch. Each file is
+      validated independently and imported profiles start disabled.
+    </p>
+  </div>
+  <a class="button-link secondary" href="{{ url_for('vpn_profiles.index') }}">Back to library</a>
+</div>
+
+<div class="card" style="max-width:820px;">
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <label>
+    VPN configuration files
+    <input name="configs" type="file" accept=".ovpn,.conf,text/plain" multiple required>
+  </label>
+  <p class="muted">
+    Friendly names are generated from filenames and made unique automatically.
+    Provider detection uses the existing profile-intelligence adapters.
+  </p>
+
+  <label>
+    Provider override
+    <input name="provider" maxlength="120" placeholder="Blank = infer per file where possible">
+  </label>
+
+  <label>
+    Tags applied to all imported profiles
+    <input name="tags" maxlength="1000" placeholder="e.g. proton, uk, imported">
+  </label>
+
+  <label>
+    Connection policy
+    <select name="connection_policy">
+      <option value="on_demand" selected>On demand · connect while assigned</option>
+      <option value="always">Always connected</option>
+    </select>
+  </label>
+
+  <label style="display:flex;gap:.6rem;align-items:flex-start;">
+    <input type="checkbox" name="create_routing_groups" value="1" style="width:auto;margin-top:.25rem;" checked>
+    <span>
+      <strong>Create matching routing groups</strong><br>
+      <span class="muted">Each group uses kill-switch fallback and inherited/client DNS.</span>
+    </span>
+  </label>
+
+  <label style="display:flex;gap:.6rem;align-items:flex-start;">
+    <input type="checkbox" name="favorite" value="1" style="width:auto;margin-top:.25rem;">
+    <span><strong>Favourite all imported profiles</strong></span>
+  </label>
+
+  <fieldset style="border:0;padding:0;margin:1rem 0;">
+    <legend><strong>Shared OpenVPN credentials</strong></legend>
+    <p class="muted">Optional. Applied to every imported profile. WireGuard ignores these fields.</p>
+    <label>Username <input name="username" autocomplete="off"></label>
+    <label>Password <input name="password" type="password" autocomplete="new-password"></label>
+  </fieldset>
+
+  <div class="error-box" style="border-color:var(--warn);background:color-mix(in srgb,var(--warn) 10%,var(--panel));">
+    WireGuard configuration files commonly contain private keys. Treat bulk
+    config exports as secrets and do not upload files you do not trust.
+  </div>
+
+  <div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1rem;">
+    <button type="submit" style="width:auto;">Import profiles</button>
+    <a class="button-link secondary" href="{{ url_for('vpn_profiles.index') }}">Cancel</a>
+  </div>
+</form>
+</div>
+{% endblock %}

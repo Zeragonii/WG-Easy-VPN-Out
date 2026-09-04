@@ -15,6 +15,12 @@
 <h2>Profile</h2>
 <p>Type: <span class="pill">{{ profile.type_label }}</span></p>
 <p>Provider: {{ profile.provider or "—" }}</p>
+<p>Favourite: {% if profile.favorite %}<span class="status-warn">★ Yes</span>{% else %}<span class="muted">☆ No</span>{% endif %}</p>
+<p>Tags:
+{% if profile.tag_list %}
+  {% for tag in profile.tag_list %}<span class="pill">{{ tag }}</span>{% endfor %}
+{% else %}<span class="muted">—</span>{% endif %}
+</p>
 <p>Config: <code>{{ profile.config_filename }}</code></p>
 <p>Username: {{ profile.username or "—" }}</p>
 <p>Password: {% if profile.password %}••••••••{% else %}—{% endif %}</p>

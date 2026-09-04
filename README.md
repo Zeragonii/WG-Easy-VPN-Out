@@ -268,6 +268,18 @@ Built-in backup/restore can export the application configuration and may
 optionally include the `SECRET_KEY`. Treat backups containing the key as
 sensitive.
 
+## VPN Profile Library
+
+VPN Router's VPN Clients area is a profile library designed for installations
+with tens or hundreds of outbound VPN exits. Profiles can be searched and
+filtered by provider, country, region, protocol and tags; sorted without extra
+server requests; marked as favourites; tagged; and changed in bulk.
+
+Bulk import accepts up to 200 OpenVPN `.ovpn` and WireGuard `.conf` files per
+batch. Every file is passed through the same existing configuration validation
+and profile-intelligence path, imports start with automatic connection disabled,
+and matching kill-switch routing groups can be created automatically.
+
 ## Interface appearance
 
 VPN Router includes an optional animated network-style particle background.

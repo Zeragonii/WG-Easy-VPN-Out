@@ -37,12 +37,22 @@ class VPNProfile(db.Model):
     manual_country = db.Column(db.String(120), nullable=True)
     manual_region = db.Column(db.String(120), nullable=True)
     manual_city = db.Column(db.String(120), nullable=True)
+    favorite = db.Column(db.Boolean, nullable=False, default=False)
+    tags = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
     @property
     def type_label(self):
         return "OpenVPN" if self.vpn_type == "openvpn" else "WireGuard"
 
+
+    @property
+    def tag_list(self):
+        return [
+            value.strip()
+            for value in (self.tags or "").split(",")
+            if value.strip()
+        ]
 
     @property
     def has_manual_location(self):

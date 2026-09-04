@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 from sqlalchemy.exc import IntegrityError
@@ -51,6 +52,67 @@ def _provider_from_form():
     return selected
 
 
+def _normalize_tags(value):
+    """Normalize comma-separated tags while preserving first-seen spelling."""
+    seen = set()
+    result = []
+    raw_values = value if isinstance(value, (list, tuple, set)) else str(value or "").split(",")
+    for raw in raw_values:
+        tag = str(raw).strip()
+        if not tag:
+            continue
+        tag = " ".join(tag.split())
+        if len(tag) > 40:
+            tag = tag[:40].rstrip()
+        folded = tag.casefold()
+        if folded in seen:
+            continue
+        seen.add(folded)
+        result.append(tag)
+        if len(result) >= 20:
+            break
+    return ", ".join(result)
+
+
+def _add_tag(profile, tag):
+    tags = profile.tag_list
+    candidate = _normalize_tags([tag])
+    if not candidate:
+        return
+    if candidate.casefold() not in {item.casefold() for item in tags}:
+        tags.append(candidate)
+    profile.tags = _normalize_tags(tags) or None
+
+
+def _remove_tag(profile, tag):
+    folded = str(tag or "").strip().casefold()
+    profile.tags = _normalize_tags(
+        [item for item in profile.tag_list if item.casefold() != folded]
+    ) or None
+
+
+def _unique_profile_name(base):
+    base = (base or "Imported VPN").strip()[:120] or "Imported VPN"
+    existing = {
+        value.casefold()
+        for value in db.session.execute(db.select(VPNProfile.name)).scalars().all()
+    }
+    if base.casefold() not in existing:
+        return base
+    counter = 2
+    while True:
+        suffix = f" ({counter})"
+        candidate = f"{base[:120-len(suffix)]}{suffix}"
+        if candidate.casefold() not in existing:
+            return candidate
+        counter += 1
+
+
+def _import_friendly_name(filename):
+    safe = safe_filename(filename)
+    stem = Path(safe).stem.replace("_", " ").replace("-", " ")
+    return " ".join(part for part in stem.split() if part) or "Imported VPN"
+
 
 def _display_health_state(profile, runtime, observability):
     """
@@ -91,7 +153,12 @@ def _display_health_state(profile, runtime, observability):
 @bp.get("/")
 @login_required
 def index():
-    profiles = db.session.execute(db.select(VPNProfile).order_by(VPNProfile.name.asc())).scalars().all()
+    profiles = db.session.execute(
+        db.select(VPNProfile).order_by(
+            VPNProfile.favorite.desc(),
+            VPNProfile.name.asc(),
+        )
+    ).scalars().all()
     svc = VPNRuntimeService()
     runtime = {p.id: svc.status(p, include_probe=False) for p in profiles}
 
@@ -145,6 +212,27 @@ def index():
             ),
         }
 
+    provider_options = sorted({
+        row["provider"]
+        for row in intelligence.values()
+        if row.get("provider") and row["provider"] != "Unknown"
+    }, key=str.casefold)
+    country_options = sorted({
+        row.get("location", {}).get("country")
+        for row in intelligence.values()
+        if row.get("location", {}).get("country")
+    }, key=str.casefold)
+    region_options = sorted({
+        row.get("location", {}).get("region")
+        for row in intelligence.values()
+        if row.get("location", {}).get("region")
+    }, key=str.casefold)
+    tag_options = sorted({
+        tag
+        for profile in profiles
+        for tag in profile.tag_list
+    }, key=str.casefold)
+
     return render_template(
         "vpn_profiles/index.html",
         profiles=profiles,
@@ -153,6 +241,10 @@ def index():
         consumer_counts=consumer_counts,
         on_demand_states=on_demand_states,
         intelligence=intelligence,
+        provider_options=provider_options,
+        country_options=country_options,
+        region_options=region_options,
+        tag_options=tag_options,
     )
 
 @bp.get("/runtime-summary")
@@ -226,6 +318,8 @@ def new():
         "manual_country": request.form.get("manual_country", ""),
         "manual_region": request.form.get("manual_region", ""),
         "manual_city": request.form.get("manual_city", ""),
+        "favorite": request.form.get("favorite", ""),
+        "tags": request.form.get("tags", ""),
         "create_routing_group": (
             request.form.get("create_routing_group", "1")
             if request.method == "POST"
@@ -294,6 +388,8 @@ def new():
             manual_country=supplied["manual_country"].strip() or None,
             manual_region=supplied["manual_region"].strip() or None,
             manual_city=supplied["manual_city"].strip() or None,
+            favorite=supplied["favorite"] == "1",
+            tags=_normalize_tags(supplied["tags"]) or None,
         )
 
         try:
@@ -381,6 +477,243 @@ def new():
         return redirect(url_for("vpn_profiles.detail", profile_id=profile.id))
 
     return render_new()
+
+
+@bp.post("/<int:profile_id>/favorite")
+@login_required
+def favorite(profile_id):
+    profile = db.get_or_404(VPNProfile, profile_id)
+    profile.favorite = request.form.get("favorite") == "1"
+    db.session.commit()
+    return redirect(url_for("vpn_profiles.index"))
+
+
+@bp.post("/bulk")
+@login_required
+def bulk():
+    raw_ids = request.form.getlist("profile_ids")
+    profile_ids = []
+    for value in raw_ids:
+        try:
+            profile_ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+
+    if not profile_ids:
+        flash("Select at least one VPN profile.", "error")
+        return redirect(url_for("vpn_profiles.index"))
+
+    profiles = db.session.execute(
+        db.select(VPNProfile).where(VPNProfile.id.in_(profile_ids))
+    ).scalars().all()
+    if not profiles:
+        flash("No matching VPN profiles were found.", "error")
+        return redirect(url_for("vpn_profiles.index"))
+
+    action = request.form.get("bulk_action", "").strip()
+    tag = request.form.get("bulk_tag", "").strip()
+
+    if action == "enable":
+        for profile in profiles:
+            profile.enabled = True
+        message = f"Allowed automatic connection for {len(profiles)} profile(s)."
+    elif action == "disable":
+        for profile in profiles:
+            profile.enabled = False
+        message = f"Disabled automatic connection for {len(profiles)} profile(s)."
+    elif action == "policy_on_demand":
+        for profile in profiles:
+            profile.connection_policy = "on_demand"
+        message = f"Set {len(profiles)} profile(s) to On demand."
+    elif action == "policy_always":
+        for profile in profiles:
+            profile.connection_policy = "always"
+        message = f"Set {len(profiles)} profile(s) to Always connected."
+    elif action == "favorite":
+        for profile in profiles:
+            profile.favorite = True
+        message = f"Favourited {len(profiles)} profile(s)."
+    elif action == "unfavorite":
+        for profile in profiles:
+            profile.favorite = False
+        message = f"Removed {len(profiles)} profile(s) from favourites."
+    elif action == "add_tag":
+        normalized = _normalize_tags([tag])
+        if not normalized:
+            flash("Enter a tag to add.", "error")
+            return redirect(url_for("vpn_profiles.index"))
+        for profile in profiles:
+            _add_tag(profile, normalized)
+        message = f"Added tag '{normalized}' to {len(profiles)} profile(s)."
+    elif action == "remove_tag":
+        normalized = _normalize_tags([tag])
+        if not normalized:
+            flash("Enter a tag to remove.", "error")
+            return redirect(url_for("vpn_profiles.index"))
+        for profile in profiles:
+            _remove_tag(profile, normalized)
+        message = f"Removed tag '{normalized}' from {len(profiles)} profile(s)."
+    else:
+        flash("Choose a valid bulk action.", "error")
+        return redirect(url_for("vpn_profiles.index"))
+
+    db.session.commit()
+
+    manager = current_app.extensions.get("on_demand_vpn")
+    if manager and action in {"enable", "disable", "policy_on_demand", "policy_always"}:
+        try:
+            manager.reconcile_once()
+        except Exception as exc:
+            current_app.logger.warning("Bulk profile reconcile failed: %s", exc)
+
+    flash(message, "success")
+    return redirect(url_for("vpn_profiles.index"))
+
+
+@bp.route("/import", methods=["GET", "POST"])
+@login_required
+def bulk_import():
+    if request.method == "GET":
+        return render_template("vpn_profiles/import.html")
+
+    uploads = [
+        item
+        for item in request.files.getlist("configs")
+        if item and item.filename
+    ]
+    if not uploads:
+        flash("Select at least one VPN configuration file.", "error")
+        return render_template("vpn_profiles/import.html")
+    if len(uploads) > 200:
+        flash("Bulk import is limited to 200 files at a time.", "error")
+        return render_template("vpn_profiles/import.html")
+
+    provider_override = request.form.get("provider", "").strip()[:120]
+    common_tags = _normalize_tags(request.form.get("tags", ""))
+    policy = request.form.get("connection_policy", "on_demand").strip().lower()
+    if policy not in ("always", "on_demand"):
+        policy = "on_demand"
+    create_groups = request.form.get("create_routing_groups") == "1"
+    favorite_imports = request.form.get("favorite") == "1"
+    username = request.form.get("username", "").strip()[:255]
+    password = request.form.get("password", "")
+
+    created = []
+    errors = []
+    created_group = False
+    geoip = current_app.extensions.get("geoip")
+
+    for upload in uploads:
+        filename = upload.filename or "vpn.conf"
+        try:
+            raw = upload.read()
+            if len(raw) > 1024 * 1024:
+                raise VPNProfileValidationError("Configuration exceeds 1 MiB.")
+
+            content = raw.decode("utf-8", errors="replace")
+            safe_upload_name = safe_filename(filename)
+            vpn_type, _ = validate_config(safe_upload_name, content)
+
+            friendly_name = _unique_profile_name(
+                _import_friendly_name(safe_upload_name)
+            )
+            stored_name = f"{safe_filename(friendly_name)}-{safe_upload_name}"
+            path = _profile_dir(vpn_type) / stored_name
+            if path.exists():
+                raise VPNProfileValidationError(
+                    "Generated stored config filename already exists."
+                )
+
+            temp_profile = SimpleNamespace(vpn_type=vpn_type, provider=None)
+            meta = inspect_profile(temp_profile, content)
+            provider = provider_override or meta.provider_detected or None
+
+            profile = VPNProfile(
+                name=friendly_name,
+                provider=provider,
+                vpn_type=vpn_type,
+                config_filename=stored_name,
+                username=username or None,
+                password=encrypt_secret(password or None),
+                enabled=False,
+                connection_policy=policy,
+                favorite=favorite_imports,
+                tags=common_tags or None,
+            )
+
+            path.write_text(content, encoding="utf-8")
+            db.session.add(profile)
+            db.session.commit()
+
+            if geoip and geoip.available() and meta.endpoint_is_ip and meta.endpoint_host:
+                try:
+                    from .services.geoip import apply_detected_location
+                    if apply_detected_location(
+                        db,
+                        profile,
+                        geoip,
+                        meta.endpoint_host,
+                        "endpoint_geoip",
+                    ):
+                        db.session.commit()
+                except Exception as exc:
+                    db.session.rollback()
+                    current_app.logger.warning(
+                        "Bulk-import GeoIP enrichment failed for profile %s: %s",
+                        profile.id,
+                        exc,
+                    )
+
+            if create_groups:
+                group = RoutingGroup(
+                    name=profile.name,
+                    vpn_profile_id=profile.id,
+                    fallback_mode="block",
+                    dns_mode="inherit",
+                    dns_target=None,
+                )
+                db.session.add(group)
+                try:
+                    db.session.commit()
+                    created_group = True
+                except IntegrityError:
+                    db.session.rollback()
+                    errors.append(
+                        f"{filename}: profile imported, but matching routing "
+                        "group name already exists."
+                    )
+
+            created.append(profile.name)
+
+        except (VPNProfileValidationError, OSError, IntegrityError) as exc:
+            db.session.rollback()
+            try:
+                if "path" in locals():
+                    path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            errors.append(f"{filename}: {exc}")
+        finally:
+            if "path" in locals():
+                del path
+
+    if created_group:
+        try:
+            RoutingEngine().rebuild(db, RoutingGroup)
+        except RoutingEngineError as exc:
+            errors.append(f"Routing rebuild after import failed: {exc}")
+
+    if created:
+        flash(
+            f"Imported {len(created)} VPN profile(s). They start disabled.",
+            "success",
+        )
+    if errors:
+        preview = errors[:10]
+        suffix = f" (+{len(errors)-10} more)" if len(errors) > 10 else ""
+        flash("Import notes: " + " | ".join(preview) + suffix, "error")
+
+    return redirect(url_for("vpn_profiles.index"))
 
 
 @bp.get("/<int:profile_id>")
@@ -596,6 +929,8 @@ def edit(profile_id):
             "manual_country": request.form.get("manual_country", ""),
             "manual_region": request.form.get("manual_region", ""),
             "manual_city": request.form.get("manual_city", ""),
+            "favorite": request.form.get("favorite", ""),
+            "tags": request.form.get("tags", ""),
             "username": request.form.get("username", ""),
         }
 
@@ -617,6 +952,8 @@ def edit(profile_id):
         profile.manual_country = supplied["manual_country"].strip() or None
         profile.manual_region = supplied["manual_region"].strip() or None
         profile.manual_city = supplied["manual_city"].strip() or None
+        profile.favorite = supplied["favorite"] == "1"
+        profile.tags = _normalize_tags(supplied["tags"]) or None
 
         policy = supplied["connection_policy"].strip().lower()
         profile.connection_policy = (

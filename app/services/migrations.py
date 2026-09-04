@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 
 class MigrationError(RuntimeError):
@@ -197,6 +197,25 @@ def _migration_7_profile_location_intelligence(connection):
             )
 
 
+def _migration_8_profile_library_metadata(connection):
+    columns = {
+        row[1]
+        for row in connection.execute(
+            "PRAGMA table_info(vpn_profiles)"
+        ).fetchall()
+    }
+    if "favorite" not in columns:
+        connection.execute(
+            "ALTER TABLE vpn_profiles "
+            "ADD COLUMN favorite BOOLEAN NOT NULL DEFAULT 0"
+        )
+    if "tags" not in columns:
+        connection.execute(
+            "ALTER TABLE vpn_profiles ADD COLUMN tags TEXT"
+        )
+
+
+
 MIGRATIONS = (
     Migration(1, "baseline", _migration_1_baseline),
     Migration(2, "application-settings", _migration_2_application_settings),
@@ -205,6 +224,7 @@ MIGRATIONS = (
     Migration(5, "vpn-connection-policy", _migration_5_connection_policy),
     Migration(6, "temporary-routing-overrides", _migration_6_temporary_routing_overrides),
     Migration(7, "vpn-profile-location-intelligence", _migration_7_profile_location_intelligence),
+    Migration(8, "vpn-profile-library-metadata", _migration_8_profile_library_metadata),
 )
 
 

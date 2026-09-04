@@ -86,6 +86,8 @@ def export_backup(db, VPNProfile, RoutingGroup, ClientAssignment, version, inclu
             "manual_country": p.manual_country,
             "manual_region": p.manual_region,
             "manual_city": p.manual_city,
+            "favorite": bool(p.favorite),
+            "tags": p.tags,
             "created_at": _iso(p.created_at),
             "updated_at": _iso(p.updated_at),
         } for p in profiles],
@@ -270,6 +272,13 @@ def _validate_backup_data(data, configs):
             raise BackupError(
                 f"VPN profile '{name}' has invalid connection policy."
             )
+        if not isinstance(row.get("favorite", False), bool):
+            raise BackupError(
+                f"VPN profile '{name}' favourite flag must be boolean."
+            )
+        tags = row.get("tags")
+        if tags is not None:
+            _require_text(tags, f"VPN profile '{name}' tags", 1000, True)
 
         for field, limit in (
             ("detected_country_code", 8),
@@ -717,6 +726,8 @@ def restore_backup(
                     manual_country=row.get("manual_country"),
                     manual_region=row.get("manual_region"),
                     manual_city=row.get("manual_city"),
+                    favorite=bool(row.get("favorite", False)),
+                    tags=row.get("tags"),
                 ))
             db.session.flush()
 

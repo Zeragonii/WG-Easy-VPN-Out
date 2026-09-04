@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.10.0
+
+### VPN Profile Library
+
+- Reworked **VPN Clients** into a profile-library interface intended to remain
+  practical with tens or hundreds of configured exits.
+- Added instant client-side search across profile name, provider, endpoint,
+  location, protocol and tags.
+- Added provider, country, region, protocol, tag and favourite filters.
+- Added sortable profile views while retaining the existing bulk runtime-status
+  endpoint instead of introducing per-profile polling.
+- Added persistent profile favourites and comma-separated tags.
+- Added favourites/tags to profile create, edit, detail, backup and restore.
+- Added bulk actions for automatic-connection permission, connection policy,
+  favourites, and adding/removing tags.
+- Added bulk import for up to 200 `.ovpn` / `.conf` files per batch.
+- Bulk import validates each file independently, generates unique friendly
+  names from filenames, uses existing provider intelligence, optionally applies
+  shared OpenVPN credentials/tags/provider overrides, and can automatically
+  create matching kill-switch routing groups.
+- Imported profiles always start with automatic connection disabled.
+- Added database schema v8 for profile-library metadata.
+- VPN runtime, policy-routing and tunnel transport semantics are unchanged.
+
 ## 1.9.3a
 
 ### Persistent particle-background state hotfix
