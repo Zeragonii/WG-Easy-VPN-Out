@@ -187,6 +187,8 @@
 
   const particles = [];
   const mouse = { x: null, y: null };
+  const STORAGE_KEY = "vpn-router-particle-state-v1";
+  const STORAGE_MAX_AGE_MS = 15000;
   const MAX_DPR = 2;
   const LINK_DISTANCE = 135;
   const MOUSE_RADIUS = 155;
@@ -209,6 +211,76 @@
     return Math.max(22, Math.min(82, Math.round((width * height) / 22000)));
   }
 
+  function saveParticleState() {
+    try {
+      const state = {
+        savedAt: Date.now(),
+        width,
+        height,
+        particles: particles.map(particle => ({
+          x: particle.x,
+          y: particle.y,
+          vx: particle.vx,
+          vy: particle.vy,
+          radius: particle.radius,
+        })),
+      };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Cosmetic state persistence must never affect page navigation.
+    }
+  }
+
+  function restoreParticleState() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+
+      const state = JSON.parse(raw);
+      if (
+        !state
+        || !Array.isArray(state.particles)
+        || !Number.isFinite(state.width)
+        || !Number.isFinite(state.height)
+        || state.width <= 0
+        || state.height <= 0
+        || !Number.isFinite(state.savedAt)
+        || (Date.now() - state.savedAt) > STORAGE_MAX_AGE_MS
+      ) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        return false;
+      }
+
+      const scaleX = width / state.width;
+      const scaleY = height / state.height;
+
+      particles.length = 0;
+      for (const saved of state.particles) {
+        if (
+          !Number.isFinite(saved.x)
+          || !Number.isFinite(saved.y)
+          || !Number.isFinite(saved.vx)
+          || !Number.isFinite(saved.vy)
+          || !Number.isFinite(saved.radius)
+        ) {
+          continue;
+        }
+
+        particles.push({
+          x: saved.x * scaleX,
+          y: saved.y * scaleY,
+          vx: saved.vx,
+          vy: saved.vy,
+          radius: saved.radius,
+        });
+      }
+
+      return particles.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   function makeParticle() {
     const angle = Math.random() * Math.PI * 2;
     const speed = BASE_SPEED * (0.55 + Math.random() * 0.9);
@@ -227,6 +299,8 @@
     if (particles.length > target) particles.length = target;
   }
 
+  let hasRestoredInitialState = false;
+
   function resize() {
     width = window.innerWidth;
     height = window.innerHeight;
@@ -238,6 +312,12 @@
     canvas.style.height = `${height}px`;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (!hasRestoredInitialState) {
+      restoreParticleState();
+      hasRestoredInitialState = true;
+    }
+
     syncParticleCount();
   }
 
@@ -330,8 +410,15 @@
     mouse.y = null;
   }, { passive: true });
 
+  window.addEventListener("pagehide", saveParticleState, { capture: true });
+
+  // Periodic snapshots make restoration robust even if a browser skips the
+  // normal pagehide path during an abrupt navigation or refresh.
+  window.setInterval(saveParticleState, 1000);
+
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
+      saveParticleState();
       if (animationFrame !== null) {
         window.cancelAnimationFrame(animationFrame);
         animationFrame = null;

@@ -896,6 +896,22 @@ def main():
     if 'section == "Appearance"' not in settings_template:
         fail("v1.9.3 Appearance settings help text is missing")
 
+    base_template = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        'STORAGE_KEY = "vpn-router-particle-state-v1"',
+        "function saveParticleState",
+        "function restoreParticleState",
+        "sessionStorage.setItem",
+        "sessionStorage.getItem",
+        'window.addEventListener("pagehide", saveParticleState',
+        "window.setInterval(saveParticleState, 1000)",
+        "STORAGE_MAX_AGE_MS = 15000",
+        "saved.x * scaleX",
+        "saved.y * scaleY",
+    ):
+        if required_fragment not in base_template:
+            fail(f"v1.9.3a persistent particle state is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

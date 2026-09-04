@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.9.3a
+
+### Persistent particle-background state hotfix
+
+- Particle positions, velocities and sizes now persist across normal Flask page
+  navigations using browser `sessionStorage`.
+- The background constellation therefore resumes from the previous page rather
+  than being regenerated on every navigation.
+- State is tab-local and automatically disappears when the browser tab/session
+  ends.
+- Saved particle positions are proportionally rescaled when the viewport size
+  changes between pages.
+- State older than 15 seconds is discarded and regenerated rather than
+  restoring stale animation data.
+- Particle state is saved on `pagehide`, when the tab becomes hidden, and once
+  per second as a lightweight checkpoint.
+- Persistence failures are ignored because the feature remains cosmetic.
+- No routing, backend, database, schema or navigation-model changes.
+
 ## 1.9.3
 
 ### Optional interactive particle background
