@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.11.1
+
+### Mobile interface pass
+
+- Reworked the WG-Easy Clients / **My VPN** page into touch-friendly client
+  cards on narrow screens instead of relying on a horizontally scrolling
+  desktop table.
+- Mobile client cards retain connection state, handshake age, RX/TX, permanent
+  route, effective route and temporary-override controls with clear labels.
+- Endpoint selectors and override buttons expand to the available mobile width.
+- Temporary override UI becomes a mobile bottom-sheet style dialog with
+  full-width actions and safe-area padding.
+- Improved mobile header/navigation sizing, touch targets, safe-area handling
+  and horizontal overflow behaviour.
+- Improved Users, VPN Profile Library and Routing Groups layouts on narrow
+  displays while preserving their desktop presentation.
+- Desktop layouts and routing/backend behaviour are unchanged.
+- Schema remains v9.
+
 ## 1.11.0
 
 ### Multi-user WG-Easy client self-service

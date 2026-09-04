@@ -1,6 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Users · VPN Router{% endblock %}
 {% block content %}
+<style>
+  .user-inline-form, .ownership-inline-form {
+    display:flex;
+    gap:.45rem;
+    align-items:end;
+    flex-wrap:wrap;
+  }
+  @media (max-width: 760px) {
+    .user-inline-form, .ownership-inline-form {
+      display:grid !important;
+      grid-template-columns:1fr;
+      align-items:stretch !important;
+    }
+    .user-inline-form label, .ownership-inline-form select {
+      min-width:0 !important;
+      width:100%;
+    }
+    .user-inline-form .inline-button,
+    .ownership-inline-form .inline-button {
+      width:100%;
+    }
+  }
+</style>
 <h1 style="margin-bottom:.35rem;">Users & client access</h1>
 <p class="muted" style="margin-top:0;">
   Create self-service accounts and decide which WG-Easy client each person can manage.
@@ -45,7 +68,7 @@
   <td>{% if user.is_admin %}<span class="status-good">Administrator</span>{% else %}Self-service{% endif %}</td>
   <td>{{ user.client_access|length }}</td>
   <td>
-    <form method="post" action="{{ url_for('users.update', user_id=user.id) }}" style="display:flex;gap:.45rem;align-items:end;flex-wrap:wrap;">
+    <form method="post" action="{{ url_for('users.update', user_id=user.id) }}" class="user-inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label style="margin:0;min-width:150px;">Username<input name="username" maxlength="64" value="{{ user.username }}" required></label>
       <label style="margin:0;min-width:180px;">New password<input name="password" type="password" minlength="10" placeholder="Leave unchanged"></label>
@@ -82,7 +105,7 @@
   <td><strong>{{ client.name }}</strong><div class="muted"><code>{{ client.external_id }}</code></div></td>
   <td><code>{{ client.ipv4_address }}</code></td>
   <td>
-    <form method="post" action="{{ url_for('users.ownership') }}" style="display:flex;gap:.5rem;align-items:center;">
+    <form method="post" action="{{ url_for('users.ownership') }}" class="ownership-inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="external_id" value="{{ client.external_id }}">
       <input type="hidden" name="client_name" value="{{ client.name }}">

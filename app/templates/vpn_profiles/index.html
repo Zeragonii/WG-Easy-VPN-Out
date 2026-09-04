@@ -72,6 +72,17 @@
   }
   @media (max-width: 600px) {
     .library-toolbar { grid-template-columns:1fr; }
+    .library-actions select,
+    .library-actions input,
+    .bulk-control,
+    .bulk-control select,
+    .bulk-control input,
+    .bulk-apply {
+      width:100%;
+    }
+    .bulk-action-grid {
+      grid-template-columns:2rem minmax(0,1fr);
+    }
   }
 </style>
 

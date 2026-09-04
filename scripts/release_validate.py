@@ -1080,6 +1080,34 @@ def main():
         if required_fragment not in users_template:
             fail(f"v1.11.0 Users UI is missing: {required_fragment}")
 
+    base_template = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "viewport-fit=cover",
+        "env(safe-area-inset-top)",
+        "min-height: 44px",
+        "-webkit-overflow-scrolling: touch",
+    ):
+        if required_fragment not in base_template:
+            fail(f"v1.11.1 global mobile support is missing: {required_fragment}")
+
+    clients_template = (ROOT / "app/templates/clients.html").read_text(encoding="utf-8")
+    for required_fragment in (
+        "clients-table",
+        "client-primary",
+        'data-label="Permanent route"',
+        'data-label="Effective route"',
+        'data-label="Temporary override"',
+        "#override-modal-backdrop",
+        "align-items: flex-end",
+        "92dvh",
+    ):
+        if required_fragment not in clients_template:
+            fail(f"v1.11.1 mobile My VPN UI is missing: {required_fragment}")
+
+    users_template = (ROOT / "app/templates/users/index.html").read_text(encoding="utf-8")
+    if "user-inline-form" not in users_template or "ownership-inline-form" not in users_template:
+        fail("v1.11.1 mobile Users forms are missing")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

@@ -280,6 +280,11 @@ Authorization is enforced server-side as well as in the UI: direct requests
 against another user's WG-Easy client are rejected, and non-client
 administration remains administrator-only.
 
+The self-service **My VPN** interface is responsive: on phones each assigned
+WG-Easy device is presented as a touch-friendly card with full-width endpoint
+and temporary-override controls rather than a desktop table requiring sideways
+scrolling.
+
 ## VPN Profile Library
 
 VPN Router's VPN Clients area is a profile library designed for installations

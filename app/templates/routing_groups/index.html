@@ -58,9 +58,27 @@
   }
   @media (max-width: 850px) {
     .routing-group-summary {
-      grid-template-columns:1fr auto;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:.6rem;
+      padding:.8rem .75rem;
     }
     .routing-group-summary .routing-summary-secondary { display:none; }
+    .routing-group-status {
+      width:auto;
+      min-width:5.2rem;
+    }
+  }
+  @media (max-width: 480px) {
+    .routing-group-summary {
+      align-items:center;
+    }
+    .routing-group-name-main {
+      white-space:normal;
+      line-height:1.15;
+    }
+    .routing-group-details {
+      padding:.8rem .75rem;
+    }
   }
 </style>
 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">

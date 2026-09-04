@@ -1,9 +1,151 @@
 {% extends "base.html" %}
 {% block title %}WG-Easy Clients · VPN Router{% endblock %}
 {% block content %}
+<style>
+  .clients-table .route-select {
+    min-width: 190px;
+  }
+
+  @media (max-width: 760px) {
+    .clients-shell {
+      padding: .75rem;
+    }
+
+    .clients-refresh-bar {
+      align-items: stretch !important;
+    }
+
+    .clients-refresh-bar > div {
+      width: 100%;
+    }
+
+    #refresh-now {
+      width: 100%;
+    }
+
+    .clients-table-wrap {
+      overflow: visible;
+      margin-top: .7rem !important;
+    }
+
+    .clients-table,
+    .clients-table tbody,
+    .clients-table tr,
+    .clients-table td {
+      display: block;
+      width: 100%;
+    }
+
+    .clients-table thead {
+      display: none;
+    }
+
+    .clients-table tbody {
+      display: grid;
+      gap: .75rem;
+    }
+
+    .clients-table tr {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel2);
+      overflow: hidden;
+    }
+
+    .clients-table td {
+      border-bottom: 1px solid var(--border);
+      padding: .68rem .75rem;
+      display: grid;
+      grid-template-columns: minmax(7.6rem, 38%) minmax(0, 1fr);
+      gap: .65rem;
+      align-items: center;
+      overflow-wrap: anywhere;
+    }
+
+    .clients-table td:last-child {
+      border-bottom: 0;
+    }
+
+    .clients-table td::before {
+      content: attr(data-label);
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .025em;
+    }
+
+    .clients-table td.client-primary {
+      display: block;
+      padding: .8rem .75rem;
+      background: color-mix(in srgb, var(--panel) 55%, var(--panel2));
+    }
+
+    .clients-table td.client-primary::before {
+      display: none;
+    }
+
+    .clients-table .client-name {
+      font-size: 1.05rem;
+    }
+
+    .clients-table .client-id {
+      overflow-wrap: anywhere;
+      margin-top: .2rem;
+    }
+
+    .clients-table .route-select {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+    }
+
+    .clients-table .route-save-status {
+      grid-column: 2;
+    }
+
+    .clients-table .override-open {
+      width: 100%;
+    }
+
+    .clients-table .override-inline-summary {
+      grid-column: 2;
+    }
+
+    #override-modal-backdrop {
+      padding: 0 !important;
+      align-items: flex-end !important;
+    }
+
+    #override-modal {
+      width: 100% !important;
+      max-height: min(92dvh, 92vh) !important;
+      border-radius: 16px 16px 0 0 !important;
+      padding:
+        1rem
+        max(1rem, env(safe-area-inset-right))
+        max(1rem, env(safe-area-inset-bottom))
+        max(1rem, env(safe-area-inset-left)) !important;
+    }
+
+    #override-modal-close {
+      min-width: 72px;
+    }
+
+    #override-modal-apply,
+    #override-modal-cancel {
+      width: 100% !important;
+    }
+
+    .self-service-help {
+      border-left: 3px solid var(--accent);
+      padding-left: .75rem;
+    }
+  }
+</style>
 <h1>{% if is_admin %}WG-Easy Clients{% else %}My VPN{% endif %}</h1>
 {% if not is_admin %}
-<p class="muted">Change the outbound endpoint for the WG-Easy client(s) assigned to your account.</p>
+<p class="muted self-service-help">Change the outbound endpoint for the WG-Easy client(s) assigned to your account.</p>
 {% endif %}
 <p class="muted">
   Live WG-Easy discovery with persistent outbound routing assignments.
@@ -19,8 +161,8 @@
   <div id="route-error-text" style="margin-top:.35rem;"></div>
 </div>
 
-<div class="card">
-  <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
+<div class="card clients-shell">
+  <div class="clients-refresh-bar" style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
     <div>
       <strong id="client-count">
         {{ clients|length }} client{% if clients|length != 1 %}s{% endif %} discovered
@@ -33,8 +175,8 @@
     <button id="refresh-now" class="inline-button" type="button">Refresh now</button>
   </div>
 
-  <div class="table-wrap" style="margin-top:.8rem;">
-    <table>
+  <div class="table-wrap clients-table-wrap" style="margin-top:.8rem;">
+    <table class="clients-table">
       <thead>
         <tr>
           <th>Name</th>
@@ -52,12 +194,12 @@
         {% for client in clients %}
         {% set assignment = assignments.get(client.external_id|string) %}
         <tr data-client-id="{{ client.external_id }}">
-          <td>
+          <td class="client-primary" data-label="Client">
             <strong class="client-name">{{ client.name }}</strong>
             <div class="muted client-id" style="font-size:.8rem;">ID {{ client.external_id }}</div>
           </td>
-          <td><code class="client-ip">{{ client.ipv4_address }}</code></td>
-          <td class="client-connection">
+          <td data-label="IPv4"><code class="client-ip">{{ client.ipv4_address }}</code></td>
+          <td class="client-connection" data-label="Connection">
             {% if client.connection_state == "online" %}
               <span class="status-good">● Online</span>
             {% elif client.connection_state == "recent" %}
@@ -68,14 +210,14 @@
               <span class="muted">○ Never connected</span>
             {% endif %}
           </td>
-          <td class="client-handshake"
+          <td class="client-handshake" data-label="Last handshake"
               data-handshake="{{ client.latest_handshake_at or '' }}">
             {{ client.handshake_age_display }}
           </td>
-          <td class="client-rx">{{ client.transfer_rx_display }}</td>
-          <td class="client-tx">{{ client.transfer_tx_display }}</td>
+          <td class="client-rx" data-label="RX">{{ client.transfer_rx_display }}</td>
+          <td class="client-tx" data-label="TX">{{ client.transfer_tx_display }}</td>
           {% set override = overrides.get(client.external_id|string) %}
-          <td>
+          <td data-label="Permanent route">
             <select class="route-select" data-client-id="{{ client.external_id }}">
               <option value="" {% if not assignment %}selected{% endif %}>Unassigned / normal routing</option>
               {% for group in groups %}
@@ -87,7 +229,7 @@
             </select>
             <div class="route-save-status muted" style="font-size:.8rem;margin-top:.25rem;"></div>
           </td>
-          <td class="effective-route">
+          <td class="effective-route" data-label="Effective route">
             {% if override %}
               <strong>{{ override.routing_group.name }}</strong>
               <div class="status-warn" style="font-size:.8rem;">Temporary override active</div>
@@ -98,7 +240,7 @@
               <span class="muted">Normal routing</span>
             {% endif %}
           </td>
-          <td>
+          <td data-label="Temporary override">
             <button class="inline-button override-open" type="button" data-client-id="{{ client.external_id }}">
               {% if override %}Override · active{% else %}Override{% endif %}
             </button>
@@ -607,21 +749,21 @@
         row = document.createElement("tr");
         row.dataset.clientId = id;
         row.innerHTML = `
-          <td>
+          <td class="client-primary" data-label="Client">
             <strong class="client-name"></strong>
             <div class="muted client-id" style="font-size:.8rem;"></div>
           </td>
-          <td><code class="client-ip"></code></td>
-          <td class="client-connection"></td>
-          <td class="client-handshake"></td>
-          <td class="client-rx"></td>
-          <td class="client-tx"></td>
-          <td>
+          <td data-label="IPv4"><code class="client-ip"></code></td>
+          <td class="client-connection" data-label="Connection"></td>
+          <td class="client-handshake" data-label="Last handshake"></td>
+          <td class="client-rx" data-label="RX"></td>
+          <td class="client-tx" data-label="TX"></td>
+          <td data-label="Permanent route">
             <select class="route-select"></select>
             <div class="route-save-status muted" style="font-size:.8rem;margin-top:.25rem;"></div>
           </td>
-          <td class="effective-route"></td>
-          <td>
+          <td class="effective-route" data-label="Effective route"></td>
+          <td data-label="Temporary override">
             <button class="inline-button override-open" type="button"></button>
             <div class="override-inline-summary muted" style="font-size:.8rem;margin-top:.25rem;"></div>
           </td>

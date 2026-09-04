@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>{% block title %}VPN Router{% endblock %}</title>
   <style>
     :root {
@@ -125,10 +125,78 @@
       background: var(--panel2);
     }
     @media (max-width: 700px) {
-      header { align-items: flex-start; }
-      .brand-row { align-items: flex-start; flex-direction: column; }
-      nav { flex-wrap: wrap; }
-      main { padding: 1rem; }
+      body {
+        overflow-x: hidden;
+      }
+      header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: .65rem;
+        padding:
+          max(.75rem, env(safe-area-inset-top))
+          max(.85rem, env(safe-area-inset-right))
+          .75rem
+          max(.85rem, env(safe-area-inset-left));
+      }
+      .brand-row {
+        width: 100%;
+        align-items: stretch;
+        flex-direction: column;
+        gap: .55rem;
+      }
+      header strong {
+        font-size: 1.12rem;
+      }
+      nav {
+        width: 100%;
+        gap: .35rem;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: .15rem;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+      }
+      nav a {
+        flex: 0 0 auto;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: .55rem .7rem;
+      }
+      header > form {
+        width: 100%;
+      }
+      header > form .inline-button {
+        width: 100%;
+        min-height: 44px;
+      }
+      main {
+        width: 100%;
+        padding:
+          1rem
+          max(.85rem, env(safe-area-inset-right))
+          max(1rem, env(safe-area-inset-bottom))
+          max(.85rem, env(safe-area-inset-left));
+      }
+      h1 {
+        font-size: clamp(1.55rem, 7vw, 2rem);
+        line-height: 1.12;
+      }
+      h2 {
+        line-height: 1.2;
+      }
+      input, select, button, .button-link {
+        min-height: 44px;
+      }
+      .inline-button, .danger-button {
+        min-height: 44px;
+      }
+      .card {
+        border-radius: 10px;
+      }
+      .table-wrap {
+        -webkit-overflow-scrolling: touch;
+      }
     }
   </style>
 </head>
