@@ -298,3 +298,8 @@ On each push to `main`, the release workflow reads `VERSION`, validates the
 tree, publishes the container, creates the matching `v<VERSION>` tag when
 needed, and creates the GitHub Release from that version's `CHANGELOG.md`
 section. The changelog remains the single source of truth for release notes.
+
+A manual **Backfill historical GitHub Releases** workflow is also available for
+creating missing Releases from older `v*` tags. It defaults to dry-run mode,
+skips Releases that already exist, and uses a short historical fallback note
+only when an old tag has no exact per-version changelog section.

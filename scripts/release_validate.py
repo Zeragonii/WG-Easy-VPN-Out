@@ -831,6 +831,24 @@ def main():
     if (ROOT / ".github/workflows/release.yml").exists():
         fail("v1.9.2a must not retain the dead tag-triggered release.yml workflow")
 
+    backfill_workflow = ROOT / ".github/workflows/backfill-releases.yml"
+    if not backfill_workflow.exists():
+        fail("v1.9.2b historical release backfill workflow is missing")
+    else:
+        backfill_text = backfill_workflow.read_text(encoding="utf-8")
+        for required_fragment in (
+            "workflow_dispatch:",
+            "dry_run:",
+            "git tag --list 'v*' --sort=version:refname",
+            "gh release view",
+            "scripts/extract_release_notes.py",
+            "historical fallback note",
+            "gh release create",
+            "--verify-tag",
+        ):
+            if required_fragment not in backfill_text:
+                fail(f"v1.9.2b release backfill workflow is missing: {required_fragment}")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

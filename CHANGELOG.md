@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.9.2b
+
+### Historical GitHub Release backfill workflow
+
+- Added a manual GitHub Actions workflow to backfill Releases for existing
+  historical `v*` tags.
+- The backfill:
+  - enumerates all existing version tags in version order,
+  - skips tags that already have a GitHub Release,
+  - uses the exact matching `CHANGELOG.md` section where available,
+  - falls back to a short historical-release note when an old tag predates
+    exact per-version changelog entries,
+  - verifies the tag already exists before publishing the Release.
+- Added a `dry_run` input, enabled by default, so the first run can preview
+  exactly which Releases would be created.
+- This workflow is manual-only and does not run on every push.
+- Normal forward release automation remains unchanged.
+- No application, routing, VPN, traffic or schema changes.
+
 ## 1.9.2a
 
 ### Consolidated automatic tag and GitHub Release workflow
