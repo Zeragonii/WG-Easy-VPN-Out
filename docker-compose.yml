@@ -1,37 +1,43 @@
 services:
-  vpn-router:
+  app:
     build: .
-    # For GHCR deployments:
-    # image: ghcr.io/zeragonii/wg-easy-vpn-out:latest
-    container_name: vpn-router
-
-    network_mode: host
-
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-
-    devices:
-      - /dev/net/tun:/dev/net/tun
-
-    environment:
-      TZ: Europe/London
-      VPN_ROUTER_PORT: "8085"
-      VPN_ROUTER_BIND: "0.0.0.0"
-      SECRET_KEY: "CHANGE-ME-TO-A-LONG-RANDOM-STRING"
-
-      # Optional deployment-level override:
-      # VPN_ROUTER_DATA_DIR: "/data"
-      # Optional local MaxMind-compatible MMDB override:
-      # VPN_ROUTER_GEOIP_DB: "/data/geoip/GeoLite2-City.mmdb"
-
-      # Legacy v1.0 application environment variables are still imported on
-      # upgrade when their corresponding database setting does not yet exist.
-
-    volumes:
-      - vpn-router-data:/data
-
+    image: ${SHARE_MANAGER_IMAGE:-ghcr.io/zeragonii/share-manager:latest}
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://sharemanager:${DB_PASSWORD}@postgres:5432/sharemanager
+      APP_SECRET: ${APP_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      RECONCILE_ON_ASSIGN: ${RECONCILE_ON_ASSIGN:-true}
+      BILLING_CHECK_INTERVAL_MINUTES: ${BILLING_CHECK_INTERVAL_MINUTES:-15}
+      NOTIFICATION_DUE_SOON_DAYS: ${NOTIFICATION_DUE_SOON_DAYS:-3}
+      STORAGE_ROOT: /share-manager
+      BACKUP_DIR: /share-manager/backups
+      ATTACHMENT_DIR: /share-manager/attachments
+    ports:
+      - "8080:8080"
+    volumes:
+      - app_data:/data
+      - ${SHARE_MANAGER_HOST_PATH:-./share-manager}:/share-manager
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sharemanager
+      POSTGRES_USER: sharemanager
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sharemanager -d sharemanager"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
 volumes:
-  vpn-router-data:
+  app_data:
+  postgres_data:

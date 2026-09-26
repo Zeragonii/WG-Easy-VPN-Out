@@ -1,0 +1,564 @@
+{% extends 'base.html' %}{% block content %}
+<header class="row between customer-page-heading"><div><h1>{{ 'Archived customers' if archived_mode else 'Customers' }}</h1><p>{{ 'Historical customer records hidden from the operational customer list.' if archived_mode else 'Link people to packages, billing periods and Plex access.' }}</p></div><a class="button-link secondary" href="{{ '/customers' if archived_mode else '/customers?archived=1' }}">{{ 'Back to customers' if archived_mode else 'Archived customers' }}</a></header>
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert success">{{ notice }}</div>{% endif %}
+{% if not archived_mode %}<section class="customer-onboarding">
+  <div class="row between">
+    <div><h2>Add customer</h2><p>Create a local record, or onboard a brand-new Plex user with their package access in one step.</p></div>
+    <button type="button" onclick="document.getElementById('onboard-customer-modal').showModal()">Invite new Plex customer</button>
+  </div>
+  <details class="manual-customer-add">
+    <summary>Add local customer without sending a Plex invitation</summary>
+    <form method="post" class="grid-form manual-customer-form"><label>Name<input name="name" required></label><label>Email<input name="email" type="email"></label><label>Plex username/email<input name="plex_username"></label><label>Notes<input name="notes"></label><label>Referral code <span class="muted">(optional)</span><input name="referral_code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="58317"></label><button>Add customer</button></form>
+  </details>
+</section>
+
+<dialog id="onboard-customer-modal" class="customer-modal">
+  <div class="modal-heading"><div><h3>Invite new Plex customer</h3><span class="muted">Create the customer, start their subscription and send the Plex library invitation.</span></div><button type="button" class="ghost modal-close" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
+  <form method="post" action="/customers/onboard" class="modal-form">
+    <label>Name<input name="name" required autocomplete="name"></label>
+    <label>Email<input name="email" type="email" autocomplete="email" placeholder="Contact / Plex email"></label>
+    <label>Plex username or email <span class="muted">(uses Email if blank)</span><input name="plex_username" placeholder="Plex username or account email"></label>
+    <label>Package / billing tier
+      <select name="billing_tier_id" required>
+      {% for t in tiers %}{% if t.id in plex_ready_tier_ids %}<option value="{{ t.id }}">{{ t.package.name }} — {{ t.name }} (£{{ '%.2f'|format(t.price) }})</option>{% endif %}{% endfor %}
+      </select>
+    </label>
+    <label>Subscription start date<input type="date" name="start_date" value="{{ today }}" required></label>
+    <label>Notes<input name="notes"></label>
+    <label>Referral code <span class="muted">(optional)</span><input name="referral_code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="58317"></label>
+    <div class="modal-help muted">The selected package must already have Plex libraries mapped. The first billing period starts on this date; the Plex invite is sent with those libraries attached.</div>
+    <div class="modal-actions"><button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button><button>Create &amp; invite</button></div>
+  </form>
+</dialog>
+
+{% if archived_match %}
+<dialog id="archived-customer-match-modal" class="customer-modal archived-match-modal">
+  <div class="modal-heading">
+    <div>
+      <h3>Archived customer found</h3>
+      <span class="muted">This Plex identity or contact email already belongs to an archived customer.</span>
+    </div>
+    <button type="button" class="ghost modal-close" onclick="this.closest('dialog').close()" aria-label="Close">×</button>
+  </div>
+  <div class="archived-match-body">
+    <div class="archived-match-customer">
+      <strong>{{ archived_match.name }}</strong>
+      <span class="muted">{{ archived_match.plex_username or archived_match.email or 'No Plex identity stored' }}</span>
+      <span class="muted">Archived {{ archived_match.archived_at.strftime('%Y-%m-%d') if archived_match.archived_at else 'previously' }}</span>
+    </div>
+    <p>Rather than creating a duplicate, you can restore the original customer record and preserve all of their payment, subscription, audit and Tautulli history.</p>
+    {% if archived_match_tier %}
+    <div class="subtle archived-match-package"><strong>Requested package:</strong> {{ archived_match_tier.package.name }} · {{ archived_match_tier.name }} (£{{ '%.2f'|format(archived_match_tier.price) }})<br><span class="muted">Start date: {{ archived_match_start_date }}</span></div>
+    {% endif %}
+    <div class="modal-help muted">The archived customer’s stored Plex identity will be reused. If their Plex account has changed, restore them first and use Edit customer before reconciling access.</div>
+    <div class="modal-actions archived-match-actions">
+      <button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button>
+      <form method="post" action="/customers/{{ archived_match.id }}/restore"><button type="submit" class="secondary">Restore customer</button></form>
+      {% if archived_match_tier %}
+      <form method="post" action="/customers/{{ archived_match.id }}/restore-onboard">
+        <input type="hidden" name="billing_tier_id" value="{{ archived_match_tier.id }}">
+        <input type="hidden" name="start_date" value="{{ archived_match_start_date }}">
+        <button type="submit">Restore &amp; reassign package</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</dialog>
+{% endif %}
+{% endif %}
+{% if archived_match %}<script>document.addEventListener('DOMContentLoaded',()=>document.getElementById('archived-customer-match-modal')?.showModal());</script>{% endif %}
+<section><h2>{{ 'Archived customers' if archived_mode else 'Managed customers' }}</h2>{% if archived_mode %}<p class="muted archived-customer-help">Archived customers remain in payment, subscription, audit and Tautulli history. Restore one to return it to the normal customer list.</p>{% endif %}
+<div class="customer-toolbar">
+  <label class="customer-search">Search customers<input id="customer-search" type="search" placeholder="Name, email or Plex username…" autocomplete="off"></label>
+  <button type="button" class="secondary customer-filter-toggle" id="customer-filter-toggle" aria-expanded="false" aria-controls="customer-filter-panel">Filters <span id="customer-filter-active-count" class="filter-toggle-count" hidden>0</span></button>
+  <div class="customer-filter-panel" id="customer-filter-panel">
+    <div class="customer-filter-panel-heading"><strong>Filter &amp; sort</strong><button type="button" class="ghost customer-filter-close" id="customer-filter-close" aria-label="Close filters">×</button></div>
+    <label class="customer-package-filter">Package<select id="customer-package-filter"><option value="all">All packages</option></select></label>
+    <label class="customer-activity-filter">Activity<select id="customer-activity-filter">
+      <option value="all">All activity</option>
+      <option value="watching">Watching now</option>
+      <option value="7d">Active in last 7 days</option>
+      <option value="30d">Active in last 30 days</option>
+      <option value="inactive30">Inactive 30+ days</option>
+      <option value="inactive90">Inactive 90+ days</option>
+      <option value="never">Never streamed</option>
+    </select></label>
+    <label class="customer-sort">Sort by<select id="customer-sort">
+      <option value="expiry-asc">Expiring soonest</option>
+      <option value="expiry-desc">Expiring latest</option>
+      <option value="last-streamed-desc">Last streamed</option>
+      <option value="activity-desc">Most active · 30d</option>
+      <option value="activity-asc">Least active · 30d</option>
+      <option value="name-asc">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+      <option value="status">Status</option>
+    </select></label>
+    <div class="customer-filters" role="group" aria-label="Filter customers by status">
+      <button type="button" class="secondary customer-filter active" data-status="all">All <span class="filter-count" data-count="all">0</span></button>
+      <button type="button" class="secondary customer-filter" data-status="active">Active <span class="filter-count" data-count="active">0</span></button>
+      <button type="button" class="secondary customer-filter" data-status="grace">Grace <span class="filter-count" data-count="grace">0</span></button>
+      <button type="button" class="secondary customer-filter" data-status="suspended">Suspended <span class="filter-count" data-count="suspended">0</span></button>
+      <button type="button" class="secondary customer-filter" data-status="cancelled">Cancelled <span class="filter-count" data-count="cancelled">0</span></button>
+      <button type="button" class="secondary customer-filter" data-status="exempt">Exempt <span class="filter-count" data-count="exempt">0</span></button>
+    </div>
+    <div class="customer-filter-panel-actions"><button type="button" class="secondary" id="customer-filter-reset">Reset</button><button type="button" id="customer-filter-done">Done</button></div>
+  </div>
+  <div class="customer-filter-sheet-backdrop" id="customer-filter-sheet-backdrop" hidden></div>
+</div>
+{% if not archived_mode %}
+<form id="bulk-customer-form" method="post" action="/customers/bulk" class="customer-bulk-bar" hidden>
+  <div class="customer-bulk-selection">
+    <strong><span id="bulk-selected-count">0</span> selected</strong>
+    <button type="button" class="ghost small-action" id="bulk-select-visible">Select visible</button>
+    <button type="button" class="ghost small-action" id="bulk-clear">Clear</button>
+  </div>
+  <div class="customer-bulk-controls">
+    <label>Bulk action
+      <select name="action" id="bulk-action" required>
+        <option value="">Choose action…</option>
+        <option value="status">Set status</option>
+        <option value="package">Change package</option>
+        <option value="reconcile">Reconcile Plex</option>
+        <option value="archive">Archive / remove</option>
+      </select>
+    </label>
+    <label id="bulk-status-field" hidden>Status
+      <select name="status">
+        <option value="active">Active</option>
+        <option value="grace">Grace</option>
+        <option value="suspended">Suspended</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="exempt">Exempt</option>
+      </select>
+    </label>
+    <label id="bulk-package-field" hidden>Package / billing tier
+      <select name="billing_tier_id">
+        <option value="">Choose tier…</option>
+        {% for tier in tiers %}<option value="{{ tier.id }}">{{ tier.package.name }} — {{ tier.name }} (£{{ '%.2f'|format(tier.price) }})</option>{% endfor %}
+      </select>
+    </label>
+    <label id="bulk-start-field" hidden>Start date
+      <input type="date" name="start_date" value="{{ today }}">
+    </label>
+    <div class="customer-bulk-submit">
+      <button type="submit" id="bulk-apply" disabled>Apply to selected</button>
+    </div>
+  </div>
+  <div id="bulk-help" class="muted customer-bulk-help">Select an action to apply it to all checked customers.</div>
+</form>
+{% endif %}
+<div id="customer-filter-empty" class="subtle customer-filter-empty" hidden>No customers match this filter.</div>
+<div class="cards customer-list">
+{% for c in customers %}
+{% set sub = c.ui_subscription %}
+{% set effective_expiry = sub.manual_access_end if sub and sub.manual_access_end and sub.manual_access_end > today_dt else (sub.grace_until if sub and sub.grace_until else (sub.current_period_end if sub else none)) %}
+{% set ta = c.tautulli_activity %}
+<article class="card customer-card" data-customer-id="{{ c.id }}" data-status="{{ 'exempt' if c.exempt else c.status }}" data-search="{{ (c.name ~ ' ' ~ (c.email or '') ~ ' ' ~ (c.plex_username or '') ~ ' ' ~ (c.notes or ''))|lower|e }}" data-name="{{ c.name|lower|e }}" data-expiry="{{ effective_expiry.isoformat() if effective_expiry else '' }}" data-package="{{ sub.billing_tier.package.name|lower|e if sub else '' }}" data-package-label="{{ sub.billing_tier.package.name|e if sub else '' }}" data-last-streamed="{{ ta.last_streamed_at.isoformat() if ta and ta.last_streamed_at else '' }}" data-watch-time-30d="{{ ta.watch_time_30d if ta else 0 }}" data-tautulli="{{ '1' if ta else '0' }}" data-watching="0">
+  {% if not archived_mode %}<label class="customer-select-control" title="Select {{ c.name|e }}"><input class="customer-select-checkbox" type="checkbox" name="customer_ids" value="{{ c.id }}" form="bulk-customer-form" aria-label="Select {{ c.name|e }}"></label>{% endif %}
+  <button type="button" class="customer-mobile-summary" aria-expanded="false">
+    <span class="customer-mobile-identity">
+      <strong>{{ c.name }}</strong>
+      <span class="muted">{% if sub %}{{ sub.billing_tier.package.name }} · {{ sub.billing_tier.name }}{% else %}No package assigned{% endif %}</span>
+      {% if ta %}<span class="customer-mobile-activity" data-live-customer="{{ c.id }}">Last streamed {{ relative_time(ta.last_streamed_at) }}</span>{% endif %}
+    </span>
+    <span class="customer-mobile-state">
+      <span class="badge {{ 'exempt' if c.exempt else c.status }}">{{ 'exempt' if c.exempt else c.status }}</span>
+      <span class="customer-mobile-chevron" aria-hidden="true">⌄</span>
+    </span>
+  </button>
+  <div class="customer-card-details">
+  <div class="customer-card-main">
+  <div class="row between"><div><h3>{{ c.name }}</h3><div class="muted">{{ c.plex_username or 'No Plex account linked' }}</div></div><span class="badge {{ 'exempt' if c.exempt else c.status }}">{{ 'exempt' if c.exempt else c.status }}</span></div>
+  {% if sub %}
+  <div class="subtle"><strong>{{ sub.billing_tier.package.name }} · {{ sub.billing_tier.name }}</strong><br>
+    <span class="muted billing-summary">
+      Started {{ sub.started_at.strftime('%Y-%m-%d') }} ·
+      {% if sub.current_period_end %}Paid through {{ sub.current_period_end.strftime('%Y-%m-%d') }} · Grace until {{ sub.grace_until.strftime('%Y-%m-%d') if sub.grace_until else '—' }}{% else %}Billing dates not initialised{% endif %}{% if sub.manual_access_end %}<br><strong>Manual access until: {{ sub.manual_access_end.strftime('%Y-%m-%d') }}</strong>{% endif %}
+    </span>
+  </div>
+  <div class="row compact-card-actions">
+    <button type="button" class="secondary small-action" onclick="document.getElementById('billing-modal-{{ sub.id }}').showModal()">Edit billing</button>
+    <button type="button" class="secondary small-action" onclick="document.getElementById('credit-modal-{{ c.id }}').showModal()">Grant credits</button>
+  </div>
+  {% else %}<div class="subtle">No subscription history yet — account credits can still be granted and redeemed once a billing tier is assigned.</div><div class="row compact-card-actions"><button type="button" class="secondary small-action" onclick="document.getElementById('credit-modal-{{ c.id }}').showModal()">Grant credits</button></div>{% endif %}
+  {% if c.exempt %}<div class="exempt-note">Automation is disabled for this customer. Billing records can still be maintained, but automatic status/Plex changes will leave them alone.</div>{% endif %}
+  </div>
+
+  <div class="customer-card-controls">
+  {% if archived_mode %}
+  <div class="archived-customer-meta muted">Archived {{ c.archived_at.strftime('%Y-%m-%d %H:%M') if c.archived_at else '—' }}</div>
+  <div class="row customer-actions archived-customer-actions"><a class="button-link secondary small-action" href="/customers/{{ c.id }}/history">History</a><button type="button" class="secondary" onclick="document.getElementById('customer-edit-{{ c.id }}').showModal()">Edit customer</button><form method="post" action="/customers/{{ c.id }}/restore"><button>Restore customer</button></form></div>
+  {% else %}
+  {% if ta %}
+  <div class="tautulli-customer-summary tautulli-package-summary" data-live-customer="{{ c.id }}">
+    <span class="tautulli-live-label" hidden><span class="live-dot"></span><strong>Watching now</strong><span class="tautulli-live-title"></span></span>
+    <span class="tautulli-cached-label"><strong>Last streamed {{ relative_time(ta.last_streamed_at) }}</strong><span>30d {{ format_duration(ta.watch_time_30d) }} · {{ ta.plays_30d }} plays · lifetime {{ format_duration(ta.watch_time_lifetime) }}</span></span>
+  </div>
+  {% endif %}
+  <form method="post" action="/customers/{{ c.id }}/subscribe" class="subscription-assign">
+    <select name="billing_tier_id">{% for t in tiers %}<option value="{{ t.id }}" {% if sub and sub.billing_tier_id == t.id %}selected{% endif %}>{{ t.package.name }} — {{ t.name }} (£{{ '%.2f'|format(t.price) }})</option>{% endfor %}</select>
+    <label class="assign-date">Start date<input type="date" name="start_date" title="Subscription start date; defaults to today if blank"></label>
+    <button>{{ 'Change package' if sub else 'Assign' }}</button>
+  </form>
+
+  <div class="row customer-actions"><a class="button-link secondary small-action" href="/customers/{{ c.id }}/history">History</a><form method="post" action="/customers/{{ c.id }}/status" class="inline"><select name="status"><option value="active" {% if not c.exempt and c.status == 'active' %}selected{% endif %}>active</option><option value="grace" {% if not c.exempt and c.status == 'grace' %}selected{% endif %}>grace</option><option value="suspended" {% if not c.exempt and c.status == 'suspended' %}selected{% endif %}>suspended</option><option value="cancelled" {% if not c.exempt and c.status == 'cancelled' %}selected{% endif %}>cancelled</option><option value="exempt" {% if c.exempt %}selected{% endif %}>exempt</option></select><button class="secondary">Set status</button></form><form method="post" action="/customers/{{ c.id }}/reconcile"><button class="secondary" {% if c.exempt %}title="This customer is exempt; reconciliation will skip them."{% endif %}>Reconcile Plex</button></form><button type="button" class="secondary" onclick="document.getElementById('customer-edit-{{ c.id }}').showModal()">Edit customer</button><form method="post" action="/customers/{{ c.id }}/archive" onsubmit="return confirm('Archive {{ c.name|e }}? Their history will be preserved and they can be restored later.');"><button type="submit" class="secondary" {% if c.exempt or c.status != 'cancelled' %}disabled title="Set this customer to Cancelled before archiving."{% endif %}>Remove customer</button></form></div>
+  {% endif %}
+  </div>
+  </div>
+</article>
+
+<dialog id="customer-edit-{{ c.id }}" class="customer-modal">
+  <div class="modal-heading"><div><h3>Edit customer · {{ c.name }}</h3><span class="muted">Update customer metadata without changing their subscription or payment history.</span></div><button type="button" class="ghost modal-close" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
+  <form method="post" action="/customers/{{ c.id }}/edit" class="modal-form">
+    <label>Name<input name="name" value="{{ c.name }}" required></label>
+    <label>Contact email<input name="email" type="email" value="{{ c.email or '' }}"></label>
+    <label>Plex username or email<input name="plex_username" value="{{ c.plex_username or '' }}"></label>
+    <label>Notes<textarea name="notes" rows="4">{{ c.notes or '' }}</textarea></label>
+    <div class="portal-admin-panel"><div class="portal-admin-heading"><div><strong>Referral</strong><span class="muted">Codes only affect future payments.</span></div></div><div class="portal-admin-details"><div><span>Customer code</span><strong>{{ c.referral_code or '—' }}</strong></div><div><span>Referred by</span><strong>{{ c.referrer.name if c.referrer else 'None' }}</strong></div></div><label>Referrer code<input name="referral_code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" value="{{ c.referrer.referral_code if c.referrer else '' }}" placeholder="e.g. 58317"><span class="muted">Clear this field to remove the relationship. Changing it starts a new prospective referral relationship.</span></label></div>
+    <div class="modal-help muted"><strong>Plex identity:</strong> changing the Plex username/email does not alter billing history, but it does change which Plex account future reconcile/invite operations target. Share Manager will clear the previously cached Plex user ID so the new identity is resolved safely.</div>
+    <div class="modal-actions"><button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button><button>Save customer</button></div>
+  </form>
+  <div class="portal-admin-panel">
+    <div class="portal-admin-heading"><div><strong>Customer portal</strong><span class="muted">Optional read-only self-service access for this customer.</span></div><span class="badge {{ 'active' if c.portal_enabled else 'suspended' }}">{{ 'enabled' if c.portal_enabled else 'disabled' }}</span></div>
+    {% if c.portal_enabled %}
+      <div class="portal-admin-details">
+        <div><span>Username</span><strong>{{ c.portal_username }}</strong></div>
+        <div><span>Password</span><strong>Hidden after creation</strong></div>
+        <div><span>Last login</span><strong>{{ c.portal_last_login_at.strftime('%Y-%m-%d %H:%M') if c.portal_last_login_at else 'Never' }}</strong></div>
+      </div>
+      <div class="portal-admin-actions">
+        <form method="post" action="/customers/{{ c.id }}/portal/reset" onsubmit="return confirm('Reset this customer portal password? Existing portal sessions will be signed out.');"><button type="submit" class="secondary">Reset password</button></form>
+        <form method="post" action="/customers/{{ c.id }}/portal/disable" onsubmit="return confirm('Disable portal access for {{ c.name|e }}? Existing portal sessions will be revoked.');"><button type="submit" class="danger">Disable portal</button></form>
+      </div>
+    {% else %}
+      {% if c.archived or c.status == 'cancelled' %}
+        <div class="modal-help muted">Portal access cannot be enabled while this customer is {{ 'archived' if c.archived else 'Cancelled' }}.</div>
+      {% else %}
+        <details class="portal-enable-details">
+          <summary>Enable customer portal</summary>
+          <form method="post" action="/customers/{{ c.id }}/portal/enable" class="portal-enable-form">
+            <label>Portal username<input name="username" value="{{ c.portal_username_suggestion }}" minlength="3" maxlength="120" pattern="[A-Za-z0-9._-]+" required autocomplete="off"></label>
+            <label>Temporary password
+              <div class="portal-password-row"><input id="portal-password-{{ c.id }}" name="password" value="" minlength="12" required autocomplete="new-password" data-portal-password><button type="button" class="secondary portal-generate-password" data-target="portal-password-{{ c.id }}">Generate</button></div>
+            </label>
+            <div class="modal-help muted">The password is stored only as a secure hash. It will be shown once after enabling the portal, then cannot be retrieved — only reset.</div>
+            <button type="submit">Enable portal</button>
+          </form>
+        </details>
+      {% endif %}
+    {% endif %}
+  </div>
+</dialog>
+
+{% if sub %}
+<dialog id="billing-modal-{{ sub.id }}" class="customer-modal">
+  <div class="modal-heading"><div><h3>Edit billing · {{ c.name }}</h3><span class="muted">{{ sub.billing_tier.package.name }} · {{ sub.billing_tier.name }}</span></div><button type="button" class="ghost modal-close" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
+  <form method="post" action="/subscriptions/{{ sub.id }}/billing-dates" class="modal-form">
+    <label>Period / subscription start<input type="date" name="start_date" value="{{ (sub.current_period_start or sub.started_at).strftime('%Y-%m-%d') }}" required></label>
+    <label>Paid through <span class="muted">(blank = calculate from tier)</span><input type="date" name="period_end" value="{{ sub.current_period_end.strftime('%Y-%m-%d') if sub.current_period_end else '' }}"></label>
+    <label>Manual access until <span class="muted">(optional temporary override)</span><input type="date" name="manual_access_end" value="{{ sub.manual_access_end.strftime('%Y-%m-%d') if sub.manual_access_end else '' }}"></label>
+    <div class="modal-help muted">While this date is in the future, access stays active. When it is reached, Share Manager automatically falls back to the normal paid-through and grace dates. Payments received during the override still extend billing normally.</div>
+    <div class="modal-actions"><button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button><button>Save billing</button></div>
+  </form>
+</dialog>
+
+
+{% endif %}
+
+<dialog id="credit-modal-{{ c.id }}" class="customer-modal">
+  <div class="modal-heading"><div><h3>Grant account credits · {{ c.name }}</h3><span class="muted">Credits use the same tier-specific monthly redemption engine as referral rewards.</span></div><button type="button" class="ghost modal-close" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
+  <form method="post" action="/customers/{{ c.id }}/credits" class="modal-form">
+    <label>Credits<input type="number" name="credits" min="1" step="1" value="100" required></label>
+    <label>Reason<input name="reason" maxlength="500" placeholder="e.g. Goodwill credit" required></label>
+    <div class="modal-help muted">This adds spendable account credits only. It does not directly alter Paid through. The customer can redeem them at the cost configured on their current Billing Tier.</div>
+    <div class="modal-actions"><button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button><button>Grant credits</button></div>
+  </form>
+</dialog>
+{% else %}<p class="muted">{{ 'No archived customers.' if archived_mode else 'No customers yet.' }}</p>{% endfor %}</div></section>
+<script>
+(() => {
+  const cards = [...document.querySelectorAll('.customer-card')];
+  const search = document.getElementById('customer-search');
+  const sort = document.getElementById('customer-sort');
+  const packageFilter = document.getElementById('customer-package-filter');
+  const activityFilter = document.getElementById('customer-activity-filter');
+  const filterPanel = document.getElementById('customer-filter-panel');
+  const filterToggle = document.getElementById('customer-filter-toggle');
+  const filterClose = document.getElementById('customer-filter-close');
+  const filterDone = document.getElementById('customer-filter-done');
+  const filterReset = document.getElementById('customer-filter-reset');
+  const filterBackdrop = document.getElementById('customer-filter-sheet-backdrop');
+  const filterActiveCount = document.getElementById('customer-filter-active-count');
+  const list = document.querySelector('.customer-list');
+  const filterButtons = [...document.querySelectorAll('.customer-filter')];
+  const empty = document.getElementById('customer-filter-empty');
+  let currentStatus = 'all';
+  let currentPackage = 'all';
+  let currentActivity = 'all';
+
+  if (packageFilter) {
+    const packages = new Map();
+    cards.forEach(card => {
+      const key = card.dataset.package || '';
+      const label = card.dataset.packageLabel || '';
+      if (key && label && !packages.has(key)) packages.set(key, label);
+    });
+    [...packages.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([key,label]) => {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = label;
+      packageFilter.appendChild(option);
+    });
+  }
+
+  function setFilterSheet(open) {
+    if (!filterPanel || !filterToggle) return;
+    filterPanel.classList.toggle('mobile-open', open);
+    filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (filterBackdrop) filterBackdrop.hidden = !open;
+    document.body.classList.toggle('customer-filter-sheet-open', open);
+  }
+
+  function updateActiveFilterCount() {
+    let active = 0;
+    if (currentStatus !== 'all') active += 1;
+    if (currentPackage !== 'all') active += 1;
+    if (currentActivity !== 'all') active += 1;
+    if ((sort?.value || 'expiry-asc') !== 'expiry-asc') active += 1;
+    if (filterActiveCount) {
+      filterActiveCount.textContent = active;
+      filterActiveCount.hidden = active === 0;
+    }
+  }
+
+  const counts = {all: cards.length, active: 0, grace: 0, suspended: 0, cancelled: 0, exempt: 0};
+  cards.forEach(card => {
+    const status = card.dataset.status;
+    if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+  });
+  document.querySelectorAll('.filter-count').forEach(node => {
+    node.textContent = counts[node.dataset.count] ?? 0;
+  });
+
+  const statusRank = {grace: 0, active: 1, suspended: 2, cancelled: 3, exempt: 4};
+
+  function sortCards() {
+    const mode = sort?.value || 'expiry-asc';
+    const sorted = [...cards].sort((a, b) => {
+      const nameA = a.dataset.name || '';
+      const nameB = b.dataset.name || '';
+      const expiryA = a.dataset.expiry || '';
+      const expiryB = b.dataset.expiry || '';
+      if (mode === 'name-asc') return nameA.localeCompare(nameB);
+      if (mode === 'name-desc') return nameB.localeCompare(nameA);
+      if (mode === 'last-streamed-desc') {
+        const aDate = a.dataset.lastStreamed || '';
+        const bDate = b.dataset.lastStreamed || '';
+        if (!aDate && !bDate) return nameA.localeCompare(nameB);
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        return bDate.localeCompare(aDate) || nameA.localeCompare(nameB);
+      }
+      if (mode === 'activity-desc' || mode === 'activity-asc') {
+        const diff = Number(a.dataset.watchTime30d || 0) - Number(b.dataset.watchTime30d || 0);
+        return (mode === 'activity-desc' ? -diff : diff) || nameA.localeCompare(nameB);
+      }
+      if (mode === 'status') {
+        const rank = (statusRank[a.dataset.status] ?? 99) - (statusRank[b.dataset.status] ?? 99);
+        return rank || nameA.localeCompare(nameB);
+      }
+      // Blank expiry dates always sort last. ISO dates are safely lexicographically sortable.
+      if (!expiryA && !expiryB) return nameA.localeCompare(nameB);
+      if (!expiryA) return 1;
+      if (!expiryB) return -1;
+      const cmp = expiryA.localeCompare(expiryB);
+      return (mode === 'expiry-desc' ? -cmp : cmp) || nameA.localeCompare(nameB);
+    });
+    sorted.forEach(card => list.appendChild(card));
+  }
+
+  function applyFilters() {
+    sortCards();
+    const query = (search.value || '').trim().toLowerCase();
+    let visible = 0;
+    cards.forEach(card => {
+      const statusMatch = currentStatus === 'all' || card.dataset.status === currentStatus;
+      const textMatch = !query || (card.dataset.search || '').includes(query);
+      const packageMatch = currentPackage === 'all' || card.dataset.package === currentPackage;
+      const last = card.dataset.lastStreamed ? new Date(card.dataset.lastStreamed) : null;
+      const daysAgo = last ? (Date.now() - last.getTime()) / 86400000 : Infinity;
+      const activityMatch = currentActivity === 'all'
+        || (currentActivity === 'watching' && card.dataset.watching === '1')
+        || (currentActivity === '7d' && daysAgo <= 7)
+        || (currentActivity === '30d' && daysAgo <= 30)
+        || (currentActivity === 'inactive30' && daysAgo > 30 && daysAgo !== Infinity)
+        || (currentActivity === 'inactive90' && daysAgo > 90 && daysAgo !== Infinity)
+        || (currentActivity === 'never' && !last && card.dataset.tautulli === '1');
+      const show = statusMatch && textMatch && packageMatch && activityMatch;
+      card.hidden = !show;
+      if (show) visible += 1;
+    });
+    empty.hidden = visible !== 0;
+    updateActiveFilterCount();
+  }
+
+  filterButtons.forEach(button => button.addEventListener('click', () => {
+    currentStatus = button.dataset.status;
+    filterButtons.forEach(item => item.classList.toggle('active', item === button));
+    applyFilters();
+  }));
+  search.addEventListener('input', applyFilters);
+  sort?.addEventListener('change', applyFilters);
+  packageFilter?.addEventListener('change', () => { currentPackage = packageFilter.value; applyFilters(); });
+  activityFilter?.addEventListener('change', () => { currentActivity = activityFilter.value; applyFilters(); });
+  filterToggle?.addEventListener('click', () => setFilterSheet(true));
+  filterClose?.addEventListener('click', () => setFilterSheet(false));
+  filterDone?.addEventListener('click', () => setFilterSheet(false));
+  filterBackdrop?.addEventListener('click', () => setFilterSheet(false));
+  filterReset?.addEventListener('click', () => {
+    currentStatus = 'all'; currentPackage = 'all'; currentActivity = 'all';
+    filterButtons.forEach(item => item.classList.toggle('active', item.dataset.status === 'all'));
+    if (packageFilter) packageFilter.value = 'all';
+    if (activityFilter) activityFilter.value = 'all';
+    if (sort) sort.value = 'expiry-asc';
+    applyFilters();
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') setFilterSheet(false); });
+  applyFilters();
+
+  const bulkForm = document.getElementById('bulk-customer-form');
+  const bulkAction = document.getElementById('bulk-action');
+  const bulkStatusField = document.getElementById('bulk-status-field');
+  const bulkPackageField = document.getElementById('bulk-package-field');
+  const bulkStartField = document.getElementById('bulk-start-field');
+  const bulkApply = document.getElementById('bulk-apply');
+  const bulkCount = document.getElementById('bulk-selected-count');
+  const bulkHelp = document.getElementById('bulk-help');
+  const selectionBoxes = [...document.querySelectorAll('.customer-select-checkbox')];
+
+  function selectedBoxes() { return selectionBoxes.filter(box => box.checked); }
+  function updateBulkSelection() {
+    if (!bulkForm) return;
+    const count = selectedBoxes().length;
+    bulkForm.hidden = count === 0;
+    if (bulkCount) bulkCount.textContent = count;
+    if (bulkApply) bulkApply.disabled = count === 0 || !bulkAction?.value;
+    cards.forEach(card => card.classList.toggle('customer-selected', !!card.querySelector('.customer-select-checkbox:checked')));
+  }
+
+  function updateBulkAction() {
+    if (!bulkAction) return;
+    const action = bulkAction.value;
+    if (bulkStatusField) bulkStatusField.hidden = action !== 'status';
+    if (bulkPackageField) bulkPackageField.hidden = action !== 'package';
+    if (bulkStartField) bulkStartField.hidden = action !== 'package';
+    if (bulkHelp) {
+      bulkHelp.textContent = action === 'package'
+        ? 'Changing package creates a new billing period for every selected customer using the chosen start date.'
+        : action === 'archive'
+          ? 'Only Cancelled, non-exempt customers can be archived. Any others in the selection will be skipped.'
+          : action === 'reconcile'
+            ? 'Runs the normal idempotent Plex reconciliation for every selected customer with a Plex identity.'
+            : action === 'status'
+              ? 'Updates the selected customers using the same status and Plex reconciliation rules as individual changes.'
+              : 'Select an action to apply it to all checked customers.';
+    }
+    updateBulkSelection();
+  }
+
+  selectionBoxes.forEach(box => box.addEventListener('change', updateBulkSelection));
+  document.getElementById('bulk-select-visible')?.addEventListener('click', () => {
+    cards.filter(card => !card.hidden).forEach(card => { const box = card.querySelector('.customer-select-checkbox'); if (box) box.checked = true; });
+    updateBulkSelection();
+  });
+  document.getElementById('bulk-clear')?.addEventListener('click', () => {
+    selectionBoxes.forEach(box => box.checked = false);
+    updateBulkSelection();
+  });
+  bulkAction?.addEventListener('change', updateBulkAction);
+  bulkForm?.addEventListener('submit', event => {
+    const count = selectedBoxes().length;
+    const action = bulkAction?.value || '';
+    let message = `Apply this bulk action to ${count} customer${count === 1 ? '' : 's'}?`;
+    if (action === 'package') message = `Change package and start a new billing period for ${count} selected customer${count === 1 ? '' : 's'}?`;
+    if (action === 'archive') message = `Archive all eligible customers in this selection? Historical data will be preserved.`;
+    if (!confirm(message)) event.preventDefault();
+  });
+  updateBulkAction();
+
+  async function liveLoop() {
+    let delay = 10000;
+    try {
+      const response = await fetch('/api/tautulli/live', {cache:'no-store'});
+      if (response.ok) {
+        const data = await response.json();
+        delay = Math.max(10000, Number(data.refresh_seconds || 10) * 1000);
+        if (data.enabled) {
+          const byCustomer = new Map((data.sessions || []).filter(s => s.customer_id).map(s => [String(s.customer_id), s]));
+          cards.forEach(card => {
+            const session = byCustomer.get(card.dataset.customerId);
+            card.dataset.watching = session ? '1' : '0';
+            card.querySelectorAll('[data-live-customer]').forEach(node => {
+              const live = node.querySelector('.tautulli-live-label');
+              const cached = node.querySelector('.tautulli-cached-label');
+              if (live) {
+                live.hidden = !session;
+                const title = live.querySelector('.tautulli-live-title');
+                if (title && session) title.textContent = session.title || '';
+              }
+              if (cached) cached.hidden = !!session;
+              if (node.classList.contains('customer-mobile-activity')) {
+                if (!node.dataset.cachedText) node.dataset.cachedText = node.textContent;
+                node.textContent = session ? `● Watching now · ${session.title || ''}` : node.dataset.cachedText;
+                node.classList.toggle('watching-now', !!session);
+              }
+            });
+          });
+          if (currentActivity === 'watching') applyFilters();
+        }
+      }
+    } catch (_) {}
+    setTimeout(liveLoop, delay);
+  }
+  liveLoop();
+})();
+
+
+document.querySelectorAll('.customer-mobile-summary').forEach(button => {
+  button.addEventListener('click', () => {
+    const card = button.closest('.customer-card');
+    const expanded = card.classList.toggle('mobile-expanded');
+    button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  });
+});
+
+function generatePortalPassword(target) {
+  if (!target) return;
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const values = new Uint32Array(12);
+  crypto.getRandomValues(values);
+  target.value = Array.from(values, value => chars[value % chars.length]).join('');
+}
+
+document.querySelectorAll('.portal-generate-password').forEach(button => {
+  button.addEventListener('click', () => generatePortalPassword(document.getElementById(button.dataset.target)));
+});
+
+document.querySelectorAll('.portal-enable-details').forEach(details => {
+  details.addEventListener('toggle', () => {
+    if (!details.open) return;
+    const target = details.querySelector('[data-portal-password]');
+    if (target && !target.value) generatePortalPassword(target);
+  });
+});
+
+document.querySelectorAll('dialog.customer-modal').forEach(dialog => {
+  dialog.addEventListener('click', event => {
+    const rect = dialog.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (!inside) dialog.close();
+  });
+});
+</script>
+{% endblock %}

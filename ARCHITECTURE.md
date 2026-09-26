@@ -1,0 +1,416 @@
+# Share Manager Architecture — v0.5.2
+
+## v0.5.2 reliable Plex reconciliation
+
+`plex_reconcile_jobs` records outstanding work with a composite customer/integration primary key, an attempt count, next-attempt timestamp, and sanitized error type. The existing startup `create_all` creates the table on upgrade without changing historical billing records.
+
+`reconcile_customer` persists jobs for all selected enabled Plex servers before network calls. Each successful server clears its own job; failures retain work with exponential backoff capped at 60 minutes and do not stop attempts on other servers. The billing cycle retries due jobs even when there are no new status transitions. Explicit actions bypass backoff. The existing single-worker deployment serializes reconciliation calls with an in-process lock.
+
+Retries reload committed customer/subscription/package data instead of storing desired libraries in a job. Disabled integrations wait; exempt or unlinked customers have their work cleared without contacting Plex. A returned invitation/pending result retains its existing successful reconciliation meaning. Outstanding work is durable across restarts, but no historical audit failures are automatically backfilled.
+
+`process_billing` accepts an optional `customer_id` scope. Payment edit/void routes use it for their immediate coverage refresh. The scheduled cycle keeps its global behavior, including notifications and reconciliation for every changed customer.
+
+## Core model
+
+`Customer -> Subscription -> BillingTier -> Package -> PackageEntitlement -> Integration`
+
+Payments are append-only ledger entries. An applied payment can reference a subscription and stores the exact `coverage_start`, `coverage_end`, and number of `billing_periods` it purchased. The period count can be inferred from amount ÷ tier price or explicitly overridden by an administrator.
+
+## Billing dates
+
+A subscription stores:
+
+- `started_at`
+- `current_period_start`
+- `current_period_end`
+- `grace_until`
+- lifecycle `status`
+
+Each BillingTier defines price, interval/count and `grace_period_days`.
+
+### Renewal rule
+
+If payment is received on/before `grace_until`, purchased coverage begins at the previous `current_period_end`. If payment arrives after grace has elapsed, purchased coverage begins on the payment date. One or more complete tier intervals are then added according to the payment's resolved billing-period count. This prevents grace days becoming free paid-service days while supporting prepayment for multiple periods.
+
+## State engine
+
+For billing-initialised subscriptions:
+
+- before `current_period_end` -> active
+- after expiry but before `grace_until` -> grace
+- after grace -> suspended
+
+`active` and `grace` retain Plex entitlement. `suspended` removes it. An applied payment reactivates the subscription and the Plex integration reconciles access.
+
+Exempt customers remain outside automatic status/Plex enforcement.
+
+## Upgrade safety
+
+v0.2 performs additive schema migration at container startup. Existing v0.1 subscriptions with a NULL `current_period_end` are intentionally skipped by automatic billing until an administrator initialises their dates.
+
+## Complimentary subscription credits (v0.2.5)
+
+`subscription_credits` records non-cash entitlement extensions separately from `payments`. A credit belongs to a customer and subscription and stores the number of tier billing periods granted, coverage start/end, reason, grant timestamp, and actor. This preserves financial reporting while allowing grandfathered or goodwill access to use the same renewal/grace semantics as paid coverage.
+
+
+### v0.2.5
+Customer cards now resolve their subscription centrally in Python instead of duplicating subscription-state filtering in the template. Complimentary access can also reactivate a customer on their most recent historical tier, so the Grant control is available for any customer with subscription history, not only customers whose current row happens to be in a specific live state.
+
+
+### Manual entitlement override
+
+`subscriptions.manual_access_end` is a temporary access guarantee. It is intentionally separate from `current_period_end`: billing history remains truthful while operators retain fine-grained entitlement control. Before the override timestamp the subscription is forced active; after it expires, normal paid-through/grace billing logic resumes automatically.
+
+## v0.2.8 UI filtering
+
+Customer status filtering and text search are intentionally client-side because the full customer collection is already rendered for management actions. Payment customer selection uses a searchable client-side picker while submitting the canonical numeric customer ID to the existing payment endpoint; no billing or persistence semantics changed in this release.
+
+## v0.2.10 operational controls
+
+- Payments support audited edit/void workflows. Coverage-affecting edits/voids are allowed only for the latest entitlement event so later payment/credit history cannot be silently invalidated.
+- `payments.voided_at` and `payments.voided_by` preserve deleted-payment provenance; voided rows are excluded from revenue calculations.
+- Customer history is assembled from subscription, payment, complimentary-credit and related audit events.
+- The application image carries PostgreSQL 17 client utilities and exposes an authenticated UI endpoint that produces custom-format `pg_dump` backups.
+
+
+## v0.3.0 notification architecture
+
+`NotificationEndpoint` stores notification adapters independently of Plex entitlement integrations. Endpoint kinds are `home_assistant`, `discord`, and `webhook`; each endpoint stores its selected event set, minimum severity, enabled state, destination URL and adapter-specific secret/target fields.
+
+`NotificationDelivery` is an append-only delivery audit containing event, severity, title/message, success state, response code and a sanitized diagnostic. An optional `event_key` provides per-endpoint de-duplication for recurring conditions such as `subscription.due_soon`. Notification delivery failures are recorded but never allowed to roll back billing, payment, backup, or Plex state transitions.
+
+Home Assistant uses its authenticated REST service-call pipeline (`/api/services/notify/<service>`) with a Bearer long-lived access token, matching the Uptime Kuma integration pattern.
+
+
+## v0.3.1 notification timing
+
+`NotificationEndpoint.due_reminder_days` stores a normalized comma-separated set of calendar-day offsets. Renewal reminder generation is endpoint-specific; each successful threshold delivery receives an event key containing endpoint, subscription, expiry date and day offset, making scheduled checks idempotent. Grace and suspension notifications continue to be emitted by billing-state transitions rather than reminder polling.
+
+## v0.3.2 onboarding
+
+Brand-new Plex users can be created directly from the Customers page. Onboarding persists the customer and subscription first, then runs the normal reconciliation engine. This deliberately reuses the same invitation, entitlement, audit and notification paths as suspension/reactivation rather than introducing a second Plex-sharing implementation. Failed Plex invitations do not roll back the local customer record, allowing correction and retry through normal reconciliation.
+
+
+## v0.3.3
+- Added a mobile-friendly responsive UI with an off-canvas navigation drawer, improved phone/tablet spacing, touch-friendly stacked controls, and horizontal-scroll wrappers for wide tables without disrupting the desktop layout.
+
+
+## v0.3.4
+- Refined the mobile navigation into a dedicated top bar so the menu control no longer overlaps drawer branding.
+- Added mobile-only compact customer summaries showing name, package/tier and status; tapping a summary expands the existing full customer controls. Desktop customer tiles are unchanged.
+
+
+## v0.3.5
+- Added a forward-looking Dashboard revenue forecast based on the current Active/Grace subscription distribution. It shows monthly-tier revenue, yearly-tier revenue, annualised total, and per-package breakdowns while excluding exempt/suspended/cancelled customers.
+
+
+## v0.3.6
+- Fixed a desktop Customers-page layout regression so each customer tile again behaves as a top/bottom flex layout, keeping summary content aligned at the top and action controls pinned to the bottom of equal-height cards.
+
+
+## v0.3.7
+- Added client-side customer sorting by effective access expiry, name, or status. Effective expiry prefers an active manual-access-until date, then grace-until, then paid-through; customers without a date sort last.
+
+
+## v0.3.8
+- Fixed the mobile hamburger icon so its bars render vertically.
+- Tightened the mobile Dashboard with a two-column headline-stat grid and smaller stat cards.
+- Added a native mobile revenue-package distribution layout, removing the need to horizontally scroll the desktop revenue table on phones.
+
+
+## v0.3.9
+- Added a client-side Package filter to the Customers page. Package filtering composes with status, text search and sorting, and the package list is generated from currently displayed customer assignments.
+
+
+## v0.3.10
+- Added an Edit customer modal beside Reconcile Plex. Friendly name, contact email, Plex username/email and notes can be updated without changing customer IDs, subscription history, payment history or package assignments. Changing Plex identity clears the cached numeric Plex user ID so future reconciliation safely resolves the new account.
+
+
+## v0.4 disaster recovery architecture
+
+- `app/services/backups.py` owns database dump creation, validation, restore, filesystem discovery, schedule-due checks, and grandfather/father/son-style retention selection.
+- PostgreSQL backups use `pg_dump --format=custom`; validation uses `pg_restore --list`; restores use `pg_restore --clean --if-exists --exit-on-error`.
+- `/share-manager` is the single bind-mounted persistence boundary. The host-side path is selected by `SHARE_MANAGER_HOST_PATH` in Compose; the app owns `backups/` and `attachments/` beneath it.
+- The FastAPI lifespan starts a backup scheduler alongside the billing scheduler. It catches up if the configured daily backup is absent after the scheduled UTC hour.
+- Automatic retention operates only on `share-manager-auto-*` dumps. Manual and pre-restore safety dumps are intentionally preserved.
+- Restore is deliberately two-stage from an operator perspective: validate source, create safety backup, then destructive restore. The UI requires the explicit confirmation token `RESTORE`.
+- Backup success/failure and restore completion integrate into the existing notification event system.
+
+
+## v0.4.1 — in-app backup automation settings
+- Backup schedule, scheduler check interval, scheduled-backup enable/disable, and daily/weekly/monthly retention are now stored in PostgreSQL and editable on the Disaster Recovery page.
+- Existing `BACKUP_SCHEDULE_HOUR`, `BACKUP_CHECK_INTERVAL_MINUTES`, and retention environment variables are retained only as first-run defaults for compatibility.
+- `SHARE_MANAGER_HOST_PATH` remains a deployment/Compose setting because Docker must mount the host/NAS path before the application starts.
+- Scheduler settings are re-read at runtime; changing the policy does not require an app restart (the check interval itself updates after the current sleep finishes).
+
+
+## v0.4.2
+- Polished the Disaster Recovery automation UI by grouping schedule and retention settings into aligned rows with consistent control heights and helper text, while keeping the existing backup behaviour unchanged.
+
+## v0.5.0 Tautulli integration
+Tautulli is an observational integration, not an entitlement authority. Historical usage is cached in `tautulli_activity` by a background sync. Live sessions use Tautulli `get_activity` through a short in-process cache exposed by `/api/tautulli/live`; browser heartbeats query Share Manager rather than Tautulli directly. User matching prefers stored Plex numeric user ID, then Plex username/email identity matching. Inactivity can notify administrators but never changes customer subscription status or Plex access.
+
+
+## v0.5.1
+- Moved the customer-card Tautulli usage/live activity summary out of the upper identity/billing content and into the package/control area so it stays visually anchored directly above the package selector. No Tautulli sync or heartbeat logic changed.
+
+## v0.5.3 reliability hardening
+
+- PostgreSQL restore uses a validated custom dump, exclusive application maintenance mode, `--single-transaction`, and post-restore schema verification.
+- Background database workers are serialized with restore operations so an already-running cycle completes before restore and no new cycle starts during maintenance.
+- Applied payments snapshot prior entitlement coverage so a latest-payment void can restore exact previous state.
+- Pending Plex invitations are managed as entitlement state rather than treated as a passive duplicate-invite guard.
+- Admin sessions use timed signed tokens and a credential-derived session version.
+
+
+## v0.5.4 runtime database policy
+
+Production/runtime Share Manager is PostgreSQL-only. Configuration validation rejects non-PostgreSQL `DATABASE_URL` values before the application engine is created. Backup and restore support is PostgreSQL-only (`pg_dump` custom format and transactional `pg_restore`). SQLite usage is limited to isolated unit-test fixtures and is not reachable from deployed application configuration.
+
+## v0.5.5
+- Desktop navigation sidebar now stays anchored to the viewport while main page content scrolls. Mobile off-canvas navigation is unchanged.
+
+
+## v0.5.6 — Customer archiving
+- Added reversible customer archiving so stale customers can be removed from the operational Customers view without deleting payments, subscriptions, credits, audit history, or Tautulli activity.
+- Customers must be Cancelled before they can be archived, preventing active Plex access from being hidden accidentally.
+- Added an Archived customers view with History, Edit, and Restore controls.
+- Archived customers are excluded from dashboard operational counts, revenue forecasts, billing processing, payment-entry customer selection, Tautulli matching, and Tautulli dashboard aggregates.
+
+## v0.5.7 — customer bulk operations
+Bulk customer changes are handled by `/customers/bulk`. Selected customer IDs are resolved server-side against non-archived records. Status/package changes preserve the existing per-customer subscription state transitions and reconciliation behavior. Archive is non-destructive and only applies to Cancelled, non-exempt customers; ineligible selections are reported as skipped.
+
+
+## v0.5.8 — bulk action performance
+- Bulk status and package changes no longer wait for sequential Plex API calls.
+- Bulk manual Reconcile Plex queues durable work and returns immediately.
+- Added a dedicated 5-second Plex reconciliation queue worker.
+- Queued work stores identities only and recalculates the latest desired entitlement at execution time.
+- Fresh operator changes reset any existing retry backoff so they are picked up promptly, while failures continue to use the existing exponential retry policy.
+- Bulk archive remains synchronous because it is database-only.
+
+
+## v0.5.9
+- Archived-customer onboarding recovery: Invite new Plex customer now detects archived identity/email matches and offers to restore the existing historical record instead of returning a generic duplicate error.
+- Added Restore & reassign package, preserving the customer ID/history while creating a fresh subscription using the originally selected tier/start date and reconciling Plex access.
+- The stored archived Plex identity is deliberately preserved; identity changes remain an explicit Edit customer operation.
+
+
+## v0.6.0 — Concurrent Stream Enforcement
+- Billing tiers now define a concurrent stream limit; `0` means unlimited and existing tiers migrate to `1`.
+- Tautulli live activity drives server-side enforcement even when no browser is open.
+- An over-limit customer must be observed in two distinct live samples before enforcement, preventing transient session flapping from killing playback.
+- Newest excess sessions are terminated first; billing-exempt customers remain subject to fair-use stream limits.
+- Unmatched/admin Tautulli sessions are never automatically terminated.
+- Optional `stream.limit_enforced` and `stream.limit_enforcement_failed` notification events are available through the existing notification adapters.
+- Dedicated Stream Limits history and per-customer enforcement history preserve successful and failed termination attempts.
+
+## v0.7.0 — PWA shell
+The web UI exposes `/manifest.webmanifest` and a root-scoped `/service-worker.js`. The service worker intentionally does not cache authenticated HTML/API responses; only static assets are cached. Navigation is network-first with `/static/offline.html` as the offline fallback. PWA cache names are release-versioned so new releases discard older static caches. Standard and maskable Android icons plus Apple touch/favicons live under `app/static/icons/`.
+
+
+## v0.7.1 — Mobile quick navigation
+- Added a persistent mobile bottom navigation bar for Dashboard, Customers, and Payments.
+- Added current-page highlighting to both the bottom navigation and sidebar drawer.
+- Added safe-area-aware bottom spacing so navigation does not cover page controls on installed PWAs or gesture-navigation devices.
+- Kept all secondary areas in the existing hamburger drawer.
+- Bumped the PWA service-worker cache version so updated navigation/CSS replaces the 0.7.0 shell cleanly.
+
+### v0.7.2 Dashboard presentation
+Dashboard mobile rendering remains server-rendered Jinja with progressive disclosure through native `<details>` elements. Historical and live data sources are unchanged; the Tautulli live count updates both desktop and mobile presentation nodes from the same asynchronous heartbeat.
+
+
+## v0.7.5
+- Stream Limits mobile-first UI: compact stats, quick date filters, collapsible filter panel, mobile enforcement cards, clearer success/failure presentation, tappable customers, and no horizontal scrolling.
+
+
+## v0.7.5a
+- Fixed Stream Limits filtering when `All customers` submits an empty `customer_id`; blank values now mean no customer filter instead of triggering FastAPI integer validation.
+- Invalid non-numeric customer filter values now redirect safely back to the unfiltered Stream Limits page.
+
+
+## v0.7.6
+- Phone-first Backups and Integrations pass: compact DR status/settings, mobile backup cards, touch-friendly restore controls, denser Plex/Tautulli/notification integration cards, and mobile notification-delivery cards without horizontal scrolling. Desktop behavior remains unchanged.
+
+## v0.8.0 customer portal
+Customer portal authentication is intentionally isolated from admin authentication. Each customer may have an optional unique portal username, bcrypt password hash, enable state, session-version integer, and login timestamps. The `sm_portal_session` signed cookie contains only the customer ID and current portal session version. Every portal request re-loads the customer from PostgreSQL and rejects disabled, archived, cancelled, or version-mismatched sessions.
+
+Passwords are never stored reversibly. Enable/reset operations display the submitted/generated temporary password exactly once, then only the hash remains. Cancellation disables portal access and rotates the portal session version. Portal routes are read-only in 0.8.0 and derive the customer exclusively from the authenticated session rather than URL/query customer IDs.
+
+
+### 0.8.0 build compatibility fix
+Pinned `bcrypt==4.0.1` alongside Passlib 1.7.4. Newer bcrypt releases are incompatible with Passlib 1.7.4's backend self-test on Python 3.12 and can fail before hashing otherwise-valid portal passwords.
+
+
+## v0.8.1 — Customer activity
+- Added a read-only customer Activity portal page backed by the existing cached Tautulli analytics.
+- Customers can see last streamed/title, 30-day and lifetime watch time/play counts, current stream allowance, live sessions, and their own recent stream-limit enforcement history.
+- Live sessions refresh asynchronously using the configured Tautulli live interval.
+- Customers can stop only their own currently active Plex sessions. Ownership is re-verified server-side against a fresh Tautulli activity response before termination; arbitrary session keys cannot be used to stop another customer's playback.
+- Customer-initiated stops are recorded in the admin audit log but are not counted as stream-limit enforcement events.
+
+## v0.8.2 — Portal history boundary
+`GET /portal/history` derives the customer exclusively from the signed portal session, then queries Payment, SubscriptionCredit, and Subscription rows scoped to that customer ID. No customer ID is accepted from the browser. The customer-facing view intentionally excludes `AuditLog`, payment notes/external references, reconciliation state, notification delivery records, and administrator-only metadata. The portal now has Account / Activity / History navigation.
+
+## Customer portal shell and PWA (v0.8.3)
+The customer portal is responsive with separate navigation presentations: a sticky left sidebar on desktop and a bottom navigation bar on mobile. Customer portal PWA resources are scoped beneath `/portal/`; the portal manifest starts at `/portal`, while its service worker caches only static assets and uses network-first navigation. Portal password changes verify the existing password, replace the bcrypt hash, increment `portal_session_version`, and issue a replacement cookie for the active browser so all other customer sessions are revoked.
+
+
+## v0.8.4 — Detailed watch history
+- Added PostgreSQL-cached Tautulli viewing-history rows per customer.
+- First detailed sync backfills up to 500 recent rows per matched user; later syncs refresh the newest 100 rows to stay lightweight.
+- Customer Activity now exposes title, watched date/time, library, device/player, platform, media type and playback duration.
+- Added customer-scoped filters for title search, device, library, media type and date range.
+- Portal queries always derive customer ownership from the authenticated portal session; watch history cannot be queried for another customer.
+
+
+## v0.8.5 — Full asynchronous Tautulli history backfill
+- Replaces the 500-row initial watch-history cap with a resumable full-history backfill for every matched, non-archived customer.
+- Backfill runs independently of normal Tautulli analytics sync in 500-row pages, so Sync Now and portal requests remain responsive.
+- History is imported oldest-first to keep pagination stable while new plays continue to arrive; normal syncs continue refreshing the newest 100 rows.
+- Backfill checkpoints and totals are persisted per customer, allowing imports to resume after container restarts or temporary Tautulli failures.
+- Integrations now shows live backfill progress, cached row counts, customer completion counts, and the latest backfill error.
+
+
+## v0.8.5a
+- Fixed the desktop customer-portal watch-history filter layout so the controls stay within the Activity card. Search/device/library/type remain on the first row, while date range and Reset/Apply actions align cleanly on the second row. No sync or filtering logic changed.
+
+## v0.8.5c
+Portal detailed watch-history pagination is performed server-side against the cached PostgreSQL dataset after filters are applied. The portal never loads the full cached history into the browser merely to paginate it.
+
+
+### v0.8.5c library history hotfix
+Detailed Tautulli watch history now resolves library names by syncing history per Plex library section. Existing cached history with missing library names is repaired asynchronously by the resumable full-history worker.
+
+## v0.8.5d watch-history rebuild
+A forced Tautulli history rebuild is an explicit cache-maintenance operation. The admin POST action is serialized through the application's DB worker lock, deletes `tautulli_watch_history` and `tautulli_history_library_sync`, resets legacy backfill fields on `tautulli_activity`, writes an audit event, and commits atomically. It does not mutate customer, billing, subscription, payment, Plex entitlement, notification or stream-limit records. The existing asynchronous backfill worker recreates per-library checkpoints and repopulates history from Tautulli on subsequent cycles.
+
+## v0.8.5e backfill progress semantics
+
+Tautulli full-history totals are discovered per customer/library checkpoint. While any checkpoint total is still unknown, the UI reports cached rows and the number of library histories measured, and does not present the partial sum as a final denominator. Once all checkpoint totals are known, the UI switches to processed/total progress and an overall percentage.
+
+## Notification Platform (v0.9)
+
+Notification-producing features emit a canonical event before any delivery channel is invoked. `notification_events` is the application event ledger; `notification_deliveries` records each channel attempt. Existing endpoint adapters (Home Assistant, Discord, generic webhook) and Web Push consume the same event definitions.
+
+Web Push subscriptions are device-specific and belong either to the admin or a customer. Customer delivery is target-scoped and only customer-safe event types can reach customer devices. Customer preferences are stored separately from browser subscriptions so a user can control event categories across all their devices. VAPID credentials are generated once and persisted in PostgreSQL. Expired browser subscriptions reported with 404/410 are disabled rather than retried indefinitely.
+
+The admin and customer PWAs use separate service-worker scopes but the same notification platform. Notification payload URLs are relative, validated server-side, and notification clicks deep-link back into the appropriate surface. This notification layer is intended to be reused by future Support Tickets without coupling ticket code to a particular delivery provider.
+
+
+## v0.9.0a portal responsive filter shell
+
+The customer Activity page keeps the desktop Watch History filter grid, but at viewport widths of 700px or below the same server-side filter form is exposed through a CSS-only collapsible control and rendered as a single vertical stack. No alternate mobile filtering endpoint or duplicated filter state is introduced.
+
+
+## Critical customer broadcasts (v0.9.1)
+
+`system.critical_broadcast` is an administrator-originated Web Push event intended for service-impacting announcements. It creates one canonical `NotificationEvent` and one `NotificationDelivery` per targeted browser subscription. The broadcast path is intentionally separate from normal customer-event dispatch because category-level opt-outs do not apply; the customer's master `push_enabled` preference remains authoritative. Normal portal eligibility rules also apply, excluding archived, Cancelled and portal-disabled customers.
+
+Broadcast destinations are constrained to `/portal` paths. Delivery continues to use the common Web Push adapter, including VAPID authentication, per-device success/failure accounting and automatic disabling of 404/410 subscriptions. This keeps future Support Ticket notifications on the normal preference-aware event path while preserving an explicit emergency/maintenance channel for administrators.
+
+
+## Admin push preferences (v0.9.2)
+
+Admin Web Push subscriptions share a singleton preference policy (`admin_notification_preferences`). The master switch controls normal operational push delivery; event selections filter canonical notification events before per-device delivery. Test pushes bypass this preference policy so subscription health can always be verified. Missing preference state is treated as all supported admin events enabled for backward compatibility.
+
+The mobile Integrations view collapses the Tautulli configuration/status body client-side only; no Tautulli synchronization behavior changes.
+
+
+## v0.9.3 notification scheduling and retries
+
+`ScheduledCustomerBroadcast` stores future critical broadcasts independently of delivery events. The notification worker checks for due schedules every 30 seconds; the audience is resolved at execution time. Scheduled broadcasts use a stable event key (`critical-broadcast-schedule:<id>`) so successful per-device deliveries are deduplicated if processing resumes after an interruption.
+
+`NotificationDelivery` persists `attempt_count`, `last_attempt_at`, `next_attempt_at`, and `final_failure`. Transient failures are retried after 1, 5, and 15 minutes. HTTP 429/5xx and network/transport failures are transient; permanent HTTP failures and expired Web Push subscriptions are terminal. Notification tests are excluded from automatic retry. The `/notifications/history` view reads this delivery ledger rather than external provider logs.
+
+
+## v0.10 Support Tickets
+
+`support_tickets` is the workflow record and `support_ticket_messages` is the immutable conversation stream. Messages distinguish customer, admin and internal-note authors; internal notes are never exposed by portal queries. Closed tickets are retained rather than deleted. Customer reply to a Resolved ticket returns it to Open.
+
+Ticket notifications reuse the canonical Notification Platform. `ticket.created` and `ticket.customer_reply` are admin-facing events. `ticket.admin_reply` and `ticket.status_changed` are delivered directly to the ticket customer only when that ticket is subscribed and the customer's master push switch remains enabled. Direct ticket pushes bypass ordinary category selections so the per-ticket subscription is authoritative.
+
+
+## v0.10.0b navigation polish
+
+The shared admin render context exposes the current count of non-Closed support tickets so the sidebar can display a live active-queue badge on every authenticated admin page. On mobile, the off-canvas sidebar carries no shadow while translated off-screen; its drawer shadow is applied only while `body.nav-open` is active.
+
+## v0.10.0b mobile ticket-detail layout hardening
+
+Navigation sidebar positioning is scoped to `#site-sidebar`. Semantic `<aside>` elements used by feature pages, including the ticket Workflow/Customer panel, remain normal document-flow content and do not inherit off-canvas or viewport-height navigation behavior.
+
+
+## v0.10.1 live ticket polling
+
+Support-ticket pseudo-realtime behavior uses short authenticated HTTP polls rather than persistent WebSockets. An open ticket view polls every five seconds only while `document.visibilityState` is `visible`. The client sends its latest rendered `SupportTicketMessage.id`, and the server returns only newer rows plus the current ticket status/priority/update metadata. Customer endpoints resolve the ticket through the signed portal customer and filter `visible_to_customer = true`; admin endpoints require the normal admin session and may include internal notes.
+
+The shared admin shell independently polls a compact ticket-summary endpoint every ten seconds. The navigation badge continues to represent all non-Closed tickets, while the unread count is used only for visual emphasis. This polling also pauses in hidden tabs and resumes on visibility return. No additional persistence or database schema is required for live updates.
+
+
+## Requests Platform integration (v0.10.2)
+
+`requests_platform_settings` stores one external customer request destination. The feature intentionally remains link-based and provider-agnostic: Share Manager does not proxy Seerr credentials or API calls. When enabled with a valid HTTP/HTTPS URL, desktop portal navigation exposes a Request link and the mobile Account page exposes the configured request action. The mobile bottom navigation remains fixed at Account, Activity, Support and History.
+
+
+## v0.10.3 mobile UI consistency
+
+The mobile presentation layer now centralises common touch-target and spacing values in a max-width 700px CSS scope. Shared controls, cards, status markers, collapsible headers and bottom-navigation hit areas use those mobile-only tokens, while compact utility actions retain a smaller explicit variant. No application routes, data models or desktop layouts change in this release.
+
+
+## News banners
+`news_banners` stores scheduled customer announcements. Only non-cancelled windows participate in overlap validation. Customer portal rendering resolves the currently active window (`starts_at <= now < ends_at`) and a session-scoped JSON endpoint supports one-minute visible-tab refreshes. Times are persisted as naive UTC to match existing scheduling conventions.
+
+## News banner visibility
+
+Scheduled news banners remain mutually exclusive by active time window. The customer portal treats Info, Advisory, and Warning as Account-page announcements. Critical banners are global and appear across all authenticated customer portal views. The polling endpoint accepts the portal display scope so live schedule changes follow the same rule.
+
+
+## Portal navigation and news (0.10.5)
+
+The mobile customer portal keeps the four primary destinations in the fixed bottom navigation and exposes secondary destinations through a slide-in menu. News is a first-class customer route at `/portal/news`; Requests Platform remains an external destination and is only rendered when enabled. Customer ticket unread counts come from a session-scoped summary endpoint and are polled only while the document is visible.
+
+
+## Ticket attachment storage (0.10.6)
+
+Persistent app-owned files share one root: `/share-manager/backups` for PostgreSQL dumps and `/share-manager/attachments` for support uploads. Attachment bytes are never stored in PostgreSQL; `support_ticket_attachments` stores authorization, ownership, message/ticket linkage, original filename, generated storage filename, MIME type, size and SHA-256 metadata. New files are staged in `attachments/_pending` and are atomically moved into `attachments/TKT-NNNNNN/` when a message is committed. Unattached files older than 24 hours are garbage-collected. Downloads are only served through authenticated application routes; the attachments directory must not be published directly by the reverse proxy. Customers are limited to five uploads across a ticket, while admin uploads do not consume that quota.
+
+
+## Admin desktop content rail (v0.10.6b)
+
+On desktop widths above 900px, the admin `<main>` rail is horizontally centred inside the grid workspace to the right of `#site-sidebar`. The existing 1400px maximum width remains authoritative; mobile navigation and layout behavior are unchanged.
+
+### Portal analytics (v0.10.7)
+Portal analytics are deliberately coarse and first-party. `portal_daily_metrics` stores per-customer/day counters rather than individual navigation events. A portal session is counted when an authenticated page view occurs after at least 30 minutes of inactivity. High-resolution clickstream, IP-history, mouse/scroll and third-party advertising telemetry are explicitly out of scope.
+
+## Referral credits (0.11)
+
+Referral identity is stored on `customers`: an immutable random five-digit `referral_code`, an optional self-referencing `referrer_customer_id`, and `referral_started_at`. A referred customer has at most one current referrer; a referrer may have many referred customers. Admin assignment/removal is explicit and prospective.
+
+`billing_tiers.referral_credits` snapshots the number of credits earned by a referrer when a qualifying payment is recorded. Referral accounting uses `referral_credit_entries` as an append-only ledger. Earn and reversal rows are unique per payment/kind, making retries idempotent. Voiding a payment appends the inverse of the original snapshotted award; tier edits never rewrite historical entries.
+
+`referral_settings` controls whether new rewards are earned and the redemption policy. Redemption locks the customer row, checks the live ledger balance, appends a negative `redeem` entry and invokes the existing complimentary subscription-credit engine. Referral credits therefore remain distinct from money and from payment records.
+
+The customer portal intentionally does not expose referred-customer identities, payment amounts, or payment dates. It exposes only the referrer's own code, aggregate referral count, balance and generic credit-ledger reasons.
+
+
+### Referral redemption semantics (0.11.0a)
+Referral earning and spending are independent Billing Tier properties. `referral_credits` snapshots how many credits a qualifying referred payment awards; `referral_redeem_cost` determines how many credits a customer on that tier must spend for exactly one calendar month of access. Redemption directly advances `Subscription.current_period_end` by one calendar month (or starts from the current time when fully lapsed), refreshes grace/status, and records an append-only referral ledger debit with the exact coverage change. It never interprets a yearly tier as a yearly referral reward.
+
+
+## Unified account credits (v0.11.1)
+
+`ReferralCreditEntry` is the canonical spendable account-credit ledger despite its legacy model name. Referral payment rewards (`earn`), payment reversals (`reversal`), administrator grants (`admin_grant`) and redemptions (`redeem`) are append-only entries. Administrator grants affect available balance but not lifetime referral-earned metrics. New `SubscriptionCredit` grants are retired; existing rows remain read-only historical data and retain their already-applied coverage semantics. Redemption is independent of the referral-programme enabled switch and uses the customer's current Billing Tier `referral_redeem_cost` to purchase exactly one calendar month.
+
+
+## FAQ / Knowledge Base (v0.12.0)
+
+`faq_entries` stores question, answer, category, sort order, publication state and a global flag. `faq_entry_packages` is a composite-key many-to-many mapping to `packages`; package names are never duplicated into FAQ content. Portal visibility is enforced server-side: published global entries are eligible for every authenticated portal customer, while targeted entries require an intersection between their mapped package IDs and package IDs reached through the customer’s subscriptions in `ASSIGNED_SUBSCRIPTION_STATES` (`active`, `grace`, `suspended`). Cancelled/historical subscriptions do not qualify.
+
+FAQ answer formatting is deliberately restricted rather than accepting stored HTML. Source text is HTML-escaped before a small formatter permits paragraphs, bold markers, bullet lists and HTTP(S) Markdown links. Customer search runs only against the already-authorized rendered entry set. Portal analytics records a coarse FAQ page view only; search terms and individual FAQ opens are not persisted.
+
+
+## Seerr management (v0.13.0)
+
+The existing `RequestsPlatformSettings` remains the source of the customer-facing external request URL and now optionally stores the Seerr API key and reconciliation state. `SeerrIntegration` uses `/api/v1` with the `X-Api-Key` header. Customer identity remains Plex-centric: Share Manager resolves a Seerr user by exact case-insensitive `plexUsername`, then email as a unique fallback, and caches the numeric Seerr user id.
+
+Package quota policy fields define movie limit/window and TV-season limit/window. `seerr_policy_priority` provides deterministic multi-package precedence; the highest priority among assigned (`active`, `grace`, `suspended`) subscriptions wins. Cancelled subscriptions are historical and do not supply policy. A 15-minute worker and manual reconciliation use Seerr's per-user general-settings endpoint to apply quota overrides. Cached usage columns support inexpensive admin reporting, while the customer portal fetches live quota data when available. Seerr outages never determine local billing or Plex entitlement state.

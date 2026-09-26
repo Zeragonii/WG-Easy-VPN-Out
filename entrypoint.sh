@@ -1,13 +1,4 @@
 #!/bin/sh
-set -eu
-
-mkdir -p /data/openvpn /data/wireguard /data/backups
-
-exec gunicorn \
-    --bind "${VPN_ROUTER_BIND:-0.0.0.0}:${VPN_ROUTER_PORT:-8085}" \
-    --workers "${GUNICORN_WORKERS:-1}" \
-    --threads "${GUNICORN_THREADS:-2}" \
-    --timeout 60 \
-    --access-logfile - \
-    --error-logfile - \
-    "app:create_app()"
+set -e
+python -m app.init_db
+exec uvicorn app.main:app --host 0.0.0.0 --port 8080

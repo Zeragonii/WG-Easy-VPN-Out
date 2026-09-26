@@ -1,0 +1,56 @@
+{% extends 'base.html' %}{% block content %}
+<header class="row between"><div><h1>{{ customer.name }}</h1><p>Combined subscription, payment, account-credit and access history.</p></div><a class="button-link secondary" href="{{ '/customers?archived=1' if customer.archived else '/customers' }}">Back to {{ 'archived customers' if customer.archived else 'customers' }}</a></header>
+<section>
+  <div class="history-summary">
+    <div><span class="muted">Email</span><strong>{{ customer.email or '—' }}</strong></div>
+    <div><span class="muted">Plex</span><strong>{{ customer.plex_username or '—' }}</strong></div>
+    <div><span class="muted">Status</span><strong>{{ ('archived · ' ~ customer.status) if customer.archived else ('exempt' if customer.exempt else customer.status) }}</strong></div>
+  </div>
+</section>
+<section class="portal-customer-usage">
+  <div><h2>Portal activity</h2><p class="muted">Coarse first-party usage totals for the last 30 days.</p></div>
+  <div class="portal-usage-grid">
+    <div><span>Last login</span><strong>{{ relative_time(customer.portal_last_login_at) }}</strong></div>
+    <div><span>Last active</span><strong>{{ relative_time(customer.portal_last_activity_at) }}</strong></div>
+    <div><span>Sessions · 30d</span><strong>{{ portal_usage.sessions_30d }}</strong></div>
+    <div><span>Page views · 30d</span><strong>{{ portal_usage.views_30d }}</strong></div>
+  </div>
+  <div class="portal-page-usage">{% for name,count in portal_usage.pages.items() %}<span>{{ name }} · {{ count }}</span>{% endfor %}<span>Requests · {{ portal_usage.request_clicks_30d }}</span></div>
+</section>
+{% if tautulli_activity %}
+<section class="tautulli-customer-history">
+  <div class="row between"><div><h2>Plex activity</h2><p class="muted">Cached Tautulli usage analytics.</p></div><span class="muted">Synced {{ relative_time(tautulli_activity.synced_at) }}</span></div>
+  <div class="tautulli-history-grid">
+    <div><span>Last streamed</span><strong>{{ relative_time(tautulli_activity.last_streamed_at) }}</strong><small>{{ tautulli_activity.last_streamed_at.strftime('%Y-%m-%d %H:%M') if tautulli_activity.last_streamed_at else 'No playback history' }}</small></div>
+    <div><span>Last title</span><strong>{{ tautulli_activity.last_title or '—' }}</strong></div>
+    <div><span>Last 30 days</span><strong>{{ tautulli_activity.plays_30d }} plays · {{ format_duration(tautulli_activity.watch_time_30d) }}</strong></div>
+    <div><span>Lifetime</span><strong>{{ tautulli_activity.plays_lifetime }} plays · {{ format_duration(tautulli_activity.watch_time_lifetime) }}</strong></div>
+  </div>
+</section>
+{% endif %}
+
+{% if stream_limit_events %}
+<section class="stream-limit-customer-history">
+  <div class="row between"><div><h2>Stream limit enforcement</h2><p class="muted">Concurrent-stream enforcement attempts for this customer.</p></div><a class="button-link secondary small-action" href="/stream-limits?customer_id={{ customer.id }}">View all</a></div>
+  <div class="stream-limit-mini-list">
+    {% for e in stream_limit_events[:10] %}
+    <div class="stream-limit-mini-row">
+      <time>{{ e.created_at.strftime('%Y-%m-%d %H:%M') }}</time>
+      <div><strong>{{ e.detected_streams }} detected · limit {{ e.allowed_streams }}</strong><span>{{ e.title or 'Unknown title' }}{% if e.player %} · {{ e.player }}{% endif %}</span></div>
+      <span class="badge {{ 'ok' if e.success else 'error-badge' }}">{{ 'terminated' if e.success else 'failed' }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+<section><h2>Timeline</h2>
+  <div class="timeline">
+  {% for event in events %}
+    <div class="timeline-row{% if event.voided %} timeline-voided{% endif %}">
+      <time>{{ event.when.strftime('%Y-%m-%d %H:%M') }}</time>
+      <div><strong>{{ event.kind }}</strong><p>{{ event.detail }}</p></div>
+    </div>
+  {% else %}<p class="muted">No history yet.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

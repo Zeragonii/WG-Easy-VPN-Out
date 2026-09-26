@@ -1,0 +1,163 @@
+{% extends 'base.html' %}{% block content %}
+<header><h1>Payments</h1><p>Payments are permanent ledger records. Applied payments also advance subscription coverage.</p></header>
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert success">{{ notice }}</div>{% endif %}
+<section><h2>Record payment</h2>
+<form method="post" class="grid-form payment-form">
+  <label class="payment-customer-label">Customer
+    <div class="customer-picker" id="payment-customer-picker">
+      <input id="payment-customer-search" type="search" placeholder="Search customer…" autocomplete="off" required>
+      <input id="payment-customer" name="customer_id" type="hidden" required>
+      <div class="customer-picker-menu" id="payment-customer-menu" hidden>
+        {% for c in customers %}
+        {% set assigned = c.subscriptions|selectattr('status','in',['active','grace','suspended'])|list %}
+        {% set sub = assigned|sort(attribute='id', reverse=true)|first if assigned else none %}
+        <button type="button" class="customer-picker-option"
+          data-customer-id="{{ c.id }}"
+          data-search="{{ (c.name ~ ' ' ~ (c.email or '') ~ ' ' ~ (c.plex_username or ''))|lower|e }}"
+          data-label="{{ c.name }}{% if sub %} — {{ sub.billing_tier.package.name }} / {{ sub.billing_tier.name }}{% endif %}"
+          {% if sub %}data-tier-price="{{ sub.billing_tier.price }}" data-tier-name="{{ sub.billing_tier.package.name }} — {{ sub.billing_tier.name }}" data-tier-unit="{{ sub.billing_tier.interval_unit }}" data-tier-count="{{ sub.billing_tier.interval_count }}"{% endif %}>
+          <strong>{{ c.name }}</strong>
+          <span class="muted">{% if c.plex_username %}{{ c.plex_username }}{% elif c.email %}{{ c.email }}{% else %}No linked identifier{% endif %}{% if sub %} · {{ sub.billing_tier.package.name }} / {{ sub.billing_tier.name }}{% endif %}</span>
+        </button>
+        {% endfor %}
+        <div class="customer-picker-empty muted" hidden>No customers match your search.</div>
+      </div>
+    </div>
+  </label>
+  <label>Amount (£)<input id="payment-amount" name="amount" type="number" min="0" step="0.01" required></label>
+  <label>Payment received<input name="paid_at" type="date" value="{{ today }}" required></label>
+  <label>Source<select name="source" required>{% for source in payment_sources if source.active %}<option value="{{ source.name }}">{{ source.name }}</option>{% endfor %}</select></label>
+  <label>Reference<input name="external_reference"></label>
+  <label>Note<input name="note"></label>
+  <label>Billing periods <span class="muted">(optional override)</span><input id="billing-periods" name="billing_periods" type="number" min="1" step="1" placeholder="Auto"></label>
+  <label class="check apply-payment"><input id="apply-payment" name="apply_to_subscription" type="checkbox" value="true" checked> Apply to current subscription</label>
+  <button>Record payment</button>
+</form>
+<div id="payment-period-preview" class="payment-period-preview muted"></div>
+<p class="muted payment-help">Leave Billing periods blank to calculate automatically from amount ÷ current tier price (for example £30 on a £10/month tier = 3 monthly periods). Enter a number manually to override that calculation, which is useful for discounts or special arrangements. If paid before expiry or during grace, all purchased periods extend from the previous expiry; after grace, they start from the payment date.</p>
+
+<details class="source-manager">
+  <summary>Manage payment sources</summary>
+  <div class="source-manager-body">
+    <form method="post" action="/payments/sources" class="source-add-form">
+      <label>New source<input name="name" placeholder="e.g. Revolut" required></label>
+      <button>Add source</button>
+    </form>
+    <div class="source-list">
+      {% for source in payment_sources %}
+      <div class="source-row{% if not source.active %} source-archived{% endif %}">
+        <form method="post" action="/payments/sources/{{ source.id }}/rename" class="source-rename-form">
+          <input name="name" value="{{ source.name }}" required>
+          <button class="secondary" type="submit">Rename</button>
+        </form>
+        <form method="post" action="/payments/sources/{{ source.id }}/toggle">
+          <button class="ghost small-action" type="submit">{{ 'Archive' if source.active else 'Restore' }}</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted source-help">Archiving removes a source from new-payment choices but does not alter historical payment records.</p>
+  </div>
+</details>
+</section>
+<section><h2>Payment history</h2><div class="table-wrap"><table><thead><tr><th>Date</th><th>Customer</th><th>Amount</th><th>Source</th><th>Periods</th><th>Coverage</th><th>Reference</th><th></th></tr></thead><tbody>
+{% for p in payments %}<tr class="{% if p.voided_at %}payment-voided{% endif %}"><td>{{ p.paid_at.strftime('%Y-%m-%d') }}</td><td><a class="plain-link" href="/customers/{{ p.customer.id }}/history">{{ p.customer.name }}</a>{% if p.voided_at %}<span class="badge cancelled">deleted</span>{% endif %}</td><td>£{{ '%.2f'|format(p.amount) }}</td><td>{{ p.source }}</td><td>{{ p.billing_periods if p.billing_periods else '—' }}</td><td>{% if p.coverage_end %}{{ p.coverage_start.strftime('%Y-%m-%d') }} → {{ p.coverage_end.strftime('%Y-%m-%d') }}{% else %}<span class="muted">Ledger only</span>{% endif %}</td><td>{{ p.external_reference or '' }}</td><td class="payment-actions">{% if not p.voided_at %}<button type="button" class="secondary small-action" onclick="document.getElementById('payment-edit-{{ p.id }}').showModal()">Edit</button>{% endif %}</td></tr>
+{% else %}<tr><td colspan="8" class="muted">No payments recorded.</td></tr>{% endfor %}</tbody></table></div></section>
+{% for p in payments if not p.voided_at %}
+<dialog id="payment-edit-{{ p.id }}" class="customer-modal">
+  <div class="modal-heading"><div><h3>Edit payment · {{ p.customer.name }}</h3><span class="muted">Received {{ p.paid_at.strftime('%Y-%m-%d') }}{% if p.coverage_end %} · applied to subscription{% else %} · ledger only{% endif %}</span></div><button type="button" class="ghost modal-close" onclick="this.closest('dialog').close()">×</button></div>
+  <form method="post" action="/payments/{{ p.id }}/edit" class="modal-form">
+    <label>Amount (£)<input name="amount" type="number" min="0" step="0.01" value="{{ '%.2f'|format(p.amount) }}" required></label>
+    <label>Payment received<input name="paid_at" type="date" value="{{ p.paid_at.strftime('%Y-%m-%d') }}" required></label>
+    <label>Source<select name="source" required>{% for source in payment_sources %}{% if source.active or source.name == p.source %}<option value="{{ source.name }}" {% if source.name == p.source %}selected{% endif %}>{{ source.name }}{% if not source.active %} (archived){% endif %}</option>{% endif %}{% endfor %}</select></label>
+    <label>Reference<input name="external_reference" value="{{ p.external_reference or '' }}"></label>
+    <label>Note<input name="note" value="{{ p.note or '' }}"></label>
+    <label>Billing periods<input name="billing_periods" type="number" min="1" step="1" value="{{ p.billing_periods or '' }}" {% if not p.subscription_id %}disabled{% endif %}></label>
+    <div class="modal-help muted">Changing amount, receipt date, source, reference or note corrects the ledger but does not rewrite already-granted coverage. Changing Billing periods recalculates coverage and is only allowed if this is the latest coverage event on the subscription.</div>
+    <div class="modal-actions split-actions"><button type="button" class="secondary" onclick="this.closest('dialog').close()">Cancel</button><button>Save payment</button></div>
+  </form>
+  <form method="post" action="/payments/{{ p.id }}/delete" class="payment-delete-form" onsubmit="return confirm('Delete this payment? Applied payments can only be removed if they are the latest coverage event.');"><button class="danger" type="submit">Delete payment</button><span class="muted">Deleted payments remain in the audit trail and are excluded from revenue totals.</span></form>
+</dialog>
+{% endfor %}
+<script>
+(() => {
+  const picker = document.getElementById('payment-customer-picker');
+  const search = document.getElementById('payment-customer-search');
+  const customerId = document.getElementById('payment-customer');
+  const menu = document.getElementById('payment-customer-menu');
+  const options = [...menu.querySelectorAll('.customer-picker-option')];
+  const empty = menu.querySelector('.customer-picker-empty');
+  const amount = document.getElementById('payment-amount');
+  const periods = document.getElementById('billing-periods');
+  const apply = document.getElementById('apply-payment');
+  const preview = document.getElementById('payment-period-preview');
+  let selected = null;
+
+  function choose(option) {
+    selected = option;
+    customerId.value = option.dataset.customerId;
+    search.value = option.dataset.label;
+    search.setCustomValidity('');
+    menu.hidden = true;
+    refresh();
+  }
+
+  function filterOptions(showAll = false) {
+    const query = showAll ? '' : (search.value || '').trim().toLowerCase();
+    let visible = 0;
+    options.forEach(option => {
+      const show = !query || (option.dataset.search || '').includes(query) || (option.dataset.label || '').toLowerCase().includes(query);
+      option.hidden = !show;
+      if (show) visible += 1;
+    });
+    empty.hidden = visible !== 0;
+    menu.hidden = false;
+  }
+
+  function refresh() {
+    if (!apply.checked) { preview.textContent = 'Ledger only — this payment will not alter subscription coverage.'; return; }
+    if (!selected) { preview.textContent = 'Choose a customer to calculate subscription coverage.'; return; }
+    if (!selected.dataset.tierPrice) { preview.textContent = 'This customer has no current subscription; payment will be ledger-only.'; return; }
+    const manual = parseInt(periods.value || '', 10);
+    const price = parseFloat(selected.dataset.tierPrice);
+    const paid = parseFloat(amount.value);
+    const count = parseInt(selected.dataset.tierCount || '1', 10);
+    const unit = selected.dataset.tierUnit || 'month';
+    const labelUnit = count === 1 ? unit : `${count} ${unit}s`;
+    if (manual > 0) { preview.textContent = `Manual: ${manual} × ${labelUnit} billing period${manual === 1 ? '' : 's'} on ${selected.dataset.tierName}.`; return; }
+    if (Number.isFinite(paid) && price > 0) {
+      const auto = paid / price;
+      if (Number.isInteger(auto) && auto >= 1) preview.textContent = `Auto: £${paid.toFixed(2)} buys ${auto} × ${labelUnit} billing period${auto === 1 ? '' : 's'} on ${selected.dataset.tierName}.`;
+      else preview.textContent = `£${paid.toFixed(2)} is not a whole multiple of the £${price.toFixed(2)} tier price — enter Billing periods manually.`;
+      return;
+    }
+    preview.textContent = `Auto calculation uses the current tier price (£${price.toFixed(2)}).`;
+  }
+
+  search.addEventListener('focus', () => {
+    if (selected) search.select();
+    filterOptions(Boolean(selected));
+  });
+  search.addEventListener('input', () => {
+    selected = null;
+    customerId.value = '';
+    search.setCustomValidity('Select a customer from the results.');
+    filterOptions();
+    refresh();
+  });
+  options.forEach(option => option.addEventListener('click', () => choose(option)));
+  document.addEventListener('click', event => { if (!picker.contains(event.target)) menu.hidden = true; });
+  picker.closest('form').addEventListener('submit', event => {
+    if (!customerId.value) {
+      search.setCustomValidity('Select a customer from the results.');
+      search.reportValidity();
+      event.preventDefault();
+    }
+  });
+  [amount, periods, apply].forEach(el => el.addEventListener('input', refresh));
+  refresh();
+})();
+</script>
+<script>document.querySelectorAll('dialog.customer-modal').forEach(dialog => dialog.addEventListener('click', event => { const r=dialog.getBoundingClientRect(); if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom) dialog.close(); }));</script>
+{% endblock %}

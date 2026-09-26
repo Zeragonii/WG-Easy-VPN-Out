@@ -1,357 +1,558 @@
-# VPN Router
+## v0.13.0 — Seerr Management Integration
 
-## AI-assisted development
+Share Manager can now manage Seerr users through their existing Plex-linked identity. Configure the Seerr URL and API key under Integrations, then define request quotas on Packages. Movie limits count movie requests; TV limits count requested seasons. When several assigned Packages define a Seerr policy, the highest policy priority wins. Quota reconciliation can run automatically every 15 minutes, while customers see their current quota usage on the portal Account page.
 
-This project was created with substantial assistance from **OpenAI's ChatGPT**.
+## v0.12.0d — FAQ category picker fix
 
-AI assistance was used during the design and implementation process for tasks
-including architecture discussion, code generation and refactoring, debugging,
-release planning, documentation, test design, and analysis of diagnostic output.
+Admin FAQ category selection now uses a real visible selector backed by categories already present in FAQ entries, alongside an editable field for creating new categories. This replaces the browser-dependent `datalist` behavior from 0.12.0c.
 
-The project was not developed autonomously by an AI system. Its requirements,
-deployment environment, testing decisions, validation, and release approval
-were directed and performed by the project maintainer. Changes were repeatedly
-tested against a real WG-Easy/OpenVPN deployment before the 1.0 release.
+## v0.12.0c — FAQ category suggestions
 
-This disclosure is included intentionally so users and contributors can make an
-informed judgement about the project's development process and provenance.
+FAQ category fields now suggest categories already in use while remaining free-text, so administrators can reuse existing categories or create new ones without a separate category-management system.
 
-A small Flask-based management UI for policy-routing WG-Easy clients through
-named outbound VPN sessions (OpenVPN or WireGuard).
+# Share Manager
 
-## What VPN Router does
+> Current release: **0.12.0c — FAQ category suggestions**
 
-VPN Router is a LAN-hosted policy-routing controller designed to sit alongside
-WG-Easy. It lets individual WG-Easy clients use different outbound paths
-without changing the WireGuard configuration distributed to those clients.
 
-Current functionality includes:
 
-- WG-Easy client discovery and metadata synchronisation.
-- Per-client assignment to routing groups.
-- Temporary per-client routing overrides with automatic expiry/revert.
-- Default-WAN or OpenVPN-backed routing groups.
-- Private/local IPv4 destination bypass.
-- Per-group **Block / kill-switch** or **WAN fallback** behavior.
-- Per-group DNS policy:
-  - **Existing / client DNS**
-  - **PIA DNS**
-  - **Custom DNS**
-- Transparent forced classic DNS interception for UDP/TCP port 53.
-- Routing-group-aware DNS visibility/leak testing.
-- VPN exit-IP visibility.
-- Routing health and recent transition history.
-- Live WG-Easy traffic visibility with per-client and per-route RX/TX rates.
-- OpenVPN retry/recovery with exponential backoff and connect timeout.
-- VPN connection policies:
-  - **Always connected**
-  - **On demand**
-- Assignment-driven On-demand lifecycle:
-  - an assignment means the outbound VPN is required
-  - the target VPN connects before a client assignment is moved
-  - unused On-demand tunnels disconnect after an idle grace period
-- Provider/profile intelligence.
-- Provider adapter framework with PIA-specific interpretation and generic
-  fallback for unknown providers.
-- Encrypted VPN credentials.
-- First-run setup wizard and persistent settings.
-- Backup/restore.
-- Diagnostics and release-preflight checks.
-- GitHub update awareness.
+Share Manager is a Dockerised subscription, payment and entitlement manager. Plex is the first entitlement integration; the core model is intentionally integration-agnostic.
 
-### Current runtime scope
 
-OpenVPN is the supported outbound VPN runtime today.
+## v0.12.0a — Portal service-aware UI cleanup
 
-WireGuard configuration parsing/intelligence exists, but outbound WireGuard
-runtime activation is not yet implemented.
+Customer portal Plex controls are now capability-aware: Activity, Plex account details and concurrent-stream information are shown only when an assigned Package contains a Plex library entitlement. Billing History is labelled **Payment History** to distinguish it from Plex watch history.
 
-VPN Router does not replace WG-Easy. WG-Easy remains the WireGuard server and
-client-management layer; VPN Router adds outbound policy routing around it.
+## v0.12.0 — Customer FAQ / Knowledge Base
 
-## Basic startup guide
+Admins can publish FAQ entries globally or target them to one or more Packages. Portal customers receive only published FAQs that are global or match a currently assigned Package; active, grace and suspended assignments qualify while cancelled history does not. FAQs support categories, ordering, drafts, safe lightweight formatting, accordion presentation and local search.
 
-### 1. Requirements
+## v0.11.1a — Referrals favicon hotfix
 
-You need:
+The customer Referrals page now uses the same favicon and Apple touch icon metadata as the rest of the portal.
 
-- Docker / Docker Compose or Portainer
-- WG-Easy already running
-- host networking
-- `/dev/net/tun`
-- `NET_ADMIN`
-- `NET_RAW`
-- IPv4 forwarding enabled on the host
-- a LAN gateway route for the WG-Easy client subnet back to the VPN Router host
+## v0.11.1 — Unified Account Credits
 
-VPN Router uses host networking because it manages host routes, policy rules,
-nftables and VPN tunnel interfaces directly.
+Share Manager now uses one account-credit ledger for referral rewards and administrator goodwill/manual grants. New complimentary-access grants are retired; historical complimentary records remain visible read-only. Admin grants require a reason and use the same tier-specific one-calendar-month redemption engine as referral credits.
 
-### 2. Minimal Compose example
+## v0.10.4b
 
-```yaml
-services:
-  vpn-router:
-    image: ghcr.io/zeragonii/wg-easy-vpn-out:latest
-    container_name: vpn-router
-    network_mode: host
-    restart: unless-stopped
+News banner visibility is severity-aware: Info, Advisory and Warning announcements are shown on the customer Account page, while Critical announcements follow the customer throughout the portal.
 
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
+## v0.10.3 — Mobile UI consistency pass
 
-    devices:
-      - /dev/net/tun:/dev/net/tun
+- Standardised mobile button heights, padding, typography and corner radii across admin and customer PWAs.
+- Normalised text inputs, selects and textareas to consistent 44px touch targets and mobile-safe font sizing.
+- Aligned card padding, vertical rhythm, headings, badges/status pills, action rows and empty states.
+- Unified the visual treatment of mobile collapsible controls without changing their behaviour.
+- Normalised customer/admin bottom-navigation hit areas and label alignment.
+- Kept intentionally compact utility controls compact and left desktop layouts unchanged.
 
-    environment:
-      TZ: Europe/London
-      VPN_ROUTER_PORT: "8085"
-      VPN_ROUTER_BIND: "0.0.0.0"
-      SECRET_KEY: "replace-with-a-long-stable-random-secret"
 
-    volumes:
-      - vpn-router-data:/data
+## v0.10.2 — Requests Platform integration
 
-volumes:
-  vpn-router-data:
+- Added a generic **Requests platform** integration for Seerr or any HTTP/HTTPS content-request service.
+- Admins can configure an enable switch, friendly name, external URL and customer-facing button label.
+- Desktop customer portal navigation shows **Request** in the left sidebar when enabled.
+- Mobile keeps the existing four-button bottom navigation and instead shows a prominent request card on the Account page.
+- Request links open the configured external service without changing Share Manager session state.
+- Disabled or unconfigured integrations are hidden from the customer portal.
+
+
+## v0.10.1 — Live Ticket Updates
+
+- Open admin and customer ticket conversations poll for new replies every 5 seconds while the page is visible.
+- Only messages newer than the last rendered message ID are returned, keeping polling lightweight.
+- Ticket status/priority metadata refreshes in place without resetting an in-progress reply.
+- Admin Tickets navigation count refreshes every 10 seconds and subtly highlights when unread ticket activity exists.
+- Polling pauses while the browser/PWA is hidden and catches up immediately when it becomes visible again.
+- Customer live-update endpoints remain session/customer scoped and never expose internal notes.
+
+## v0.5.2
+
+Failed Plex updates now survive restarts and retry automatically using the customer's current access rules. Payment coverage edits and voids refresh only the affected customer's billing, preserving other customers' scheduled access updates. See [release notes](RELEASE_NOTES.md) for upgrade details, retry timing, and regression tests.
+
+## v0.3.0 highlights
+
+- Package and billing-tier management, including per-tier grace periods.
+- Customer subscriptions with explicit start/current-period dates.
+- Manual payment ledger with payment-received date, coverage attribution, and multi-period prepayments.
+- Payment duration can be auto-calculated from amount ÷ tier price or manually overridden.
+- Customer cards retain the responsive tile layout with aligned controls and client-side search/status filtering.
+- Renewal semantics:
+  - first/fully-lapsed payment starts coverage on the payment date;
+  - early/on-time payments extend from the existing expiry;
+  - payments during grace also extend from the previous expiry, so grace does not create free days.
+- Automatic `active -> grace -> suspended` billing state transitions.
+- Applied payment automatically returns an overdue subscription to `active` and reconciles Plex access.
+- Background billing check every 15 minutes by default, plus a manual **Run billing check** button.
+- Existing v0.1 subscriptions with no expiry remain untouched until their billing dates are initialised.
+- Existing Plex package/reconcile/exempt behavior retained.
+
+## One-click Docker / Portainer
+
+The stack contains the app and PostgreSQL. Persistent data lives in named Docker volumes.
+
+Required environment values. In Portainer, add these under the stack's **Environment variables** section (the Compose file passes them into the app container):
+
+```text
+DB_PASSWORD=<strong-random-value>
+APP_SECRET=<strong-random-value>
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=<strong-password>
+RECONCILE_ON_ASSIGN=true
+BILLING_CHECK_INTERVAL_MINUTES=15
+NOTIFICATION_DUE_SOON_DAYS=3
 ```
 
-Keep `SECRET_KEY` stable. It protects encrypted stored values; changing it later
-can make previously encrypted data unreadable.
+The container listens on port `8080`; map any free host port to it, e.g. `8088:8080`.
 
-### 3. Host networking prerequisites
+## Moving existing v0.1 users onto billing
 
-Enable IPv4 forwarding:
+Upgrading does **not** immediately suspend existing users. Old subscription rows have no `current_period_end`, so the billing engine skips them.
+
+For each existing customer, open **Edit billing** and set the current period start and optionally the paid-through date. If paid-through is blank, Share Manager calculates it from the customer's tier. Once those dates exist, automated billing starts managing that subscription.
+
+## Recording payments
+
+An applied payment creates an immutable payment history row and advances the customer's current subscription by one or more billing periods.
+
+- Leave **Billing periods** blank to calculate automatically from `amount / tier price` (for example, £30 on a £10 monthly tier buys 3 monthly periods).
+- Enter **Billing periods** manually to override the calculation for discounts or special arrangements.
+- Automatic calculation requires a whole-number multiple of the tier price; otherwise the UI asks for a manual period count rather than guessing.
+- Untick **Apply to current subscription** when entering historical ledger data that should not alter current entitlement dates.
+
+Payment-provider integrations can later feed this same payment model without changing the subscription engine.
+
+## Complimentary access
+
+v0.2.5 adds complimentary subscription credits for grandfathered users, donor recognition, goodwill extensions, and other non-cash access grants. On a managed customer card, choose **Grant complimentary access**, enter the number of billing periods and an optional reason. The current billing tier defines the period length (for example, three periods on a monthly tier grants three months; one period on an annual tier grants one year).
+
+Complimentary access is deliberately separate from the payments ledger. Each grant records its period count, coverage start/end, reason, grant date and actor, without creating a fake £0 payment or inflating revenue. Grants made before expiry or during grace extend from the existing expiry; grants made after grace has elapsed start from the grant date. A grant reactivates the subscription and triggers Plex reconciliation when automation is enabled.
+
+
+### v0.2.5
+Customer cards now resolve their subscription centrally in Python instead of duplicating subscription-state filtering in the template. Complimentary access can also reactivate a customer on their most recent historical tier, so the Grant control is available for any customer with subscription history, not only customers whose current row happens to be in a specific live state.
+
+
+## Manual access until override
+
+Each subscription can optionally have a **Manual access until** date from the customer card's **Edit billing** modal. While that date is still in the future, the customer is guaranteed active access without altering their payment or complimentary-credit history. When the override date is reached, Share Manager automatically falls back to the normal paid-through and grace calculation. Payments recorded during the override continue to update normal billing coverage, so paid access can carry on afterwards without an administrator clearing the override.
+
+## v0.2.8
+
+- Added instant client-side customer search on the Customers page.
+- Added status filters for All, Active, Grace, Suspended, Cancelled and Exempt customers, with live counts.
+- Search and status filters can be combined without reloading the page.
+- Replaced the long Payments customer dropdown with a searchable customer picker that matches names, email addresses and Plex usernames while retaining billing-period previews.
+
+## v0.2.10 operations
+
+### Payment maintenance
+Payments now have an **Edit** action. Amount, receipt date, source, reference and note can be corrected without changing the access period that was already granted. Billing-period count can also be changed, but only when that payment is the latest coverage event on the subscription; Share Manager then recalculates the current coverage end.
+
+**Delete payment** is audit-safe rather than destructive. Ledger-only payments can be voided immediately. An applied payment can only be voided when it is the latest coverage event; Share Manager rolls the subscription back to the preceding payment/complimentary-credit coverage and reruns billing/Plex reconciliation. Voided payments remain visible in history and are excluded from dashboard revenue totals.
+
+### Customer history
+Each customer tile now has a **History** button. The timeline combines subscription assignments, payments (including voided ones), complimentary credits and relevant customer/subscription/payment audit events.
+
+### Database backups
+The **Backups** page can generate and download a PostgreSQL custom-format dump from the live database. The application image includes PostgreSQL 17 client tools so its `pg_dump` version matches the bundled PostgreSQL 17 service.
+
+A typical restore into the `sharemanager` database is:
 
 ```bash
-sudo sysctl -w net.ipv4.ip_forward=1
+pg_restore --clean --if-exists --no-owner -d sharemanager share-manager-YYYYMMDD-HHMMSS.dump
 ```
 
-Persist it using your distribution's normal sysctl configuration.
+Stop the application container while restoring. The database backup contains Share Manager data, not your Portainer stack/environment variables, so keep a copy of those separately.
 
-Your LAN gateway must also know how to return traffic to the WG-Easy client
-subnet. For example:
+
+## v0.3.x notifications
+
+Share Manager can route operational events to **Home Assistant**, **Discord**, or a **generic JSON webhook**. Notification integrations are configured under **Integrations → Notifications** and support per-endpoint event selection, a minimum severity filter, enable/disable controls, editing, deletion, and a **Send test** action. The page also shows the most recent delivery results.
+
+Supported events in v0.3.0 are:
+
+- `payment.received` (info)
+- `customer.entered_grace` (warning)
+- `customer.suspended` (critical)
+- `customer.reactivated` (info)
+- `subscription.due_soon` (warning)
+- `plex.invite_sent` (info)
+- `plex.reconcile_failed` (critical)
+- `backup.created` (info)
+
+`NOTIFICATION_DUE_SOON_DAYS` is now the default reminder offset used when creating/migrating notification destinations. In v0.3.1 each destination has its own **Due reminder days** schedule, for example `7,3,1,0` (seven, three and one day before renewal plus the due date). Reminder deliveries are de-duplicated per destination, subscription, expiry date and threshold, so the billing worker does not repeat the same reminder.
+
+### Home Assistant
+
+The Home Assistant adapter intentionally mirrors Uptime Kuma's native Home Assistant notifier. Configure the Home Assistant base URL and a long-lived access token. Share Manager POSTs to:
 
 ```text
-WG-Easy clients: 192.168.3.0/24
-VPN Router host: 192.168.1.202
+<HA URL>/api/services/notify/<notification action>
 ```
 
-requires a route equivalent to:
+The optional **Notification action** is the service name without the `notify.` prefix, for example `mobile_app_pixel_9`. If left blank, Share Manager uses `notify`, matching Kuma's default behaviour. The payload includes `title`, `message`, and an additional `data` object containing the Share Manager event name and severity.
+
+### Generic webhook payload
+
+Generic endpoints receive JSON containing `event`, `severity`, `title`, `message`, `data`, and `sent_at`. Discord endpoints use the standard Discord webhook endpoint. Webhook URLs and HA tokens should be treated as secrets; Share Manager masks webhook URLs in the UI and does not persist secret-bearing exception URLs in delivery errors.
+
+
+## v0.3.1 staged notification rules
+
+Each notification destination can independently configure renewal reminder offsets. Example:
 
 ```text
-192.168.3.0/24 via 192.168.1.202
+Home Assistant: 3,1,0
+Discord:        7,3,1,0
 ```
 
-### 4. First start
+`0` means the paid-through date itself. Grace and suspension alerts remain state-transition events: if those events are enabled for a destination, Share Manager sends them when the customer actually enters grace or becomes suspended. This provides a staged sequence such as 3-day warning → grace alert → suspension alert without repeated notifications every billing cycle.
 
-Start the container and open:
+The legacy `NOTIFICATION_DUE_SOON_DAYS` environment setting is retained as the default for new notification destinations and is copied into existing destinations during the v0.3.0 → v0.3.1 schema upgrade.
 
-```text
-http://<VPN-Router-host>:8085
+## New customer onboarding (v0.3.2)
+
+The Customers page includes **Invite new Plex customer** for people who have never been synced before. The onboarding flow creates the customer and first subscription period, then reconciles the selected package immediately. If no accepted Plex share exists, Share Manager sends an invitation containing the package's mapped Plex libraries.
+
+Fields include the customer name, contact email, Plex username/account email, billing tier, subscription start date, and notes. If the Plex identity field is blank, the contact email is used as the Plex invitation target. If both are supplied, the explicit Plex identity wins.
+
+If the Plex invitation fails, the customer and subscription are retained and the error is shown in the UI. Correct the Plex identity if needed and use **Reconcile Plex** to retry. Packages without an enabled Plex library mapping are not offered in the onboarding selector.
+
+
+## v0.3.3
+- Added a mobile-friendly responsive UI with an off-canvas navigation drawer, improved phone/tablet spacing, touch-friendly stacked controls, and horizontal-scroll wrappers for wide tables without disrupting the desktop layout.
+
+
+## v0.3.4
+- Refined the mobile navigation into a dedicated top bar so the menu control no longer overlaps drawer branding.
+- Added mobile-only compact customer summaries showing name, package/tier and status; tapping a summary expands the existing full customer controls. Desktop customer tiles are unchanged.
+
+
+## v0.3.5
+- Added a forward-looking Dashboard revenue forecast based on the current Active/Grace subscription distribution. It shows monthly-tier revenue, yearly-tier revenue, annualised total, and per-package breakdowns while excluding exempt/suspended/cancelled customers.
+
+
+## v0.3.6
+- Fixed a desktop Customers-page layout regression so each customer tile again behaves as a top/bottom flex layout, keeping summary content aligned at the top and action controls pinned to the bottom of equal-height cards.
+
+
+## v0.3.7
+- Added client-side customer sorting by effective access expiry, name, or status. Effective expiry prefers an active manual-access-until date, then grace-until, then paid-through; customers without a date sort last.
+
+
+## v0.3.8
+- Fixed the mobile hamburger icon so its bars render vertically.
+- Tightened the mobile Dashboard with a two-column headline-stat grid and smaller stat cards.
+- Added a native mobile revenue-package distribution layout, removing the need to horizontally scroll the desktop revenue table on phones.
+
+
+## v0.3.9
+- Added a client-side Package filter to the Customers page. Package filtering composes with status, text search and sorting, and the package list is generated from currently displayed customer assignments.
+
+
+## v0.3.10
+- Added an Edit customer modal beside Reconcile Plex. Friendly name, contact email, Plex username/email and notes can be updated without changing customer IDs, subscription history, payment history or package assignments. Changing Plex identity clears the cached numeric Plex user ID so future reconciliation safely resolves the new account.
+
+
+## v0.4.0 — Disaster recovery
+
+Share Manager 0.4 adds persistent scheduled backups and a restore pipeline.
+
+### Backup schedule
+
+The app checks for a missing daily automatic backup and creates one after the configured UTC hour. If the app was offline at the scheduled hour, it catches up after the next start instead of silently skipping the day.
+
+Portainer/environment settings:
+
+```env
+SHARE_MANAGER_HOST_PATH=/path/on/independent/storage/share-manager
 ```
 
-A fresh install creates a one-time setup token at:
+`SHARE_MANAGER_HOST_PATH` is mounted at `/share-manager` inside the app container; backups live in `/share-manager/backups` and ticket uploads in `/share-manager/attachments`. For genuine disaster recovery, put this on storage independent from the PostgreSQL volume (for example an Unraid SMB/CIFS location or another physical disk/server). The backup schedule and retention policy are configured from **Disaster Recovery → Backup automation** in the web UI.
 
-```text
-/data/runtime/setup-token
+Automatic retention uses one set of dump files and keeps the union of:
+- the newest N daily restore points;
+- one representative restore point from each of the newest N ISO weeks;
+- one representative restore point from each of the newest N calendar months.
+
+Manual backups and automatic pre-restore safety backups are not pruned automatically.
+
+### Restore pipeline
+
+The Backups page can restore either a stored backup or an uploaded `.dump`. A PostgreSQL dump is first validated with `pg_restore --list`. Immediately before the destructive restore, Share Manager creates a fresh safety backup of the current database. PostgreSQL sessions are disconnected and the dump is restored with `--clean --if-exists --no-owner --no-privileges --exit-on-error`.
+
+After a successful restore, restart the Share Manager app container so all workers and connection pools start cleanly against the restored database.
+
+The database backup does **not** contain Portainer environment variables, passwords, secrets, or the stack definition. Back up that deployment configuration separately.
+
+
+## v0.4.1 — in-app backup automation settings
+- Backup schedule, scheduler check interval, scheduled-backup enable/disable, and daily/weekly/monthly retention are now stored in PostgreSQL and editable on the Disaster Recovery page.
+- Existing `BACKUP_SCHEDULE_HOUR`, `BACKUP_CHECK_INTERVAL_MINUTES`, and retention environment variables are retained only as first-run defaults for compatibility.
+- `SHARE_MANAGER_HOST_PATH` remains a deployment/Compose setting because Docker must mount the host/NAS path before the application starts.
+- Scheduler settings are re-read at runtime; changing the policy does not require an app restart (the check interval itself updates after the current sleep finishes).
+
+
+## v0.4.2
+- Polished the Disaster Recovery automation UI by grouping schedule and retention settings into aligned rows with consistent control heights and helper text, while keeping the existing backup behaviour unchanged.
+
+## v0.5.0 — Tautulli customer intelligence
+- Connect one Tautulli instance from Integrations using URL + API key.
+- Cached historical sync for user matching, last streamed, latest title, 30-day plays/watch time, and lifetime plays/watch time.
+- Configurable historical sync interval (5 minutes to 24 hours) and live refresh interval (10/15/30/60 seconds).
+- Live `get_activity` heartbeat is served through Share Manager with a short shared server-side cache; browsers never call Tautulli directly.
+- Customer cards show usage summaries and update to **Watching now** asynchronously without a page reload.
+- Customer Activity filter: watching now, active 7/30 days, inactive 30/90 days, never streamed.
+- Customer sorting adds last streamed / most active / least active.
+- Dashboard Plex activity summary and live sessions panel.
+- Customer History gains a detailed Plex activity panel.
+- Notification events for sync failure, unmatched users, 90+ day inactivity, never-streamed customers, and suspended customers streaming.
+- Tautulli is advisory only: usage never changes billing or entitlement state automatically.
+
+### Tautulli setup
+Open **Integrations → Tautulli** and enter the URL Share Manager can reach (for example `http://tautulli:8181` on a shared Docker network, or the Tautulli host/LAN URL) plus the Tautulli API key. Save, use **Test connection**, then **Sync now** for the initial customer match. No additional Docker environment variables are required.
+
+Matching prefers the stored Plex numeric user ID and falls back to Plex username/email. Historical analytics are cached in PostgreSQL; the UI never waits for Tautulli during normal page loads. Live activity is fetched through Share Manager's `/api/tautulli/live` endpoint and is server-cached so multiple open browsers share one lightweight Tautulli `get_activity` sample per refresh interval.
+
+
+## v0.5.1
+- Moved the customer-card Tautulli usage/live activity summary out of the upper identity/billing content and into the package/control area so it stays visually anchored directly above the package selector. No Tautulli sync or heartbeat logic changed.
+
+## v0.5.3 correctness and recovery hardening
+
+v0.5.3 hardens the v0.5.2 review changes. Backup storage errors (including stale NFS/CIFS file handles) are shown cleanly in the Disaster Recovery UI; PostgreSQL restores are transactional and run in maintenance mode with post-restore schema verification; payment voids restore captured pre-payment state; pending Plex invitations follow current entitlement state; admin sessions expire server-side and are invalidated when credentials change; and release CI runs pytest before publishing.
+
+For HTTPS deployments, set `SESSION_COOKIE_SECURE=true`. The backup mount itself is still controlled by Docker/Portainer through `SHARE_MANAGER_HOST_PATH`; if `/share-manager` reports a stale file handle, repair/remount the host storage and recreate/restart the app container before relying on backups again.
+
+
+## v0.5.4 — PostgreSQL-only hardening
+
+Share Manager now requires PostgreSQL at runtime. `DATABASE_URL` has no SQLite fallback and startup fails clearly if it is missing, malformed, or points to a non-PostgreSQL backend. Disaster Recovery accepts only PostgreSQL custom-format `.dump` files and uses `pg_dump`/`pg_restore` exclusively. SQLite may still appear in unit-test fixtures as a fast isolated SQLAlchemy test backend; it is not a supported deployment/runtime database.
+
+## v0.5.5
+- Desktop navigation sidebar now stays anchored to the viewport while main page content scrolls. Mobile off-canvas navigation is unchanged.
+
+
+## v0.5.6 — Customer archiving
+- Added reversible customer archiving so stale customers can be removed from the operational Customers view without deleting payments, subscriptions, credits, audit history, or Tautulli activity.
+- Customers must be Cancelled before they can be archived, preventing active Plex access from being hidden accidentally.
+- Added an Archived customers view with History, Edit, and Restore controls.
+- Archived customers are excluded from dashboard operational counts, revenue forecasts, billing processing, payment-entry customer selection, Tautulli matching, and Tautulli dashboard aggregates.
+
+## v0.5.7 — customer bulk actions
+The Customers page supports multi-select with Select visible / Clear selection controls. Bulk actions include status changes, package/tier changes with an explicit billing start date, Plex reconciliation, and safe archive/remove. Bulk operations preserve the same entitlement rules as individual operations; archive skips customers that are not Cancelled and non-exempt.
+
+
+## v0.5.8 — bulk action performance
+- Bulk status and package changes no longer wait for sequential Plex API calls.
+- Bulk manual Reconcile Plex queues durable work and returns immediately.
+- Added a dedicated 5-second Plex reconciliation queue worker.
+- Queued work stores identities only and recalculates the latest desired entitlement at execution time.
+- Fresh operator changes reset any existing retry backoff so they are picked up promptly, while failures continue to use the existing exponential retry policy.
+- Bulk archive remains synchronous because it is database-only.
+
+
+## v0.5.9
+- Archived-customer onboarding recovery: Invite new Plex customer now detects archived identity/email matches and offers to restore the existing historical record instead of returning a generic duplicate error.
+- Added Restore & reassign package, preserving the customer ID/history while creating a fresh subscription using the originally selected tier/start date and reconciling Plex access.
+- The stored archived Plex identity is deliberately preserved; identity changes remain an explicit Edit customer operation.
+
+
+## v0.6.0 — Concurrent Stream Enforcement
+- Billing tiers now define a concurrent stream limit; `0` means unlimited and existing tiers migrate to `1`.
+- Tautulli live activity drives server-side enforcement even when no browser is open.
+- An over-limit customer must be observed in two distinct live samples before enforcement, preventing transient session flapping from killing playback.
+- Newest excess sessions are terminated first; billing-exempt customers remain subject to fair-use stream limits.
+- Unmatched/admin Tautulli sessions are never automatically terminated.
+- Optional `stream.limit_enforced` and `stream.limit_enforcement_failed` notification events are available through the existing notification adapters.
+- Dedicated Stream Limits history and per-customer enforcement history preserve successful and failed termination attempts.
+
+## v0.7.0 — PWA foundation
+Share Manager now ships as an installable Progressive Web App when served over HTTPS. The manifest provides standard and Android maskable icons, standalone display mode, launcher shortcuts, theme metadata, Apple touch icon support and favicons. A root-scoped service worker caches static assets only; authenticated application pages remain network-first and fall back to a dedicated unreachable page instead of presenting stale customer/billing data. Reverse-proxy HTTPS is required for normal production PWA installation.
+
+
+## v0.7.1 — Mobile quick navigation
+- Added a persistent mobile bottom navigation bar for Dashboard, Customers, and Payments.
+- Added current-page highlighting to both the bottom navigation and sidebar drawer.
+- Added safe-area-aware bottom spacing so navigation does not cover page controls on installed PWAs or gesture-navigation devices.
+- Kept all secondary areas in the existing hamburger drawer.
+- Bumped the PWA service-worker cache version so updated navigation/CSS replaces the 0.7.0 shell cleanly.
+
+### v0.7.2 mobile Dashboard
+The installed PWA Dashboard uses a denser phone-first presentation: compact primary stats, collapsible package distribution and secondary Plex analytics, portrait-friendly live session rows, and collapsible recent activity. Desktop presentation remains unchanged.
+
+## v0.7.3 — Customers phone-first
+- Added a mobile filter/sort bottom sheet so package, activity, sort and status controls no longer consume the main Customers viewport.
+- Added an active-filter count and one-tap reset/done controls.
+- Tightened compact customer rows and made live Watching now state more prominent.
+- Increased mobile selection touch targets and selected-card feedback.
+- Reworked the bulk-action tray into a phone-friendly fixed panel above the PWA bottom navigation.
+
+
+## v0.7.5
+- Stream Limits mobile-first UI: compact stats, quick date filters, collapsible filter panel, mobile enforcement cards, clearer success/failure presentation, tappable customers, and no horizontal scrolling.
+
+
+## v0.7.5a
+- Fixed Stream Limits filtering when `All customers` submits an empty `customer_id`; blank values now mean no customer filter instead of triggering FastAPI integer validation.
+- Invalid non-numeric customer filter values now redirect safely back to the unfiltered Stream Limits page.
+
+
+## v0.7.6
+- Phone-first Backups and Integrations pass: compact DR status/settings, mobile backup cards, touch-friendly restore controls, denser Plex/Tautulli/notification integration cards, and mobile notification-delivery cards without horizontal scrolling. Desktop behavior remains unchanged.
+
+## v0.8.0 — Customer portal foundation
+- Customer portal access is opt-in per customer from Edit customer.
+- Portal usernames default from Plex identity and can be edited before enablement.
+- A cryptographically generated 12-character alphanumeric temporary password is supplied by default and stored only as a bcrypt hash.
+- Temporary passwords are shown only once after enable/reset; admins can reset but cannot retrieve existing passwords.
+- Portal sessions are separate from administrator sessions and are invalidated on password reset, portal disable, and customer cancellation.
+- Customer portal login is rate-limited and uses the same Secure/HttpOnly session policy as the administrator UI.
+- The initial read-only portal dashboard shows package, tier, price, access state, paid-through/grace dates, stream allowance, Plex identity, and contact email.
+- Activity, enforcement history, and payment/subscription history are intentionally reserved for later 0.8.x releases.
+
+
+### 0.8.0 build compatibility fix
+Pinned `bcrypt==4.0.1` alongside Passlib 1.7.4. Newer bcrypt releases are incompatible with Passlib 1.7.4's backend self-test on Python 3.12 and can fail before hashing otherwise-valid portal passwords.
+
+
+## v0.8.1 — Customer activity
+- Added a read-only customer Activity portal page backed by the existing cached Tautulli analytics.
+- Customers can see last streamed/title, 30-day and lifetime watch time/play counts, current stream allowance, live sessions, and their own recent stream-limit enforcement history.
+- Live sessions refresh asynchronously using the configured Tautulli live interval.
+- Customers can stop only their own currently active Plex sessions. Ownership is re-verified server-side against a fresh Tautulli activity response before termination; arbitrary session keys cannot be used to stop another customer's playback.
+- Customer-initiated stops are recorded in the admin audit log but are not counted as stream-limit enforcement events.
+
+## v0.8.2 — Customer financial & subscription history
+The customer portal now includes a read-only History area. Authenticated customers can review their own recorded payments, complimentary access grants, and package/subscription history. Payment notes, external references, administrator audit entries, reconciliation details, and other internal-only operational data remain private. Reversed payments are shown transparently but excluded from completed-payment and lifetime-paid totals.
+
+### Customer portal UX (v0.8.3)
+The customer portal uses a left navigation rail on desktop and a bottom navigation bar on mobile. It has its own PWA manifest at `/portal/manifest.webmanifest` and service worker at `/portal/service-worker.js`, allowing customers to install the portal with `/portal` as its start URL. Customers can also change their own portal password from Account; doing so revokes other portal sessions while issuing a fresh session to the current browser.
+
+
+## v0.8.4 — Detailed watch history
+- Added PostgreSQL-cached Tautulli viewing-history rows per customer.
+- First detailed sync backfills up to 500 recent rows per matched user; later syncs refresh the newest 100 rows to stay lightweight.
+- Customer Activity now exposes title, watched date/time, library, device/player, platform, media type and playback duration.
+- Added customer-scoped filters for title search, device, library, media type and date range.
+- Portal queries always derive customer ownership from the authenticated portal session; watch history cannot be queried for another customer.
+
+
+## v0.8.5 — Full asynchronous Tautulli history backfill
+- Replaces the 500-row initial watch-history cap with a resumable full-history backfill for every matched, non-archived customer.
+- Backfill runs independently of normal Tautulli analytics sync in 500-row pages, so Sync Now and portal requests remain responsive.
+- History is imported oldest-first to keep pagination stable while new plays continue to arrive; normal syncs continue refreshing the newest 100 rows.
+- Backfill checkpoints and totals are persisted per customer, allowing imports to resume after container restarts or temporary Tautulli failures.
+- Integrations now shows live backfill progress, cached row counts, customer completion counts, and the latest backfill error.
+
+
+## v0.8.5a
+- Fixed the desktop customer-portal watch-history filter layout so the controls stay within the Activity card. Search/device/library/type remain on the first row, while date range and Reset/Apply actions align cleanly on the second row. No sync or filtering logic changed.
+
+## v0.8.5c
+- Detailed portal watch history now uses server-side pagination with 10 rows by default and selectable 10/25/50 row page sizes.
+- Existing device/library/type/title/date filters are preserved across pages.
+- Watch-history metadata cards now reserve consistent Library, Device, Platform and Playback positions; browser players such as Chrome are normalized to Platform: Web.
+
+
+### v0.8.5c library history hotfix
+Detailed Tautulli watch history now resolves library names by syncing history per Plex library section. Existing cached history with missing library names is repaired asynchronously by the resumable full-history worker.
+
+## v0.8.5d
+
+### Force full Tautulli history rebuild
+Integrations → Tautulli now includes **Force full re-sync**. Use it when cached detailed watch history needs to be rebuilt after parser/library-resolution changes. It clears only the local watch-history cache and its backfill checkpoints; all customer, billing and stream-limit data remains intact. The normal asynchronous backfill worker then reconstructs the full history from Tautulli.
+
+## v0.8.5e backfill progress semantics
+
+Tautulli full-history totals are discovered per customer/library checkpoint. While any checkpoint total is still unknown, the UI reports cached rows and the number of library histories measured, and does not present the partial sum as a final denominator. Once all checkpoint totals are known, the UI switches to processed/total progress and an overall percentage.
+
+## v0.9.0a — Mobile Watch History Filters
+
+On customer portal screens up to 700px wide, Watch History filters now live behind a compact collapsible **Filters** control. All filter fields and actions stack vertically at full width, preventing overlap on narrow PWA/browser layouts. Active filters reopen the panel automatically after applying them. Desktop filtering is unchanged.
+
+## v0.9.0 — Notification Platform
+
+Share Manager now has a first-class notification event layer and native PWA Web Push support.
+
+- Every notification is recorded as a canonical `notification_events` row before delivery.
+- Existing Home Assistant, Discord and generic webhook integrations continue to use the same event definitions and delivery ledger.
+- Admin browsers/PWAs can subscribe to Web Push from **Integrations → Notifications**.
+- Customer portal users can enable Web Push from **Account → Notifications**, choose which customer-facing events they want, disable the current device, and send themselves a test notification.
+- VAPID keys are generated automatically on first use and persisted in PostgreSQL; changing/removing them would invalidate existing browser subscriptions.
+- Push subscriptions are stored per device. HTTP 404/410 responses automatically disable stale subscriptions.
+- Push notification clicks deep-link into the relevant Share Manager or customer portal page.
+- Customer pushes are restricted to customer-safe events and to the customer targeted by the event.
+- Notification deliveries now record channel and recipient metadata for troubleshooting.
+
+Web Push requires HTTPS (or localhost) and browser/OS notification permission. The existing Cloudflare/NPM HTTPS deployment is suitable; the customer portal service worker remains scoped to `/portal`.
+
+
+## v0.9.1a — Mobile Watch-History Spacing
+
+Tiny customer-portal UX hotfix adding consistent spacing beneath the collapsed Watch History Filters control on mobile. Desktop and expanded filter layouts are unchanged.
+
+## v0.9.1 — Critical Customer Broadcasts
+
+Administrators can send critical service announcements from **Integrations → Notifications** to all eligible customer Web Push subscriptions. The broadcast composer shows the current customer/device audience, accepts a title/message and customer-portal destination, and requires confirmation before sending.
+
+Critical broadcasts are deliberately different from ordinary customer events: they ignore per-category event preferences but still respect the customer's master **Allow push notifications** setting. Archived, Cancelled or portal-disabled customers are never included. Broadcast events and every device delivery remain visible in the normal notification event/delivery audit trail.
+
+
+## v0.9.2 — Admin Push Preferences & Mobile Tautulli Polish
+
+Admin Web Push can now be filtered by event category from Integrations → Notifications. Upgrades preserve the previous all-events behavior until preferences are changed. On mobile, the Tautulli integration body is collapsible to reduce vertical space while the desktop layout remains expanded.
+
+## Notification operations (v0.9.3)
+
+The notification platform supports immediate and scheduled critical customer broadcasts, automatic retry/backoff for transient Web Push and integration delivery failures, and a dedicated admin Notification History view. Scheduled times are entered in the browser's local time and stored as UTC. Retry state is persisted in PostgreSQL so container restarts do not discard pending retries.
+
+
+## Support Tickets (v0.10.0)
+
+Customers can raise support tickets from the portal with a category, subject and description, follow a threaded conversation, subscribe per-ticket to push notifications, and see Open / Reviewed / In Progress / Resolved / Closed states. Resolved tickets reopen automatically when the customer replies; Closed is the terminal/archive state.
+
+Admins have an active ticket queue plus a dedicated Closed view, filters for status/category/priority/customer search, threaded customer replies, internal notes, status and priority controls, unread markers and customer context. New tickets and customer replies use the Notification Platform; subscribed customers receive deep-linked push notifications for admin replies and status changes. Ticket creation/replies are rate-limited. Attachments and multi-agent assignment are intentionally deferred.
+
+
+## Scheduled customer news banners (0.10.4)
+Admins can queue non-overlapping customer portal announcements from the News page. Each banner has a severity and UTC-backed start/end window entered in the browser's local time. Active banners are displayed prominently throughout the customer PWA and update on a lightweight one-minute poll.
+
+
+
+## v0.10.6a — Desktop portal alignment hotfix
+
+- Centres the customer portal content rail within the workspace to the right of the desktop sidebar.
+- Constrains active news/critical banners to the same rail and horizontal edges as normal portal content.
+- Preserves the existing desktop content width and leaves the mobile layout unchanged.
+
+## v0.10.6 — Ticket attachments
+
+Support ticket conversations now accept authenticated attachments. Customer uploads are limited to five attachments per ticket and 15 MB per file; admin replies/internal notes do not consume the customer five-file quota but retain the 15 MB per-file safety limit. Allowed formats are JPG/JPEG, PNG, WebP, GIF, PDF, TXT and LOG. Images render as previews while every download remains authorization-gated through Share Manager.
+
+Persistent files now use one storage root. Map a durable host path to `/share-manager`; Share Manager creates `/share-manager/backups` and `/share-manager/attachments` itself. Pending asynchronous uploads are cleaned after 24 hours. When upgrading from the old direct `/backups` mapping, point the same host backup directory at `/share-manager`; startup moves root-level `share-manager-*.dump` files into `backups/` automatically.
+
+Example:
+```yaml
+volumes:
+  - /mnt/unraid-smb/Nextcloud/sharemanager:/share-manager
 ```
 
-The token is also written to the container logs.
+If Nginx Proxy Manager sets a restrictive request-body limit, allow at least 20 MB for Share Manager. Attachments upload individually, so the proxy never needs to accept a combined 75 MB request.
 
-Use the setup wizard to:
 
-1. Create the administrator account.
-2. Configure WG-Easy URL and credentials.
-3. Test the WG-Easy connection.
-4. Finish setup.
+## v0.10.6b — Admin desktop alignment hotfix
 
-### 5. Add outbound VPN profiles
+The admin desktop content rail is centred within the workspace remaining to the right of the fixed navigation sidebar. The existing 1400px maximum width is retained, so wide displays gain balanced whitespace without stretching admin cards and forms. Mobile/responsive layouts are unchanged.
 
-Import OpenVPN configurations from the VPN Profiles page.
+### Portal analytics
+v0.10.7 adds privacy-light portal adoption metrics: successful logins, 30-minute sessions, coarse page views and Requests-platform clicks. Metrics are aggregated per customer/day; Share Manager does not keep a detailed clickstream or third-party analytics profile.
 
-Each profile can have:
+### Referral credits (0.11.0 / 0.11.0a)
 
-- friendly name
-- provider
-- credentials where required
-- Allow automatic connection
-- **Always connected** or **On demand** connection policy
+Share Manager can run a simple referral-credit programme without requiring public signup or payment automation. Every customer gets a random five-digit code. Admins may assign that code as another customer's referrer, after which future qualifying payments award the configured number of credits from that customer's billing tier.
 
-For On-demand profiles, **Allow automatic connection must be enabled**. Allow automatic connection means VPN
-Router is permitted to start the profile automatically; On demand determines
-when it should run.
-
-### 6. Create routing groups
-
-Create a routing group and select:
-
-- outbound VPN profile or Default WAN
-- fallback behavior
-- DNS policy
-
-VPN-backed groups receive their own fwmark and policy-routing table.
-
-### 7. Assign WG-Easy clients
-
-Assign WG-Easy clients to routing groups from the Clients page.
-
-For an On-demand profile:
-
-```text
-client assigned
-→ VPN required
-→ tunnel starts if needed
-→ VPN becomes ready
-→ assignment/routing takes effect
-```
-
-When the final assignment using that VPN is removed, it enters the idle grace
-period and then disconnects.
-
-This is assignment-driven rather than handshake-driven, so the outbound tunnel
-can already be ready when an offline WireGuard client reconnects.
-
-## Routing and DNS behavior
-
-### Local/private traffic bypass
-
-The following ranges bypass the outbound VPN path by default:
-
-```text
-127.0.0.0/8
-10.0.0.0/8
-172.16.0.0/12
-192.168.0.0/16
-169.254.0.0/16
-```
-
-Forced DNS is handled specially so provider DNS inside a private range can
-still be routed into the VPN.
-
-### Forced classic DNS
-
-Forced PIA/custom DNS intercepts classic:
-
-```text
-UDP/53
-TCP/53
-```
-
-and transparently redirects it to the configured resolver.
-
-DNS-over-HTTPS is not intercepted. DNS-over-TLS is not transparently rewritten,
-although it still follows the routing group's normal outbound path.
-
-### Kill-switch behavior
-
-With **Block / kill-switch**, a VPN-backed group is blackholed if its VPN is
-unavailable.
-
-With **WAN fallback**, traffic may use WAN while the VPN is unavailable.
-
-## Data and backups
-
-Persistent state lives under:
-
-```text
-/data
-```
-
-This includes the SQLite database, imported VPN configs, encrypted credentials,
-runtime metadata and setup state.
-
-Use a persistent volume or bind mount for `/data`.
-
-Built-in backup/restore can export the application configuration and may
-optionally include the `SECRET_KEY`. Treat backups containing the key as
-sensitive.
-
-## Multi-user self-service
-
-VPN Router supports administrator and self-service accounts. Administrators can
-assign discovered WG-Easy clients to individual self-service users from the
-**Users** page. A self-service user sees only their assigned client(s) and can
-switch those clients between routing groups/endpoints already configured by an
-administrator.
-
-Authorization is enforced server-side as well as in the UI: direct requests
-against another user's WG-Easy client are rejected, and non-client
-administration remains administrator-only.
-
-The self-service **My VPN** interface is responsive: on phones each assigned
-WG-Easy device is presented as a compact, collapsed card showing connection
-state and effective endpoint. Tapping the card expands the full-width endpoint,
-traffic and temporary-override controls without requiring sideways scrolling.
-
-## VPN Profile Library
-
-VPN Router's VPN Clients area is a profile library designed for installations
-with tens or hundreds of outbound VPN exits. Profiles can be searched and
-filtered by provider, country, region, protocol and tags; sorted without extra
-server requests; marked as favourites; tagged; and changed in bulk.
-
-Bulk import accepts up to 200 OpenVPN `.ovpn` and WireGuard `.conf` files per
-batch. Every file is passed through the same existing configuration validation
-and profile-intelligence path, imports start with automatic connection disabled,
-and matching kill-switch routing groups can be created automatically.
-
-Routing Groups use compact collapsed summaries by default so large profile
-libraries do not turn the routing page into an endless wall of cards. Expanding
-a group reveals the existing health, DNS, transition and management details.
-
-## Compact interface
-
-VPN Router uses a summary-first interface. Operational state and primary
-actions remain visible, while deeper inspection data, technical inventories,
-logs, explanatory text and infrequently changed settings are collapsed by
-default. Expandable sections preserve the full information without making the
-normal workflow feel like a wall of admin panels.
-
-## Interface appearance
-
-VPN Router includes an optional animated network-style particle background.
-The effect is enabled by default and can be disabled under
-**Settings → Appearance**. It is rendered locally with no third-party runtime
-dependency, sits behind the interface without receiving pointer events, pauses
-when the tab is hidden, respects the browser's reduced-motion preference, and
-preserves its particle state across normal page navigation within the same
-browser tab.
-
-## Security notes
-
-VPN Router is intended as a trusted LAN administration service.
-
-It requires elevated networking capabilities because it manages interfaces,
-routes, policy rules and nftables. It intentionally does **not** require the
-Docker socket or a fully privileged container.
-
-Recommended practice:
-
-- keep the UI LAN-only
-- use a strong stable `SECRET_KEY`
-- restrict host access
-- back up `/data`
-- do not expose the admin UI directly to the public internet
-
-## Releases and changelog
-
-The README documents the **current** project and deployment model rather than
-duplicating historical patch notes.
-
-- [GitHub Releases](https://github.com/Zeragonii/WG-Easy-VPN-Out/releases)
-  contains the release notes for each tagged version.
-- [CHANGELOG.md](CHANGELOG.md) contains the complete searchable version
-  history in the repository.
-
-On each push to `main`, the release workflow reads `VERSION`, validates the
-tree, publishes the container, creates the matching `v<VERSION>` tag when
-needed, and creates the GitHub Release from that version's `CHANGELOG.md`
-section. The changelog remains the single source of truth for release notes.
-GHCR image names are normalized to lowercase automatically during publishing.
-
-A manual **Backfill historical GitHub Releases** workflow is also available for
-creating missing Releases from older `v*` tags. It defaults to dry-run mode,
-skips Releases that already exist, and uses a short historical fallback note
-only when an old tag has no exact per-version changelog section.
+Credits are ledger-backed and auditable. Payment voids reverse the original award, historical rewards do not change when tier settings change, and old payments are never rewarded retroactively when a referral relationship is added. Customers can see their code/balance in Portal → Referrals and redeem the configured number of credits for complimentary billing periods. Admins can review balances and redeem on a customer's behalf from the Referrals page.

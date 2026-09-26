@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+{% macro event_choices(prefix, selected=None) -%}
+  <div class="notification-events">
+    {% for key,meta in notification_events.items() %}
+      {% if key != 'portal.notification.test' %}<label class="notification-event-choice">
+        <input type="checkbox" name="events" value="{{ key }}" {% if selected is none or key in selected %}checked{% endif %}>
+        <span><strong>{{ meta.label }}</strong><small>{{ meta.severity }}</small></span>
+      </label>{% endif %}
+    {% endfor %}
+  </div>
+{%- endmacro %}
+{% block content %}
+<header><h1>Integrations</h1><p>Connect entitlement targets and notification pipelines.</p></header>
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert success">{{ notice }}</div>{% endif %}
+
+<section class="integration-section plex-integration-section">
+  <h2>Plex</h2>
+  <details class="integration-add">
+    <summary>Add Plex server</summary>
+    <form method="post" action="/integrations/plex" class="grid-form integration-add-body">
+      <label>Friendly name<input name="name" placeholder="Main Plex" required></label>
+      <label>Server URL<input name="base_url" placeholder="http://192.168.1.100:32400" required></label>
+      <label>Plex token<input name="token" type="password" required></label>
+      <button>Connect &amp; test</button>
+    </form>
+  </details>
+  <div class="cards integration-cards">
+    {% for i,libs,plex_error in integrations %}
+      <article class="card">
+        <div class="row between"><h3>{{ i.name }}</h3><span class="badge">{{ i.kind }}</span></div>
+        <div class="muted">{{ i.base_url }}</div>
+        {% if plex_error %}<div class="alert error">{{ plex_error }}</div>{% else %}<p>{{ libs|length }} libraries discovered.</p>{% endif %}
+        <form method="post" action="/integrations/{{ i.id }}/import-users"><button>Import Plex users</button></form>
+      </article>
+    {% else %}<p class="muted">No Plex integrations connected.</p>{% endfor %}
+  </div>
+</section>
+
+<section class="integration-section requests-platform-integration">
+  <div class="row between">
+    <div><h2>Requests platform</h2><p class="muted">Link the customer portal to Seerr or another external content-request service.</p></div>
+    {% if requests_platform and requests_platform.enabled and requests_platform.base_url %}<span class="badge active">enabled</span>{% endif %}
+  </div>
+  <form method="post" action="/integrations/requests-platform" class="requests-platform-form">
+    <label class="toggle-choice"><input type="checkbox" name="enabled" {% if requests_platform and requests_platform.enabled %}checked{% endif %}><span><strong>Enable requests platform</strong><small class="muted">Shows Request in the desktop portal sidebar and the mobile portal menu.</small></span></label>
+    <div class="requests-platform-grid">
+      <label>Friendly name<input name="name" maxlength="120" value="{{ requests_platform.name if requests_platform else 'Seerr' }}" placeholder="Seerr" required></label>
+      <label>Button label<input name="button_label" maxlength="80" value="{{ requests_platform.button_label if requests_platform else 'Request Content' }}" placeholder="Request Content" required></label>
+      <label class="requests-platform-url">Seerr URL<input name="base_url" value="{{ requests_platform.base_url if requests_platform and requests_platform.base_url else '' }}" placeholder="https://requests.example.com"></label>
+      <label>Seerr API key <span class="muted">{% if requests_platform and requests_platform.api_key %}(leave blank to keep current){% endif %}</span><input name="api_key" type="password" {% if not requests_platform or not requests_platform.api_key %}placeholder="Required for management"{% endif %}></label>
+    </div>
+    <label class="toggle-choice"><input type="checkbox" name="manage_quotas" {% if requests_platform and requests_platform.manage_quotas %}checked{% endif %}><span><strong>Manage Seerr request quotas</strong><small class="muted">Every 15 minutes Share Manager applies the highest-priority assigned Package policy to the matching Plex-linked Seerr user.</small></span></label>
+    <p class="muted requests-platform-help">The external Request link still works without an API key. API management uses Seerr's X-Api-Key authentication and matches customers primarily by Plex username.</p>
+    <button>Save requests platform</button>
+  </form>
+  {% if requests_platform and requests_platform.api_key %}
+  <div class="tautulli-status-grid">
+    <div><span>Last successful sync</span><strong>{{ requests_platform.last_sync_success_at.strftime('%Y-%m-%d %H:%M') if requests_platform.last_sync_success_at else 'Never' }}</strong></div>
+    <div><span>Matched customers</span><strong>{{ requests_platform.last_matched_count or 0 }}</strong></div>
+    <div><span>Unmatched customers</span><strong>{{ requests_platform.last_unmatched_count or 0 }}</strong></div>
+    <div><span>Policy drift</span><strong>{{ requests_platform.last_drift_count or 0 }}</strong></div>
+  </div>
+  {% if requests_platform.last_sync_error %}<div class="alert error">{{ requests_platform.last_sync_error }}</div>{% endif %}
+  <div class="row tautulli-actions secondary-actions">
+    <form method="post" action="/integrations/seerr/test"><button class="secondary">Test Seerr connection</button></form>
+    <form method="post" action="/integrations/seerr/sync"><button class="secondary">Sync users &amp; quotas now</button></form>
+  </div>
+  <div class="table-wrap seerr-admin-table"><table>
+    <thead><tr><th>Customer</th><th>Seerr match</th><th>Movies</th><th>TV seasons</th><th>Total requests</th><th></th></tr></thead>
+    <tbody>{% for c in seerr_customers %}<tr>
+      <td><strong>{{ c.name }}</strong><div class="muted">{{ c.plex_username }}</div></td>
+      <td>{% if c.seerr_user_id %}<span class="badge active">{{ c.seerr_username or ('User ' ~ c.seerr_user_id) }}</span><div class="muted">{{ c.seerr_match_method or 'matched' }}</div>{% elif c.seerr_last_error %}<span class="badge suspended">Unmatched</span><div class="muted">{{ c.seerr_last_error }}</div>{% else %}<span class="muted">Not synced</span>{% endif %}</td>
+      <td>{% if c.seerr_movie_limit %}{{ c.seerr_movie_used if c.seerr_movie_used is not none else '—' }} / {{ c.seerr_movie_limit }}{% elif c.seerr_user_id %}Unlimited{% else %}—{% endif %}<div class="muted">{{ c.seerr_movie_requests_total or 0 }} lifetime requests</div></td>
+      <td>{% if c.seerr_tv_limit %}{{ c.seerr_tv_used if c.seerr_tv_used is not none else '—' }} / {{ c.seerr_tv_limit }}{% elif c.seerr_user_id %}Unlimited{% else %}—{% endif %}<div class="muted">{{ c.seerr_tv_seasons_total or 0 }} lifetime seasons</div></td>
+      <td>{{ c.seerr_request_count or 0 }}</td>
+      <td><form method="post" action="/customers/{{ c.id }}/seerr/reconcile"><button class="secondary small-action">Reconcile</button></form></td>
+    </tr>{% else %}<tr><td colspan="6" class="muted">No Plex-linked customers.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+</section>
+
+<section class="tautulli-integration">
+  <div class="row between tautulli-heading">
+    <div><h2>Tautulli</h2><p class="muted">Usage analytics and live Plex activity for managed customers.</p></div>
+    <div class="tautulli-heading-actions">{% if tautulli_settings.integration and tautulli_settings.integration.enabled %}<span class="badge active">connected</span>{% endif %}<button type="button" class="secondary tautulli-mobile-toggle" id="tautulli-mobile-toggle" aria-expanded="false" aria-controls="tautulli-mobile-body">Show</button></div>
+  </div>
+  <div id="tautulli-mobile-body" class="tautulli-mobile-body">
+  <form method="post" action="/integrations/tautulli" class="tautulli-settings-form">
+    <label class="toggle-choice"><input type="checkbox" name="enabled" {% if not tautulli_settings.integration or tautulli_settings.integration.enabled %}checked{% endif %}><span><strong>Enable Tautulli integration</strong><small class="muted">Historical usage sync and live activity heartbeat.</small></span></label>
+    <div class="tautulli-settings-grid">
+      <label>Tautulli URL<input name="base_url" value="{{ tautulli_settings.integration.base_url if tautulli_settings.integration else '' }}" placeholder="http://192.168.1.100:8181" required></label>
+      <label>API key <span class="muted">{% if tautulli_settings.integration %}(leave blank to keep current){% endif %}</span><input name="api_key" type="password" {% if not tautulli_settings.integration %}required{% endif %}></label>
+      <label>Historical sync interval<select name="sync_interval_minutes">{% for n in [5,15,30,60,120,360,720,1440] %}<option value="{{ n }}" {% if tautulli_settings.sync_interval_minutes == n %}selected{% endif %}>{{ n }} minute{{ '' if n == 1 else 's' }}</option>{% endfor %}</select></label>
+      <label>Live activity refresh<select name="live_refresh_seconds">{% for n in [10,15,30,60] %}<option value="{{ n }}" {% if tautulli_settings.live_refresh_seconds == n %}selected{% endif %}>Every {{ n }} seconds</option>{% endfor %}</select></label>
+    </div>
+    {% if tautulli_settings.integration %}
+    <div class="tautulli-status-grid">
+      <div><span>Last successful sync</span><strong>{{ tautulli_settings.last_sync_success_at.strftime('%Y-%m-%d %H:%M') if tautulli_settings.last_sync_success_at else 'Never' }}</strong></div>
+      <div><span>Matched customers</span><strong>{{ tautulli_settings.last_matched_count }}</strong></div>
+      <div><span>Unmatched Tautulli users</span><strong>{{ tautulli_settings.last_unmatched_count }}</strong></div>
+      <div><span>Last result</span><strong class="{% if tautulli_settings.last_sync_error %}text-error{% endif %}">{{ tautulli_settings.last_sync_error or 'OK' }}</strong></div>
+    </div>
+    <div class="tautulli-backfill-card" id="tautulli-backfill-card">
+      <div class="row between tautulli-backfill-heading"><div><strong>Full watch-history backfill</strong><span class="muted">Runs asynchronously in 500-row pages; normal analytics sync stays lightweight.</span></div><span class="badge {{ 'active' if tautulli_backfill.complete else 'grace' }}" id="tautulli-backfill-state">{{ 'complete' if tautulli_backfill.complete else ('syncing' if tautulli_backfill.total_is_final else 'scanning') }}</span></div>
+      <div class="tautulli-backfill-progress"><div id="tautulli-backfill-bar" style="width:{% if tautulli_backfill.total_is_final and tautulli_backfill.known_total %}{{ [100, (tautulli_backfill.progress_rows * 100 / tautulli_backfill.known_total)|round(1)]|min }}{% else %}0{% endif %}%"></div></div>
+      <div class="tautulli-backfill-meta">
+        <span><strong id="tautulli-backfill-rows">{% if tautulli_backfill.total_is_final %}{{ tautulli_backfill.progress_rows }} / {{ tautulli_backfill.known_total }}{% else %}{{ tautulli_backfill.cached_rows }}{% endif %}</strong><small id="tautulli-backfill-rows-label">{{ 'history rows processed' if tautulli_backfill.total_is_final else 'cached history rows' }}</small></span>
+        <span><strong id="tautulli-backfill-customers">{{ tautulli_backfill.customers_complete }} / {{ tautulli_backfill.customers_total }}</strong><small>customers complete</small></span>
+        <span><strong id="tautulli-backfill-targets">{{ tautulli_backfill.targets_measured }} / {{ tautulli_backfill.targets_total }}</strong><small>library histories measured</small></span>
+      </div>
+      <div class="muted tautulli-backfill-error{% if not tautulli_backfill.last_error %} hidden{% endif %}" id="tautulli-backfill-error">{{ tautulli_backfill.last_error or '' }}</div>
+    </div>
+    {% endif %}
+    <div class="row tautulli-actions">
+      <button>Save Tautulli settings</button>
+    </div>
+  </form>
+  {% if tautulli_settings.integration %}
+  <div class="row tautulli-actions secondary-actions">
+    <form method="post" action="/integrations/tautulli/test"><button class="secondary">Test connection</button></form>
+    <form method="post" action="/integrations/tautulli/sync"><button class="secondary">Sync now</button></form>
+    <form method="post" action="/integrations/tautulli/history/force-resync" onsubmit="return confirm('Force a complete watch-history re-sync? This deletes only Share Manager\'s cached Tautulli watch history and rebuilds it from scratch. On large histories this may take a long time. Customer, billing and stream-limit data are not affected.');"><button class="danger">Force full re-sync</button></form>
+  </div>
+  <p class="muted tautulli-resync-help">Force full re-sync clears only the cached watch-history rows and backfill checkpoints, then the asynchronous worker rebuilds the complete history from Tautulli.</p>
+  {% endif %}
+  </div>
+</section>
+
+<section class="integration-section notification-section" id="notifications">
+  <div class="row between notification-heading">
+    <div><h2>Notifications</h2><p class="muted">Route Share Manager events to Web Push, Home Assistant, Discord or a generic webhook.</p></div>
+    <a class="button-link secondary" href="/notifications/history">Notification history</a>
+  </div>
+
+
+  <article class="card notification-platform-card">
+    <div class="row between"><div><h3>Web Push</h3><p class="muted">Native PWA/browser notifications. VAPID keys are generated and persisted automatically.</p></div><span class="badge active">0.9 platform</span></div>
+    <div class="notification-platform-stats"><span><strong>{{ admin_push_devices }}</strong> admin device{{ '' if admin_push_devices == 1 else 's' }}</span><span><strong>{{ notification_event_count }}</strong> recorded events</span></div>
+    <div class="row notification-actions"><button type="button" id="admin-push-enable">Enable on this device</button><button type="button" class="secondary" id="admin-push-disable">Disable</button><button type="button" class="ghost" id="admin-push-test">Send test</button></div>
+    <p class="muted" id="admin-push-status">Checking this browser…</p>
+    <details class="admin-push-preferences" open>
+      <summary>Admin push preferences</summary>
+      <form method="post" action="/notifications/admin/preferences" class="admin-push-preferences-form">
+        <label class="toggle-choice"><input type="checkbox" name="push_enabled" {% if admin_push_status.enabled %}checked{% endif %}><span><strong>Allow admin push notifications</strong><small class="muted">Master switch for operational Web Push. Send test remains available.</small></span></label>
+        <div class="admin-push-event-grid">
+          {% for key,meta in admin_push_status.available_events.items() %}
+          <label class="notification-event-choice">
+            <input type="checkbox" name="events" value="{{ key }}" {% if key in admin_push_status.events %}checked{% endif %}>
+            <span><strong>{{ meta.label }}</strong><small>{{ meta.severity }}</small></span>
+          </label>
+          {% endfor %}
+        </div>
+        <button>Save admin push preferences</button>
+      </form>
+    </details>
+  </article>
+
+  <article class="card critical-broadcast-card" id="critical-customer-broadcast">
+    <div class="row between critical-broadcast-heading">
+      <div><h3>Critical customer broadcast</h3><p class="muted">Send an important service announcement to every eligible customer device with push notifications enabled.</p></div>
+      <span class="badge error-badge">critical</span>
+    </div>
+    <div class="critical-broadcast-audience">
+      <span><strong>{{ critical_broadcast_audience.customers }}</strong><small>customer{{ '' if critical_broadcast_audience.customers == 1 else 's' }}</small></span>
+      <span><strong>{{ critical_broadcast_audience.devices }}</strong><small>enabled device{{ '' if critical_broadcast_audience.devices == 1 else 's' }}</small></span>
+    </div>
+    <form method="post" action="/notifications/broadcast/critical" class="critical-broadcast-form" onsubmit="return confirm('Send this CRITICAL notification to {{ critical_broadcast_audience.customers }} customer{{ '' if critical_broadcast_audience.customers == 1 else 's' }} across {{ critical_broadcast_audience.devices }} enabled device{{ '' if critical_broadcast_audience.devices == 1 else 's' }}?');">
+      <label>Title<input name="title" maxlength="120" placeholder="Planned service maintenance" required></label>
+      <label>Message<textarea name="message" maxlength="1000" rows="4" placeholder="Share Manager/Plex will be unavailable from 22:00 while scheduled maintenance is carried out. Service is expected to return by 23:00." required></textarea><small class="muted">Keep it concise enough to read comfortably from a phone notification.</small></label>
+      <label>Open when tapped<select name="destination"><option value="/portal">Account</option><option value="/portal/activity">Activity</option><option value="/portal/history">History</option></select></label>
+      <div class="critical-broadcast-footer">
+        <p class="muted">Critical broadcasts bypass category-level notification preferences, but still respect the customer's master push-notification setting.</p>
+        <button class="danger" {% if critical_broadcast_audience.devices == 0 %}disabled title="No eligible customer devices"{% endif %}>Send critical broadcast</button>
+      </div>
+    </form>
+    <details class="critical-broadcast-schedule">
+      <summary>Schedule this broadcast for later</summary>
+      <form method="post" action="/notifications/broadcast/critical/schedule" class="critical-broadcast-form critical-broadcast-schedule-form" id="critical-broadcast-schedule-form">
+        <label>Title<input name="title" maxlength="120" placeholder="Planned service maintenance" required></label>
+        <label>Message<textarea name="message" maxlength="1000" rows="4" placeholder="Plex will be unavailable while scheduled maintenance is carried out." required></textarea></label>
+        <label>Open when tapped<select name="destination"><option value="/portal">Account</option><option value="/portal/activity">Activity</option><option value="/portal/history">History</option></select></label>
+        <label>Send at <span class="muted">(your local time)</span><input type="datetime-local" id="critical-broadcast-local-time" required></label>
+        <input type="hidden" name="scheduled_for_utc" id="critical-broadcast-utc-time">
+        <div class="critical-broadcast-footer"><p class="muted">The browser converts your local time to UTC before saving. The eligible audience is calculated when the broadcast actually sends.</p><button class="secondary">Schedule critical broadcast</button></div>
+      </form>
+    </details>
+    {% if scheduled_broadcasts %}
+    <div class="scheduled-broadcast-list">
+      <h4>Upcoming broadcasts</h4>
+      {% for item in scheduled_broadcasts %}
+      <div class="scheduled-broadcast-row"><div><strong>{{ item.title }}</strong><span class="muted">{{ item.scheduled_for.strftime('%Y-%m-%d %H:%M') }} UTC</span></div><form method="post" action="/notifications/broadcast/scheduled/{{ item.id }}/cancel" onsubmit="return confirm('Cancel this scheduled broadcast?')"><button class="ghost">Cancel</button></form></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </article>
+
+  <div class="notification-add-grid">
+    <details class="integration-add">
+      <summary>Add Home Assistant</summary>
+      <form method="post" action="/notifications" class="notification-form integration-add-body">
+        <input type="hidden" name="kind" value="home_assistant">
+        <label>Friendly name<input name="name" placeholder="Phone alerts" required></label>
+        <label>Home Assistant URL<input name="url" placeholder="http://homeassistant.local:8123" required></label>
+        <label>Long-lived access token<input name="secret" type="password" required></label>
+        <label>Notification action <span class="muted">(optional)</span><input name="target" placeholder="mobile_app_pixel_9"></label>
+        <p class="muted notification-help">Uses the same pipeline as Uptime Kuma: <code>/api/services/notify/&lt;action&gt;</code>. Enter the action without <code>notify.</code>. Leave blank to use Home Assistant's default <code>notify</code> action.</p>
+        <label>Minimum severity<select name="min_severity"><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></label>
+        <label>Due reminder days <span class="muted">(before renewal)</span><input name="due_reminder_days" value="{{ notification_default_due_days }}" placeholder="7,3,1,0"><small class="muted">Comma-separated calendar days. 0 = due date.</small></label>
+        <fieldset><legend>Events</legend>{{ event_choices('ha') }}</fieldset>
+        <button>Add Home Assistant</button>
+      </form>
+    </details>
+
+    <details class="integration-add">
+      <summary>Add Discord webhook</summary>
+      <form method="post" action="/notifications" class="notification-form integration-add-body">
+        <input type="hidden" name="kind" value="discord">
+        <label>Friendly name<input name="name" placeholder="Admin Discord" required></label>
+        <label>Webhook URL<input name="url" type="password" placeholder="https://discord.com/api/webhooks/..." required></label>
+        <label>Minimum severity<select name="min_severity"><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></label>
+        <label>Due reminder days <span class="muted">(before renewal)</span><input name="due_reminder_days" value="{{ notification_default_due_days }}" placeholder="7,3,1,0"><small class="muted">Comma-separated calendar days. 0 = due date.</small></label>
+        <fieldset><legend>Events</legend>{{ event_choices('discord') }}</fieldset>
+        <button>Add Discord</button>
+      </form>
+    </details>
+
+    <details class="integration-add">
+      <summary>Add generic webhook</summary>
+      <form method="post" action="/notifications" class="notification-form integration-add-body">
+        <input type="hidden" name="kind" value="webhook">
+        <label>Friendly name<input name="name" placeholder="Automation endpoint" required></label>
+        <label>Webhook URL<input name="url" placeholder="https://example.com/hooks/share-manager" required></label>
+        <label>Minimum severity<select name="min_severity"><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></label>
+        <label>Due reminder days <span class="muted">(before renewal)</span><input name="due_reminder_days" value="{{ notification_default_due_days }}" placeholder="7,3,1,0"><small class="muted">Comma-separated calendar days. 0 = due date.</small></label>
+        <fieldset><legend>Events</legend>{{ event_choices('webhook') }}</fieldset>
+        <button>Add webhook</button>
+      </form>
+    </details>
+  </div>
+
+  <div class="cards notification-cards">
+    {% for endpoint in notification_endpoints %}
+      {% set selected = endpoint.events.split(',') if endpoint.events else [] %}
+      <article class="card notification-card {% if not endpoint.enabled %}notification-disabled{% endif %}">
+        <div class="row between"><h3>{{ endpoint.name }}</h3><span class="badge">{{ endpoint.kind.replace('_',' ') }}</span></div>
+        <p class="muted notification-url">{{ endpoint.ui_url }}</p>
+        {% if endpoint.kind == 'home_assistant' %}<p class="muted">Action: notify.{{ endpoint.target or 'notify' }}</p>{% endif %}
+        <p><strong>{{ selected|length }}</strong> event(s) · minimum {{ endpoint.min_severity }}</p>
+        {% if 'subscription.due_soon' in selected or '*' in selected %}<p class="muted">Due reminders: {{ endpoint.due_reminder_days or '3' }} day(s) before renewal</p>{% endif %}
+        <div class="row notification-actions">
+          <form method="post" action="/notifications/{{ endpoint.id }}/test"><button>Send test</button></form>
+          <form method="post" action="/notifications/{{ endpoint.id }}/toggle"><button class="secondary">{{ 'Disable' if endpoint.enabled else 'Enable' }}</button></form>
+        </div>
+        <details class="notification-editor">
+          <summary>Edit</summary>
+          <form method="post" action="/notifications/{{ endpoint.id }}/edit" class="notification-form">
+            <label>Friendly name<input name="name" value="{{ endpoint.name }}" required></label>
+            <label>{{ 'Home Assistant URL' if endpoint.kind == 'home_assistant' else 'Webhook URL' }}<input name="url" value="{{ endpoint.url }}" required></label>
+            {% if endpoint.kind == 'home_assistant' %}
+              <label>New token <span class="muted">(leave blank to keep current)</span><input name="secret" type="password"></label>
+              <label>Notification action<input name="target" value="{{ endpoint.target or '' }}" placeholder="mobile_app_pixel_9"></label>
+            {% endif %}
+            <label>Minimum severity<select name="min_severity"><option value="info" {% if endpoint.min_severity=='info' %}selected{% endif %}>Info</option><option value="warning" {% if endpoint.min_severity=='warning' %}selected{% endif %}>Warning</option><option value="critical" {% if endpoint.min_severity=='critical' %}selected{% endif %}>Critical</option></select></label>
+            <label>Due reminder days <span class="muted">(before renewal)</span><input name="due_reminder_days" value="{{ endpoint.due_reminder_days or '3' }}" placeholder="7,3,1,0"><small class="muted">Only used when Subscription due soon is enabled. 0 = due date.</small></label>
+            <fieldset><legend>Events</legend>{{ event_choices('edit' ~ endpoint.id, selected) }}</fieldset>
+            <button>Save changes</button>
+          </form>
+          <form method="post" action="/notifications/{{ endpoint.id }}/delete" class="notification-delete" onsubmit="return confirm('Delete this notification integration?')"><button class="danger">Delete integration</button></form>
+        </details>
+      </article>
+    {% else %}<p class="muted">No notification integrations configured yet.</p>{% endfor %}
+  </div>
+</section>
+
+<section class="integration-section notification-delivery-section">
+  <h2>Recent notification deliveries</h2>
+  <div class="table-wrap notification-delivery-desktop"><table>
+    <thead><tr><th>Time</th><th>Endpoint</th><th>Event</th><th>Severity</th><th>Result</th></tr></thead>
+    <tbody>
+      {% for delivery in notification_deliveries %}
+      <tr><td>{{ delivery.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ delivery.endpoint.name if delivery.endpoint else ('Web Push · ' ~ (delivery.recipient_type or 'device') if delivery.channel == 'web_push' else 'Deleted endpoint') }}</td><td><code>{{ delivery.event }}</code></td><td>{{ delivery.severity }}</td><td><span class="badge {{ 'ok' if delivery.success else ('warning' if delivery.next_attempt_at and not delivery.final_failure else 'error-badge') }}">{{ 'sent' if delivery.success else ('retrying' if delivery.next_attempt_at and not delivery.final_failure else 'failed') }}</span>{% if not delivery.success and delivery.detail %}<div class="muted delivery-error">{{ delivery.detail }}</div>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="5" class="muted">No notifications sent yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <div class="notification-delivery-mobile">
+    {% for delivery in notification_deliveries %}
+    <article class="notification-delivery-card {{ 'success' if delivery.success else 'failed' }}">
+      <div class="row between"><strong>{{ delivery.endpoint.name if delivery.endpoint else ('Web Push · ' ~ (delivery.recipient_type or 'device') if delivery.channel == 'web_push' else 'Deleted endpoint') }}</strong><span class="badge {{ 'ok' if delivery.success else ('warning' if delivery.next_attempt_at and not delivery.final_failure else 'error-badge') }}">{{ 'sent' if delivery.success else ('retrying' if delivery.next_attempt_at and not delivery.final_failure else 'failed') }}</span></div>
+      <code>{{ delivery.event }}</code>
+      <div class="notification-delivery-meta"><span>{{ delivery.created_at.strftime('%Y-%m-%d %H:%M') }}</span><span>{{ delivery.severity }}</span></div>
+      {% if not delivery.success and delivery.detail %}<div class="muted delivery-error">{{ delivery.detail }}</div>{% endif %}
+    </article>
+    {% else %}<div class="empty-state">No notifications sent yet.</div>{% endfor %}
+  </div>
+</section>
+
+
+<script>
+(() => {
+  const form=document.getElementById('critical-broadcast-schedule-form');
+  const local=document.getElementById('critical-broadcast-local-time');
+  const utc=document.getElementById('critical-broadcast-utc-time');
+  if(!form||!local||!utc)return;
+  form.addEventListener('submit',e=>{
+    const d=new Date(local.value);
+    if(!local.value||Number.isNaN(d.getTime())){e.preventDefault();return;}
+    utc.value=d.toISOString().slice(0,19);
+  });
+})();
+</script>
+
+<script>
+(() => {
+  const toggle = document.getElementById('tautulli-mobile-toggle');
+  const body = document.getElementById('tautulli-mobile-body');
+  if (!toggle || !body) return;
+  const mq = window.matchMedia('(max-width: 700px)');
+  const apply = () => {
+    if (!mq.matches) { body.classList.remove('is-collapsed'); toggle.setAttribute('aria-expanded','true'); return; }
+    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    body.classList.toggle('is-collapsed', !expanded);
+    toggle.textContent = expanded ? 'Hide' : 'Show';
+  };
+  toggle.addEventListener('click', () => { toggle.setAttribute('aria-expanded', toggle.getAttribute('aria-expanded') === 'true' ? 'false' : 'true'); apply(); });
+  if (mq.addEventListener) mq.addEventListener('change', apply);
+  apply();
+})();
+</script>
+
+<script>
+(() => {
+ const status=document.getElementById('admin-push-status'); if(!status)return;
+ if(!('serviceWorker'in navigator)||!('PushManager'in window)){status.textContent='Push is not supported by this browser';return;}
+ const b64=s=>{const p='='.repeat((4-s.length%4)%4),raw=atob((s+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));};
+ const reg=()=>navigator.serviceWorker.ready; const cur=async()=> (await reg()).pushManager.getSubscription();
+ const refresh=async()=>status.textContent=(await cur())?'Enabled on this device':'Not enabled on this device';
+ document.getElementById('admin-push-enable').onclick=async()=>{try{const key=(await(await fetch('/api/notifications/push/public-key')).json()).public_key;const r=await reg();let sub=await r.pushManager.getSubscription();if(!sub)sub=await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64(key)});const out=await fetch('/api/notifications/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub.toJSON())});if(!out.ok)throw new Error((await out.json()).error||'Subscription failed');refresh();}catch(e){status.textContent=e.message;}};
+ document.getElementById('admin-push-disable').onclick=async()=>{const sub=await cur();if(sub){await fetch('/api/notifications/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})});await sub.unsubscribe();}refresh();};
+ document.getElementById('admin-push-test').onclick=async()=>{status.textContent='Sending test…';const d=await(await fetch('/api/notifications/push/test',{method:'POST'})).json();status.textContent=d.ok?`Test sent to ${d.delivered} admin device(s)`:'No enabled admin push subscription received the test';}; refresh();
+})();
+</script>
+
+<script>
+(() => {
+  const card = document.getElementById('tautulli-backfill-card');
+  if (!card) return;
+  const state = document.getElementById('tautulli-backfill-state');
+  const bar = document.getElementById('tautulli-backfill-bar');
+  const rows = document.getElementById('tautulli-backfill-rows');
+  const rowsLabel = document.getElementById('tautulli-backfill-rows-label');
+  const customers = document.getElementById('tautulli-backfill-customers');
+  const targets = document.getElementById('tautulli-backfill-targets');
+  const error = document.getElementById('tautulli-backfill-error');
+  const update = async () => {
+    try {
+      const response = await fetch('/api/tautulli/backfill', {cache:'no-store', credentials:'same-origin'});
+      if (!response.ok) return;
+      const data = await response.json();
+      const denominatorReady = !!data.total_is_final;
+      rows.textContent = denominatorReady ? `${data.progress_rows} / ${data.known_total}` : `${data.cached_rows}`;
+      rowsLabel.textContent = denominatorReady ? 'history rows processed' : 'cached history rows';
+      customers.textContent = `${data.customers_complete} / ${data.customers_total}`;
+      targets.textContent = `${data.targets_measured} / ${data.targets_total}`;
+      const percent = denominatorReady && data.known_total ? Math.min(100, (data.progress_rows / data.known_total) * 100) : (data.targets_total ? Math.min(100, (data.targets_measured / data.targets_total) * 100) : 0);
+      bar.style.width = `${percent}%`;
+      state.textContent = data.complete ? 'complete' : (denominatorReady ? 'syncing' : 'scanning');
+      state.classList.toggle('active', !!data.complete);
+      state.classList.toggle('grace', !data.complete);
+      if (data.last_error) { error.textContent = data.last_error; error.classList.remove('hidden'); }
+      else { error.textContent = ''; error.classList.add('hidden'); }
+      if (!data.complete) window.setTimeout(update, 5000);
+    } catch (_) { window.setTimeout(update, 10000); }
+  };
+  if (state.textContent.trim() !== 'complete') window.setTimeout(update, 2500);
+})();
+</script>
+
+{% endblock %}

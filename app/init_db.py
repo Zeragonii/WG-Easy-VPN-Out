@@ -1,0 +1,197 @@
+from sqlalchemy import inspect, text
+from .db import Base, engine
+from .config import settings
+from . import models  # noqa: F401
+
+
+Base.metadata.create_all(bind=engine)
+
+# Lightweight in-place migration path for existing PostgreSQL installs.
+# We can move to Alembic later; these additive migrations keep 0.2 a drop-in upgrade.
+def add_column_if_missing(table: str, column: str, ddl: str):
+    inspector = inspect(engine)
+    cols = {c["name"] for c in inspector.get_columns(table)}
+    if column in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+
+add_column_if_missing("customers", "archived", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("customers", "archived_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "portal_enabled", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("customers", "portal_username", "VARCHAR(120) NULL")
+add_column_if_missing("customers", "portal_password_hash", "TEXT NULL")
+add_column_if_missing("customers", "portal_session_version", "INTEGER NOT NULL DEFAULT 1")
+add_column_if_missing("customers", "portal_enabled_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "portal_disabled_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "portal_last_login_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "portal_last_activity_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "referral_code", "VARCHAR(5) NULL")
+add_column_if_missing("customers", "referrer_customer_id", "INTEGER NULL REFERENCES customers(id) ON DELETE SET NULL")
+add_column_if_missing("customers", "referral_started_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "seerr_user_id", "INTEGER NULL")
+add_column_if_missing("customers", "seerr_username", "VARCHAR(255) NULL")
+add_column_if_missing("customers", "seerr_match_method", "VARCHAR(32) NULL")
+add_column_if_missing("customers", "seerr_last_sync_at", "TIMESTAMP NULL")
+add_column_if_missing("customers", "seerr_last_error", "TEXT NULL")
+add_column_if_missing("customers", "seerr_request_count", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("customers", "seerr_movie_requests_total", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("customers", "seerr_tv_seasons_total", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("customers", "seerr_movie_used", "INTEGER NULL")
+add_column_if_missing("customers", "seerr_movie_limit", "INTEGER NULL")
+add_column_if_missing("customers", "seerr_tv_used", "INTEGER NULL")
+add_column_if_missing("customers", "seerr_tv_limit", "INTEGER NULL")
+add_column_if_missing("packages", "seerr_manage_quotas", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("packages", "seerr_policy_priority", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("packages", "seerr_movie_limit", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("packages", "seerr_movie_days", "INTEGER NOT NULL DEFAULT 30")
+add_column_if_missing("packages", "seerr_tv_limit", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("packages", "seerr_tv_days", "INTEGER NOT NULL DEFAULT 30")
+add_column_if_missing("requests_platform_settings", "api_key", "TEXT NULL")
+add_column_if_missing("requests_platform_settings", "manage_quotas", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("requests_platform_settings", "last_sync_at", "TIMESTAMP NULL")
+add_column_if_missing("requests_platform_settings", "last_sync_success_at", "TIMESTAMP NULL")
+add_column_if_missing("requests_platform_settings", "last_sync_error", "TEXT NULL")
+add_column_if_missing("requests_platform_settings", "last_matched_count", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("requests_platform_settings", "last_unmatched_count", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("requests_platform_settings", "last_drift_count", "INTEGER NOT NULL DEFAULT 0")
+with engine.begin() as conn:
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_customers_referral_code ON customers (referral_code) WHERE referral_code IS NOT NULL"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_customers_seerr_user_id ON customers (seerr_user_id) WHERE seerr_user_id IS NOT NULL"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_customers_portal_username_lower ON customers (lower(portal_username)) WHERE portal_username IS NOT NULL"))
+add_column_if_missing("billing_tiers", "grace_period_days", "INTEGER NOT NULL DEFAULT 3")
+add_column_if_missing("billing_tiers", "stream_limit", "INTEGER NOT NULL DEFAULT 1")
+add_column_if_missing("billing_tiers", "referral_credits", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("billing_tiers", "referral_redeem_cost", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("portal_daily_metrics", "faq_views", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("tautulli_settings", "admin_user_ids", "TEXT NULL")
+add_column_if_missing("tautulli_activity", "history_backfill_complete", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("tautulli_activity", "history_backfill_offset", "INTEGER NOT NULL DEFAULT 0")
+add_column_if_missing("tautulli_activity", "history_backfill_total", "INTEGER NULL")
+add_column_if_missing("tautulli_activity", "history_backfill_started_at", "TIMESTAMP NULL")
+add_column_if_missing("tautulli_activity", "history_backfill_updated_at", "TIMESTAMP NULL")
+add_column_if_missing("tautulli_activity", "history_backfill_error", "TEXT NULL")
+add_column_if_missing("subscriptions", "current_period_start", "TIMESTAMP NULL")
+add_column_if_missing("subscriptions", "manual_access_end", "TIMESTAMP NULL")
+add_column_if_missing("subscriptions", "grace_until", "TIMESTAMP NULL")
+add_column_if_missing("subscriptions", "cancelled_at", "TIMESTAMP NULL")
+add_column_if_missing("payments", "subscription_id", "INTEGER NULL REFERENCES subscriptions(id)")
+add_column_if_missing("payments", "coverage_start", "TIMESTAMP NULL")
+add_column_if_missing("payments", "coverage_end", "TIMESTAMP NULL")
+add_column_if_missing("payments", "billing_periods", "INTEGER NULL")
+add_column_if_missing("payments", "prior_state_captured", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("payments", "prior_started_at", "TIMESTAMP NULL")
+add_column_if_missing("payments", "prior_period_start", "TIMESTAMP NULL")
+add_column_if_missing("payments", "prior_period_end", "TIMESTAMP NULL")
+add_column_if_missing("payments", "prior_grace_until", "TIMESTAMP NULL")
+add_column_if_missing("payments", "prior_subscription_status", "VARCHAR(32) NULL")
+add_column_if_missing("payments", "prior_customer_status", "VARCHAR(32) NULL")
+add_column_if_missing("payments", "created_at", "TIMESTAMP NULL")
+add_column_if_missing("payments", "voided_at", "TIMESTAMP NULL")
+add_column_if_missing("payments", "voided_by", "VARCHAR(120) NULL")
+_notification_columns = {c["name"] for c in inspect(engine).get_columns("notification_endpoints")}
+_notification_due_days_was_missing = "due_reminder_days" not in _notification_columns
+add_column_if_missing("notification_endpoints", "due_reminder_days", "VARCHAR(120) NOT NULL DEFAULT '3'")
+add_column_if_missing("notification_deliveries", "notification_event_id", "INTEGER NULL REFERENCES notification_events(id) ON DELETE SET NULL")
+add_column_if_missing("notification_deliveries", "channel", "VARCHAR(32) NOT NULL DEFAULT 'endpoint'")
+add_column_if_missing("notification_deliveries", "push_subscription_id", "INTEGER NULL REFERENCES push_subscriptions(id) ON DELETE SET NULL")
+add_column_if_missing("notification_deliveries", "recipient_type", "VARCHAR(16) NULL")
+add_column_if_missing("notification_deliveries", "recipient_id", "VARCHAR(64) NULL")
+add_column_if_missing("notification_deliveries", "attempt_count", "INTEGER NOT NULL DEFAULT 1")
+add_column_if_missing("notification_deliveries", "last_attempt_at", "TIMESTAMP NULL")
+add_column_if_missing("notification_deliveries", "next_attempt_at", "TIMESTAMP NULL")
+add_column_if_missing("notification_deliveries", "final_failure", "BOOLEAN NOT NULL DEFAULT FALSE")
+add_column_if_missing("customer_notification_preferences", "ticket_notifications_default", "BOOLEAN NOT NULL DEFAULT TRUE")
+add_column_if_missing("notification_platform_settings", "ticket_events_seeded", "BOOLEAN NOT NULL DEFAULT FALSE")
+if _notification_due_days_was_missing:
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE notification_endpoints SET due_reminder_days = :days"),
+            {"days": str(max(0, int(settings.notification_due_soon_days)))},
+        )
+
+# Backfill created_at for old payment rows after adding the nullable column.
+with engine.begin() as conn:
+    conn.execute(text("UPDATE payments SET created_at = COALESCE(created_at, paid_at) WHERE created_at IS NULL"))
+
+
+# v0.10: existing admin push installs should receive new-ticket/customer-reply events by default once.
+with engine.begin() as conn:
+    row = conn.execute(text("SELECT ticket_events_seeded FROM notification_platform_settings WHERE id = 1")).fetchone()
+    if row is not None and not row[0]:
+        pref = conn.execute(text("SELECT events FROM admin_notification_preferences WHERE id = 1")).fetchone()
+        if pref is not None:
+            events = {x.strip() for x in (pref[0] or "").split(",") if x.strip()}
+            if "*" not in events:
+                events.update({"ticket.created", "ticket.customer_reply"})
+                conn.execute(text("UPDATE admin_notification_preferences SET events = :events WHERE id = 1"), {"events": ",".join(sorted(events))})
+        conn.execute(text("UPDATE notification_platform_settings SET ticket_events_seeded = TRUE WHERE id = 1"))
+
+print("Database schema ready")
+
+
+# Seed editable payment-source choices. Payments keep their source text so historical
+# ledger entries remain unchanged if a source is later renamed or archived.
+from .db import SessionLocal
+from .models import BackupSettings, Customer, Payment, PaymentSource, RequestsPlatformSettings, ReferralSettings
+from .services.referrals import ensure_customer_referral_code
+
+db = SessionLocal()
+try:
+    defaults = ["manual", "bank_transfer", "cash", "paypal", "stripe", "other"]
+    historical = [row[0] for row in db.query(Payment.source).distinct().all() if row[0]]
+    existing = {row.name.lower() for row in db.query(PaymentSource).all()}
+    for name in defaults + historical:
+        if name.lower() not in existing:
+            db.add(PaymentSource(name=name, active=True))
+            existing.add(name.lower())
+
+    # v0.4.1: move backup automation policy into the database. Environment
+    # variables remain first-run defaults so existing deployments migrate cleanly.
+    if db.get(RequestsPlatformSettings, 1) is None:
+        db.add(RequestsPlatformSettings(
+            id=1,
+            enabled=False,
+            name="Seerr",
+            base_url=None,
+            button_label="Request Content",
+        ))
+
+
+    if db.get(ReferralSettings, 1) is None:
+        db.add(ReferralSettings(id=1, enabled=True, credits_per_reward=10, reward_periods=1))
+        db.flush()
+    # Allocate immutable random five-digit codes to existing customers on upgrade.
+    for customer in db.query(Customer).filter(Customer.referral_code.is_(None)).all():
+        ensure_customer_referral_code(db, customer)
+
+    if db.get(BackupSettings, 1) is None:
+        db.add(BackupSettings(
+            id=1,
+            enabled=True,
+            schedule_hour=max(0, min(23, int(settings.backup_schedule_hour))),
+            check_interval_minutes=max(1, int(settings.backup_check_interval_minutes)),
+            retention_daily=max(1, int(settings.backup_retention_daily)),
+            retention_weekly=max(0, int(settings.backup_retention_weekly)),
+            retention_monthly=max(0, int(settings.backup_retention_monthly)),
+        ))
+    db.commit()
+finally:
+    db.close()
+
+# v0.10.6: storage consolidation. When the old backup host directory is remapped
+# as /share-manager, legacy dumps may be sitting at the root. Move them into the
+# new backups/ child automatically so existing restore points remain visible.
+from pathlib import Path
+try:
+    storage_root = Path(settings.storage_root)
+    new_backup_root = Path(settings.backup_dir)
+    storage_root.mkdir(parents=True, exist_ok=True)
+    new_backup_root.mkdir(parents=True, exist_ok=True)
+    for legacy_dump in storage_root.glob("share-manager-*.dump"):
+        destination = new_backup_root / legacy_dump.name
+        if not destination.exists():
+            legacy_dump.replace(destination)
+except OSError as exc:
+    print(f"Storage-root migration warning: {exc}")

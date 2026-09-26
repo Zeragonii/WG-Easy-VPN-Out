@@ -1,454 +1,113 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="page-intro">
-  <h1>System status</h1>
-  <p class="muted">
-    Live health and routing overview for WG-Easy clients, outbound VPN tunnels,
-    policy-routing groups, and automatic recovery.
-  </p>
+{% extends 'base.html' %}{% block content %}
+<header class="row between dashboard-header"><div><h1>Dashboard</h1><p>Subscription, billing and entitlement overview.</p></div><form method="post" action="/billing/run"><button class="secondary dashboard-billing-check">Run billing check</button></form></header>
+{% if request.query_params.get('notice') %}<div class="alert success">{{ request.query_params.get('notice') }}</div>{% endif %}
+<div class="stats billing-stats dashboard-primary-stats">
+{% for label,value in [('Customers',stats.customers),('Active',stats.active),('In grace',stats.grace),('Suspended',stats.suspended),('Due in 7 days',stats.due_soon)] %}<div class="stat"><strong>{{ value }}</strong><span>{{ label }}</span></div>{% endfor %}
+<div class="stat"><strong>£{{ '%.2f'|format(stats.revenue) }}</strong><span>Revenue this month</span></div>
 </div>
-
-<div id="update-banner" class="card" style="margin-bottom:1rem;display:none;">
-  <strong id="update-title">Update available</strong>
-  <div id="update-detail" class="muted" style="margin-top:.25rem;"></div>
-  <div id="update-link-wrap" style="margin-top:.6rem;display:none;">
-    <a id="update-link" class="button-link" href="#" target="_blank" rel="noopener">View repository</a>
+<section class="revenue-forecast">
+  <div class="row between forecast-heading"><div><h2>Expected revenue</h2><p class="muted">Projected from the current Active/Grace package distribution. Exempt and suspended customers are excluded.</p></div></div>
+  <div class="forecast-totals">
+    <div class="forecast-stat"><span>Monthly revenue</span><strong>£{{ '%.2f'|format(revenue_forecast.monthly) }}</strong><small>per month from monthly-billed tiers</small></div>
+    <div class="forecast-stat"><span>Yearly revenue</span><strong>£{{ '%.2f'|format(revenue_forecast.yearly) }}</strong><small>per year from yearly-billed tiers</small></div>
+    <div class="forecast-stat"><span>Annualised total</span><strong>£{{ '%.2f'|format(revenue_forecast.annualised) }}</strong><small>monthly tiers × 12 + yearly tiers</small></div>
   </div>
-</div>
-
-<div class="grid">
-  <section class="card">
-    <h2>Application</h2>
-    <p>Version <code>{{ status.version }}</code></p>
-    <p>Persistent DB <span class="status-good">● configured</span></p>
-    <p>Routing reconciler <span class="status-good">● active</span></p>
-    <p>VPN resilience manager <span class="status-good">● active</span></p>
-  </section>
-
-  <section class="card">
-    <h2>WG-Easy</h2>
-    <p><code>{{ status.wg_easy_url }}</code></p>
-    <p>
-      wg0:
-      {% if status.wg0_present %}
-        <span class="status-good">● visible</span>
-      {% else %}
-        <span class="status-bad">● not visible</span>
-      {% endif %}
-    </p>
-
-    {% if status.operational.wg_easy.available %}
-      <p>Total clients: <strong>{{ status.operational.wg_easy.total }}</strong></p>
-      <p>
-        Online now:
-        {% if status.operational.wg_easy.online > 0 %}
-          <span class="status-good">● {{ status.operational.wg_easy.online }}</span>
-        {% else %}
-          <span class="muted">○ 0</span>
-        {% endif %}
-      </p>
-      {% if status.operational.wg_easy.recent > 0 %}
-        <p>
-          Recently active:
-          <span class="status-warn">◐ {{ status.operational.wg_easy.recent }}</span>
-        </p>
-      {% endif %}
-    {% else %}
-      <p>Total clients: <span class="status-warn">◐ unavailable</span></p>
-    {% endif %}
-
-    <p>Assigned clients: <strong>{{ status.operational.client_assignments }}</strong></p>
-  </section>
-
-  <section class="card">
-    <h2>Traffic visibility</h2>
-    <p>
-      Moving traffic:
-      <strong id="dash-traffic-active">{{ status.traffic.totals.active_clients or 0 }}</strong>
-      / <span id="dash-traffic-clients">{{ status.traffic.totals.clients or 0 }}</span> clients
-    </p>
-    <p>RX: <strong id="dash-traffic-rx">{{ status.traffic.totals.rx_rate_display or "—" }}</strong></p>
-    <p>TX: <strong id="dash-traffic-tx">{{ status.traffic.totals.tx_rate_display or "—" }}</strong></p>
-    <a href="{{ url_for('traffic.index') }}" class="button-link">Open traffic view</a>
-  </section>
-
-  <section class="card">
-    <h2>Outbound VPNs</h2>
-    <p>Profiles: <strong>{{ status.operational.vpn_profiles }}</strong></p>
-    <p>Auto-connect enabled: <strong>{{ status.operational.vpn_enabled }}</strong></p>
-    <p>
-      Connected:
-      {% if status.operational.vpn_connected > 0 %}
-        <span class="status-good">● {{ status.operational.vpn_connected }}</span>
-      {% else %}
-        <span class="muted">○ 0</span>
-      {% endif %}
-    </p>
-    {% if status.operational.vpn_connecting > 0 %}
-      <p>Connecting: <span class="status-warn">◐ {{ status.operational.vpn_connecting }}</span></p>
-    {% endif %}
-    {% if status.operational.vpn_problem > 0 %}
-      <p>Needs attention: <span class="status-bad">● {{ status.operational.vpn_problem }}</span></p>
-    {% endif %}
-  </section>
-
-  <section class="card">
-    <h2>Policy routing</h2>
-    <p>Routing groups: <strong>{{ status.operational.routing_groups }}</strong></p>
-    <p>nftables marking <span class="status-good">● enabled</span></p>
-    <p>Per-group route tables <span class="status-good">● enabled</span></p>
-    <p>Kill-switch / WAN fallback <span class="status-good">● enabled</span></p>
-  </section>
-
-  <section class="card">
-    <h2>Recovery</h2>
-    <p>
-      Route reconciliation:
-      every <strong>{{ status.routing_reconcile_interval }}s</strong>
-    </p>
-    <p>
-      VPN retry backoff:
-      <strong>{{ status.retry_base_seconds }}s</strong>
-      → max <strong>{{ status.retry_max_seconds }}s</strong>
-    </p>
-    <p>Reconnect recovery <span class="status-good">● enabled</span></p>
-    <p>Connecting timeout: <strong>{{ status.connect_timeout_seconds }}s</strong></p>
-  </section>
-
-  <section class="card">
-    <h2>Networking tools</h2>
-    {% for tool, available in status.tools.items() %}
-      <p>
-        {{ tool }}:
-        {% if available %}
-          <span class="status-good">● installed</span>
-        {% else %}
-          <span class="status-bad">● missing</span>
-        {% endif %}
-      </p>
-    {% endfor %}
-  </section>
-</div>
-
-<details class="compact-details">
-  <summary>
-    <div class="compact-summary-main">
-      <div class="compact-summary-title">Outbound VPN health</div>
-      <div class="compact-summary-meta">{{ status.operational.vpn_connected }} connected · {{ status.operational.vpn_profiles }} profiles</div>
+  <div class="forecast-desktop-table table-wrap"><table class="forecast-table"><thead><tr><th>Package</th><th>Live customers</th><th>Monthly</th><th>Yearly</th></tr></thead><tbody>
+    {% for row in revenue_forecast.packages %}<tr><td><strong>{{ row.name }}</strong></td><td>{{ row.customers }}</td><td>£{{ '%.2f'|format(row.monthly) }} <span class="muted">/mo · {{ row.monthly_customers }} customer{{ '' if row.monthly_customers == 1 else 's' }}</span></td><td>£{{ '%.2f'|format(row.yearly) }} <span class="muted">/yr · {{ row.yearly_customers }} customer{{ '' if row.yearly_customers == 1 else 's' }}</span></td></tr>{% else %}<tr><td colspan="4" class="muted">No revenue-bearing subscriptions yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <details class="forecast-mobile-details dashboard-mobile-details">
+    <summary><span>Package distribution</span><small>{{ revenue_forecast.packages|length }} package{{ '' if revenue_forecast.packages|length == 1 else 's' }}</small></summary>
+    <div class="forecast-mobile-list">
+      {% for row in revenue_forecast.packages %}
+      <article class="forecast-package-card">
+        <div class="row between"><strong>{{ row.name }}</strong><span class="muted">{{ row.customers }} live</span></div>
+        <div class="forecast-package-values">
+          <div><span>Monthly</span><strong>£{{ '%.2f'|format(row.monthly) }}</strong><small>{{ row.monthly_customers }} customer{{ '' if row.monthly_customers == 1 else 's' }}</small></div>
+          <div><span>Yearly</span><strong>£{{ '%.2f'|format(row.yearly) }}</strong><small>{{ row.yearly_customers }} customer{{ '' if row.yearly_customers == 1 else 's' }}</small></div>
+        </div>
+      </article>
+      {% else %}<p class="muted">No revenue-bearing subscriptions yet.</p>{% endfor %}
     </div>
-    <span class="compact-summary-chevron">›</span>
-  </summary>
-  <div class="compact-details-body">
-    <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
-      <div class="muted">Current tunnel state, addressing, uptime, and observed public exit.</div>
-      <a href="{{ url_for('vpn_profiles.index') }}" class="button-link">Manage VPN profiles</a>
+  </details>
+</section>
+{% if tautulli_usage %}
+<section class="tautulli-dashboard" data-live-refresh="{{ tautulli_settings.live_refresh_seconds }}">
+  <div class="row between tautulli-heading"><div><h2>Plex activity</h2><p class="muted">Customer usage from Tautulli. Historical metrics update every {{ tautulli_settings.sync_interval_minutes }} minutes; live sessions refresh asynchronously.</p></div><span id="tautulli-live-age" class="muted"></span></div>
+  <div class="tautulli-dashboard-stats tautulli-dashboard-stats-desktop">
+    <div class="tautulli-stat live"><strong id="tautulli-live-count-desktop">—</strong><span>Watching now</span></div>
+    <div class="tautulli-stat"><strong>{{ tautulli_usage.active_7d }}</strong><span>Active last 7 days</span></div>
+    <div class="tautulli-stat"><strong>{{ tautulli_usage.active_30d }}</strong><span>Active last 30 days</span></div>
+    <div class="tautulli-stat"><strong>{{ tautulli_usage.inactive_90d }}</strong><span>Inactive 90+ days</span></div>
+    <div class="tautulli-stat"><strong>{{ tautulli_usage.never }}</strong><span>Never streamed</span></div>
+    <div class="tautulli-stat"><strong>{{ format_duration(tautulli_usage.watch_time_30d) }}</strong><span>Watch time · 30d</span></div>
+    <div class="tautulli-stat"><strong>{{ format_duration(tautulli_usage.average_30d) }}</strong><span>Avg / active user · 30d</span></div>
+  </div>
+  <div class="tautulli-dashboard-mobile">
+    <div class="tautulli-mobile-primary">
+      <div class="tautulli-stat live tautulli-watching-now"><strong id="tautulli-live-count">—</strong><span>Watching now</span></div>
+      <div class="tautulli-stat"><strong>{{ tautulli_usage.active_7d }}</strong><span>Active · 7d</span></div>
+      <div class="tautulli-stat"><strong>{{ tautulli_usage.active_30d }}</strong><span>Active · 30d</span></div>
     </div>
-
-  <div class="table-wrap" style="margin-top:.8rem;">
-    <table>
-      <thead>
-        <tr>
-          <th>Profile</th>
-          <th>State</th>
-          <th>Tunnel</th>
-          <th>Gateway</th>
-          <th>Exit IP</th>
-          <th>Uptime</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for vpn in status.operational.vpn_rows %}
-        <tr data-vpn-profile-id="{{ vpn.id }}">
-          <td>
-            <strong>{{ vpn.name }}</strong>
-            <div class="muted" style="font-size:.8rem;">{{ vpn.provider }} · {{ vpn.type }}</div>
-          </td>
-          <td class="vpn-state">
-            {% if vpn.state == "connected" %}
-              <span class="status-good">● Connected</span>
-            {% elif vpn.state == "connecting" %}
-              <span class="status-warn">◐ Connecting</span>
-            {% elif vpn.state == "stored" %}
-              <span class="muted">○ Stored only</span>
-            {% else %}
-              <span class="status-bad">● {{ vpn.state|capitalize }}</span>
-            {% endif %}
-            {% if vpn.enabled %}
-              <div class="muted" style="font-size:.8rem;">Auto-connect enabled</div>
-            {% endif %}
-          </td>
-          <td class="vpn-tunnel">
-            {% if vpn.tunnel_ipv4 %}
-              <code>{{ vpn.interface }}</code>
-              <div><code>{{ vpn.tunnel_ipv4 }}</code></div>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td class="vpn-gateway">
-            {% if vpn.gateway %}
-              <code>{{ vpn.gateway }}</code>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td class="vpn-exit-ip">
-            {% if vpn.exit_ip %}
-              <code>{{ vpn.exit_ip }}</code>
-              {% if vpn.exit_ip_cache and vpn.exit_ip_cache.checking %}
-                <div class="muted" style="font-size:.8rem;">◐ refreshing…</div>
-              {% elif vpn.exit_ip_cache and vpn.exit_ip_cache.probe_ok == false %}
-                <div class="status-warn" style="font-size:.8rem;">last refresh failed</div>
-              {% endif %}
-            {% elif vpn.state == "connected" %}
-              <span class="status-warn">◐ Checking…</span>
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td class="vpn-uptime">{{ vpn.uptime }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="muted">No outbound VPN profiles configured.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <details class="dashboard-mobile-details tautulli-more-details">
+      <summary><span>More usage stats</span><small>30-day &amp; lifetime signals</small></summary>
+      <div class="tautulli-mobile-secondary">
+        <div class="tautulli-stat"><strong>{{ tautulli_usage.inactive_90d }}</strong><span>Inactive 90+ days</span></div>
+        <div class="tautulli-stat"><strong>{{ tautulli_usage.never }}</strong><span>Never streamed</span></div>
+        <div class="tautulli-stat"><strong>{{ format_duration(tautulli_usage.watch_time_30d) }}</strong><span>Watch time · 30d</span></div>
+        <div class="tautulli-stat"><strong>{{ format_duration(tautulli_usage.average_30d) }}</strong><span>Avg / active user</span></div>
+      </div>
+    </details>
   </div>
-  </div>
-</details>
-
-<details class="compact-details">
-  <summary>
-    <div class="compact-summary-main">
-      <div class="compact-summary-title">Routing group health</div>
-      <div class="compact-summary-meta">{{ status.operational.routing_groups }} groups · {{ status.operational.client_assignments }} assigned clients</div>
-    </div>
-    <span class="compact-summary-chevron">›</span>
-  </summary>
-  <div class="compact-details-body">
-    <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap;">
-      <div class="muted">Configured policy versus the exit currently in effect.</div>
-      <a href="{{ url_for('routing_groups.index') }}" class="button-link">Manage routing groups</a>
-    </div>
-  <div class="table-wrap" style="margin-top:.8rem;">
-    <table>
-      <thead>
-        <tr>
-          <th>Group</th>
-          <th>Clients</th>
-          <th>Configured exit</th>
-          <th>Effective exit</th>
-          <th>DNS</th>
-          <th>Last change</th>
-          <th>State</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for group in status.operational.routing_rows %}
-        <tr>
-          <td>
-            <strong>{{ group.name }}</strong>
-            <div class="muted" style="font-size:.8rem;">
-              {{ group.fwmark }} · table {{ group.table_id or "—" }}
-            </div>
-          </td>
-          <td><strong>{{ group.assigned_clients }}</strong></td>
-          <td>{{ group.configured_exit }}</td>
-          <td>{{ group.effective_exit }}</td>
-          <td>
-            {% if not group.dns %}
-              <span class="muted">—</span>
-            {% elif group.dns.state == "no_obvious_leak" %}
-              <span class="status-good">● No obvious leak</span>
-            {% elif group.dns.state == "potential_leak" %}
-              <span class="status-warn">⚠ Potential leak</span>
-            {% elif group.dns.checking %}
-              <span class="status-warn">◐ Checking…</span>
-            {% else %}
-              <span class="muted">○ {{ group.dns.state|replace("_", " ")|capitalize }}</span>
-            {% endif %}
-          </td>
-          <td>{{ group.last_transition_at or "—" }}</td>
-          <td>
-            {% if group.state == "ready" %}
-              <span class="status-good">● Ready</span>
-            {% elif group.state == "fallback" %}
-              <span class="status-warn">◐ Fallback</span>
-            {% else %}
-              <span class="status-bad">● Blocked</span>
-            {% endif %}
-            <div class="muted" style="font-size:.8rem;">{{ group.detail }}</div>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="7" class="muted">No routing groups configured.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  </div>
-</details>
-
-<details class="compact-details">
-  <summary>
-    <div class="compact-summary-main">
-      <div class="compact-summary-title">About this build</div>
-      <div class="compact-summary-meta">Feature summary and current milestone</div>
-    </div>
-    <span class="compact-summary-chevron">›</span>
-  </summary>
-  <div class="compact-details-body">
-    <h3 style="margin-top:0;">Current feature set</h3>
-  <p>
-    WG-Easy clients can be persistently assigned to routing groups targeting
-    Default WAN or an outbound OpenVPN/WireGuard profile while private/local destinations
-    continue using normal local routing. VPN-backed groups support
-    block-on-failure or WAN fallback, and routing automatically follows tunnel
-    connect/disconnect/reconnect events with retry recovery.
-  </p>
-    <hr style="border:0;border-top:1px solid var(--border);margin:1rem 0;">
-    <h3>Current milestone</h3>
-  <p>
-    Backup and restore is now available for portable VPN profiles, configuration
-    files, routing groups and WG-Easy client assignments, with optional
-    SECRET_KEY inclusion for fully portable encrypted credentials.
-  </p>
-  </div>
-</details>
-
+  <div id="tautulli-live-sessions" class="tautulli-live-sessions"><p class="muted">Loading live sessions…</p></div>
+</section>
 <script>
 (() => {
-  const LIVE_POLL_MS = 10000;
-  const liveUrl = "{{ url_for('main.dashboard_live') }}";
-
-  function updateTrafficSummary(traffic) {
-    const totals = (traffic && traffic.totals) || {};
-    const active = document.getElementById("dash-traffic-active");
-    const clients = document.getElementById("dash-traffic-clients");
-    const rx = document.getElementById("dash-traffic-rx");
-    const tx = document.getElementById("dash-traffic-tx");
-    if (active) active.textContent = totals.active_clients ?? 0;
-    if (clients) clients.textContent = totals.clients ?? 0;
-    if (rx) rx.textContent = totals.rx_rate_display || "—";
-    if (tx) tx.textContent = totals.tx_rate_display || "—";
-  }
-
-  function stateHtml(vpn) {
-    let value = "";
-    if (vpn.state === "connected") {
-      value = '<span class="status-good">● Connected</span>';
-    } else if (vpn.state === "connecting") {
-      value = '<span class="status-warn">◐ Connecting</span>';
-    } else if (vpn.state === "stored") {
-      value = '<span class="muted">○ Stored only</span>';
-    } else {
-      const label = String(vpn.state || "unknown");
-      value = `<span class="status-bad">● ${label.charAt(0).toUpperCase() + label.slice(1)}</span>`;
-    }
-
-    if (vpn.enabled) {
-      value += '<div class="muted" style="font-size:.8rem;">Auto-connect enabled</div>';
-    }
-    return value;
-  }
-
-  function tunnelHtml(vpn) {
-    if (!vpn.tunnel_ipv4) return '<span class="muted">—</span>';
-    return `<code>${vpn.interface}</code><div><code>${vpn.tunnel_ipv4}</code></div>`;
-  }
-
-  function gatewayHtml(vpn) {
-    return vpn.gateway
-      ? `<code>${vpn.gateway}</code>`
-      : '<span class="muted">—</span>';
-  }
-
-  function exitIpHtml(vpn) {
-    const cache = vpn.exit_ip_cache || {};
-
-    if (vpn.exit_ip) {
-      let value = `<code>${vpn.exit_ip}</code>`;
-      if (cache.checking) {
-        value += '<div class="muted" style="font-size:.8rem;">◐ refreshing…</div>';
-      } else if (cache.probe_ok === false) {
-        value += '<div class="status-warn" style="font-size:.8rem;">last refresh failed</div>';
-      }
-      return value;
-    }
-
-    if (vpn.state === "connected") {
-      return '<span class="status-warn">◐ Checking…</span>';
-    }
-
-    return '<span class="muted">—</span>';
-  }
-
-  function renderVpn(vpn) {
-    const row = document.querySelector(
-      `tr[data-vpn-profile-id="${vpn.id}"]`
-    );
-    if (!row) return;
-
-    row.querySelector(".vpn-state").innerHTML = stateHtml(vpn);
-    row.querySelector(".vpn-tunnel").innerHTML = tunnelHtml(vpn);
-    row.querySelector(".vpn-gateway").innerHTML = gatewayHtml(vpn);
-    row.querySelector(".vpn-exit-ip").innerHTML = exitIpHtml(vpn);
-    row.querySelector(".vpn-uptime").textContent = vpn.uptime || "—";
-  }
-
-  function renderUpdate(update) {
-    const banner = document.getElementById("update-banner");
-    const title = document.getElementById("update-title");
-    const detail = document.getElementById("update-detail");
-    const linkWrap = document.getElementById("update-link-wrap");
-    const link = document.getElementById("update-link");
-
-    if (!update || !update.available) {
-      banner.style.display = "none";
-      return;
-    }
-
-    title.textContent = `Update available: v${update.latest}`;
-    detail.textContent =
-      `You're running v${update.installed}. A newer repository version is available.`;
-
-    if (update.repository_url) {
-      link.href = update.repository_url;
-      linkWrap.style.display = "";
-    } else {
-      linkWrap.style.display = "none";
-    }
-
-    banner.style.display = "";
-  }
-
-  async function refreshLive() {
+  const section = document.querySelector('.tautulli-dashboard');
+  if (!section) return;
+  const counts = [document.getElementById('tautulli-live-count'), document.getElementById('tautulli-live-count-desktop')].filter(Boolean);
+  const list = document.getElementById('tautulli-live-sessions');
+  const age = document.getElementById('tautulli-live-age');
+  const refreshMs = Math.max(10000, Number(section.dataset.liveRefresh || 10) * 1000);
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  async function refresh() {
     try {
-      const response = await fetch(liveUrl, {
-        headers: { "Accept": "application/json" },
-        cache: "no-store"
-      });
-
+      const response = await fetch('/api/tautulli/live', {cache:'no-store'});
+      if (!response.ok) throw new Error('live request failed');
       const data = await response.json();
-      if (!response.ok || !data.ok) return;
-
-      updateTrafficSummary(data.traffic);
-      for (const vpn of data.vpns || []) {
-        renderVpn(vpn);
-      }
-      renderUpdate(data.update);
+      const sessions = data.sessions || [];
+      counts.forEach(node => { node.textContent = sessions.length; });
+      if (data.error) age.textContent = 'Live activity unavailable · showing last known state';
+      else age.textContent = data.sampled_at ? 'Live sample updated' : '';
+      if (!sessions.length) { list.innerHTML = '<p class="muted">Nobody is streaming right now.</p>'; return; }
+      list.innerHTML = sessions.map(s => `<div class="tautulli-live-row"><span class="live-dot"></span><div><strong>${escapeHtml(s.customer_name || s.username || 'Unknown user')}</strong><span>${escapeHtml(s.title || 'Unknown title')}</span></div><small>${escapeHtml(s.state || 'playing')}</small></div>`).join('');
     } catch (_) {
-      // Dashboard remains useful from its last rendered/cached state.
+      age.textContent = 'Live activity unavailable';
     }
   }
-
-  refreshLive();
-  setInterval(refreshLive, LIVE_POLL_MS);
+  refresh();
+  setInterval(refresh, refreshMs);
 })();
 </script>
-
+{% endif %}
+<section class="portal-analytics-dashboard">
+  <div class="row between"><div><h2>Customer portal</h2><p class="muted">Privacy-light usage aggregates. No clickstream, IP history or interaction recording.</p></div></div>
+  <div class="portal-analytics-stats">
+    <div><strong>{{ portal_analytics.enabled }}</strong><span>Portal enabled</span></div>
+    <div><strong>{{ portal_analytics[30].active_users }}</strong><span>Active users · 30d</span></div>
+    <div><strong>{{ portal_analytics[30].sessions }}</strong><span>Sessions · 30d</span></div>
+    <div><strong>{{ portal_analytics.never_logged_in }}</strong><span>Never logged in</span></div>
+  </div>
+  <div class="portal-analytics-range table-wrap"><table><thead><tr><th>Window</th><th>Active users</th><th>Sessions</th><th>Page views</th><th>Support views</th><th>Request clicks</th></tr></thead><tbody>
+  {% for days in [7,30,90] %}<tr><td>Last {{ days }} days</td><td>{{ portal_analytics[days].active_users }}</td><td>{{ portal_analytics[days].sessions }}</td><td>{{ portal_analytics[days].page_views }}</td><td>{{ portal_analytics[days].support_views }}</td><td>{{ portal_analytics[days].request_clicks }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+<section class="dashboard-recent-activity">
+  <div class="dashboard-recent-desktop"><h2>Recent activity</h2><div class="table-wrap"><table><thead><tr><th>When</th><th>Action</th><th>Detail</th></tr></thead><tbody>{% for a in recent %}<tr><td>{{ a.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td><code>{{ a.action }}</code></td><td>{{ a.detail or '' }}</td></tr>{% else %}<tr><td colspan="3" class="muted">No activity yet.</td></tr>{% endfor %}</tbody></table></div></div>
+  <details class="dashboard-mobile-details dashboard-recent-mobile">
+    <summary><span>Recent activity</span><small>{{ recent|length }} recent event{{ '' if recent|length == 1 else 's' }}</small></summary>
+    <div class="dashboard-activity-list">
+      {% for a in recent %}<article class="dashboard-activity-card"><div class="row between"><code>{{ a.action }}</code><time>{{ a.created_at.strftime('%d %b · %H:%M') }}</time></div>{% if a.detail %}<p>{{ a.detail }}</p>{% endif %}</article>{% else %}<p class="muted">No activity yet.</p>{% endfor %}
+    </div>
+  </details>
+</section>
 {% endblock %}

@@ -1,0 +1,220 @@
+from datetime import datetime
+from decimal import Decimal
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.db import Base
+from app.models import BillingTier, Customer, Package, Subscription
+from app.services.billing import apply_payment, initialize_subscription_period, process_billing
+
+
+def make_db(grace=3):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    package = Package(name="Plex")
+    tier = BillingTier(name="Monthly", price=10, interval_unit="month", interval_count=1, grace_period_days=grace, package=package)
+    customer = Customer(name="Example")
+    db.add_all([package, tier, customer]); db.flush()
+    sub = Subscription(customer=customer, billing_tier=tier, status="active")
+    initialize_subscription_period(sub, datetime(2026, 9, 1))
+    db.add(sub); db.commit()
+    return db, customer, sub
+
+
+def test_payment_during_grace_extends_from_previous_expiry():
+    db, customer, sub = make_db(grace=3)
+    payment = apply_payment(db, customer=customer, amount=Decimal("10"), paid_at=datetime(2026, 10, 3), source="manual", external_reference=None, note=None, apply_to_subscription=True)
+    db.commit()
+    assert payment.coverage_start == datetime(2026, 10, 1)
+    assert payment.coverage_end == datetime(2026, 11, 1)
+    assert sub.current_period_end == datetime(2026, 11, 1)
+
+
+def test_payment_after_grace_restarts_from_payment_date():
+    db, customer, sub = make_db(grace=3)
+    payment = apply_payment(db, customer=customer, amount=Decimal("10"), paid_at=datetime(2026, 10, 5), source="manual", external_reference=None, note=None, apply_to_subscription=True)
+    db.commit()
+    assert payment.coverage_start == datetime(2026, 10, 5)
+    assert payment.coverage_end == datetime(2026, 11, 5)
+
+
+def test_billing_cycle_moves_through_grace_and_suspension():
+    db, customer, sub = make_db(grace=3)
+    process_billing(db, datetime(2026, 10, 2))
+    db.refresh(sub); db.refresh(customer)
+    assert sub.status == "grace"
+    assert customer.status == "grace"
+    process_billing(db, datetime(2026, 10, 5))
+    db.refresh(sub); db.refresh(customer)
+    assert sub.status == "suspended"
+    assert customer.status == "suspended"
+
+
+def test_uninitialised_v01_subscription_is_not_auto_suspended():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    package = Package(name="Legacy")
+    tier = BillingTier(name="Monthly", price=10, package=package)
+    customer = Customer(name="Legacy User", status="active")
+    sub = Subscription(customer=customer, billing_tier=tier, status="active", current_period_end=None)
+    db.add_all([package, tier, customer, sub]); db.commit()
+    process_billing(db, datetime(2030, 1, 1))
+    db.refresh(sub); db.refresh(customer)
+    assert sub.status == "active"
+    assert customer.status == "active"
+
+
+def test_multi_period_payment_auto_calculates_from_amount():
+    db, customer, sub = make_db(grace=3)
+    payment = apply_payment(db, customer=customer, amount=Decimal("30"), paid_at=datetime(2026, 9, 15), source="manual", external_reference=None, note=None, apply_to_subscription=True)
+    db.commit()
+    assert payment.billing_periods == 3
+    assert payment.coverage_start == datetime(2026, 10, 1)
+    assert payment.coverage_end == datetime(2027, 1, 1)
+    assert sub.current_period_end == datetime(2027, 1, 1)
+
+
+def test_multi_period_payment_manual_override_allows_special_amount():
+    db, customer, sub = make_db(grace=3)
+    payment = apply_payment(db, customer=customer, amount=Decimal("25"), paid_at=datetime(2026, 9, 15), source="manual", external_reference=None, note=None, apply_to_subscription=True, billing_periods=3)
+    db.commit()
+    assert payment.billing_periods == 3
+    assert payment.coverage_end == datetime(2027, 1, 1)
+
+
+def test_auto_period_calculation_requires_whole_multiple():
+    db, customer, sub = make_db(grace=3)
+    import pytest
+    with pytest.raises(ValueError, match="whole-number multiple"):
+        apply_payment(db, customer=customer, amount=Decimal("25"), paid_at=datetime(2026, 9, 15), source="manual", external_reference=None, note=None, apply_to_subscription=True)
+
+
+def test_complimentary_credit_during_grace_extends_from_previous_expiry():
+    from app.services.billing import apply_subscription_credit
+    db, customer, sub = make_db(grace=3)
+    credit = apply_subscription_credit(
+        db,
+        customer=customer,
+        periods=3,
+        granted_at=datetime(2026, 10, 3),
+        reason="Grandfathered donor",
+        granted_by="admin",
+    )
+    db.commit()
+    assert credit.billing_periods == 3
+    assert credit.coverage_start == datetime(2026, 10, 1)
+    assert credit.coverage_end == datetime(2027, 1, 1)
+    assert sub.current_period_end == datetime(2027, 1, 1)
+    assert credit.reason == "Grandfathered donor"
+
+
+def test_complimentary_credit_after_grace_restarts_from_grant_date():
+    from app.services.billing import apply_subscription_credit
+    db, customer, sub = make_db(grace=3)
+    credit = apply_subscription_credit(
+        db,
+        customer=customer,
+        periods=2,
+        granted_at=datetime(2026, 10, 5),
+        reason=None,
+        granted_by="admin",
+    )
+    db.commit()
+    assert credit.coverage_start == datetime(2026, 10, 5)
+    assert credit.coverage_end == datetime(2026, 12, 5)
+    assert sub.status == "active"
+    assert customer.status == "active"
+
+
+def test_complimentary_credit_does_not_create_payment():
+    from app.models import Payment, SubscriptionCredit
+    from app.services.billing import apply_subscription_credit
+    db, customer, sub = make_db(grace=3)
+    apply_subscription_credit(
+        db,
+        customer=customer,
+        periods=1,
+        granted_at=datetime(2026, 9, 10),
+        reason="Courtesy month",
+        granted_by="admin",
+    )
+    db.commit()
+    assert db.query(Payment).count() == 0
+    assert db.query(SubscriptionCredit).count() == 1
+
+
+def test_complimentary_credit_reactivates_most_recent_cancelled_subscription():
+    from app.services.billing import apply_subscription_credit
+    db, customer, sub = make_db(grace=3)
+    sub.status = "cancelled"
+    sub.cancelled_at = datetime(2026, 10, 2)
+    customer.status = "cancelled"
+    db.commit()
+
+    credit = apply_subscription_credit(
+        db,
+        customer=customer,
+        periods=2,
+        granted_at=datetime(2026, 10, 10),
+        reason="Grandfathered donor",
+        granted_by="admin",
+    )
+    db.commit()
+
+    assert credit.subscription_id == sub.id
+    assert credit.coverage_start == datetime(2026, 10, 10)
+    assert credit.coverage_end == datetime(2026, 12, 10)
+    assert sub.status == "active"
+    assert sub.cancelled_at is None
+    assert customer.status == "active"
+
+
+def test_manual_access_end_extends_access_without_rewriting_paid_through():
+    from app.services.billing import desired_billing_status
+    db, customer, sub = make_db(grace=3)
+    paid_through = sub.current_period_end
+    sub.manual_access_end = datetime(2026, 10, 20)
+    assert desired_billing_status(sub, datetime(2026, 10, 10)) == "active"
+    assert sub.current_period_end == paid_through
+
+
+def test_manual_access_end_falls_back_to_normal_billing_after_override():
+    from app.services.billing import desired_billing_status
+    db, customer, sub = make_db(grace=3)
+    sub.manual_access_end = datetime(2026, 9, 20)
+    # Override guarantees access while it is in force.
+    assert desired_billing_status(sub, datetime(2026, 9, 19)) == "active"
+    # Once it expires, the still-paid subscription remains active automatically.
+    assert desired_billing_status(sub, datetime(2026, 9, 20)) == "active"
+
+
+def test_payment_during_manual_override_continues_after_override_expires():
+    from app.services.billing import desired_billing_status
+    db, customer, sub = make_db(grace=3)
+    sub.manual_access_end = datetime(2026, 10, 10)
+    payment = apply_payment(db, customer=customer, amount=Decimal("10"), paid_at=datetime(2026, 10, 5), source="manual", external_reference=None, note=None, apply_to_subscription=True)
+    db.commit()
+    assert payment.coverage_end == datetime(2026, 11, 5)
+    # After manual access ends, normal paid coverage takes over with no admin action.
+    assert desired_billing_status(sub, datetime(2026, 10, 11)) == "active"
+
+
+def test_manual_override_expiry_can_fall_back_to_grace_or_suspension():
+    from app.services.billing import desired_billing_status
+    db, customer, sub = make_db(grace=3)
+    sub.manual_access_end = datetime(2026, 10, 2)
+    assert desired_billing_status(sub, datetime(2026, 10, 2)) == "grace"
+    assert desired_billing_status(sub, datetime(2026, 10, 5)) == "suspended"
+
+
+def test_clearing_manual_access_end_returns_to_normal_billing_rules():
+    from app.services.billing import desired_billing_status
+    db, customer, sub = make_db(grace=3)
+    sub.manual_access_end = datetime(2026, 10, 20)
+    assert desired_billing_status(sub, datetime(2026, 10, 10)) == "active"
+    sub.manual_access_end = None
+    assert desired_billing_status(sub, datetime(2026, 10, 10)) == "suspended"

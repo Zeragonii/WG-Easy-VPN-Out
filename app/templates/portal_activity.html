@@ -1,0 +1,132 @@
+{% from '_portal_navigation.html' import portal_sidebar, portal_topbar, portal_bottom_nav with context %}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0f141c"><meta name="application-name" content="Share Manager Portal"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Share Manager Portal"><title>Activity · Share Manager</title><link rel="manifest" href="/portal/manifest.webmanifest"><link rel="icon" href="/static/icons/favicon.ico"><link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png"><link rel="stylesheet" href="/static/app.css?v={{ app_version }}"></head>
+<body class="portal-body">
+<div class="portal-shell portal-app-shell">
+{{ portal_sidebar('activity', customer, requests_platform) }}
+<div class="portal-content-shell">
+{{ portal_topbar(customer, active_news_banner, False, requests_platform) }}
+<main class="portal-main portal-main-with-nav">
+  <section class="portal-page-heading"><div><span class="muted">Your Plex account</span><h1>Activity</h1></div></section>
+  {% if notice %}<div class="alert success">{{ notice }}</div>{% endif %}{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+  <section class="portal-live-section">
+    <div class="portal-section-heading"><div><h2>Watching now</h2><span class="muted">Updates every {{ live_refresh_seconds }} seconds</span></div><span id="portal-live-count" class="badge active">{{ live.sessions|length }} active</span></div>
+    <div id="portal-live-status" class="portal-live-status{% if live.error %} warning{% endif %}">{% if live.error %}Live activity is temporarily unavailable; showing the last known sample.{% endif %}</div>
+    <div id="portal-live-sessions" class="portal-live-list">
+      {% for session in live.sessions %}
+      <article class="portal-live-card" data-session-key="{{ session.session_key }}">
+        <div><strong>{{ session.title }}</strong><span>{{ session.player or 'Plex player' }} · {{ session.state|capitalize }}</span></div>
+        <form method="post" action="/portal/activity/stop" onsubmit="return confirm('Stop this Plex stream? Playback will end immediately on that device.');"><input type="hidden" name="session_key" value="{{ session.session_key }}"><button class="danger small-action">Stop stream</button></form>
+      </article>
+      {% else %}<div class="portal-empty-live">Nothing is streaming on your Plex account right now.</div>{% endfor %}
+    </div>
+  </section>
+
+  <section class="portal-info-section">
+    <div class="portal-section-heading"><div><h2>Your activity</h2><span class="muted">Synced from Tautulli</span></div></div>
+    {% if activity %}
+    <div class="portal-activity-grid">
+      <div><span>Last streamed</span><strong>{{ relative_time(activity.last_streamed_at) }}</strong><small>{{ activity.last_title or '—' }}</small></div>
+      <div><span>Last 30 days</span><strong>{{ format_duration(activity.watch_time_30d) }}</strong><small>{{ activity.plays_30d }} plays</small></div>
+      <div><span>Lifetime</span><strong>{{ format_duration(activity.watch_time_lifetime) }}</strong><small>{{ activity.plays_lifetime }} plays</small></div>
+      <div><span>Stream allowance</span><strong>{% if subscription %}{{ 'Unlimited' if subscription.billing_tier.stream_limit == 0 else subscription.billing_tier.stream_limit }}{% else %}—{% endif %}</strong><small>Concurrent streams</small></div>
+    </div>
+    {% else %}<div class="portal-empty"><strong>No Tautulli activity has been matched yet.</strong><span>Your activity will appear after the next successful Tautulli sync.</span></div>{% endif %}
+  </section>
+
+  <section class="portal-info-section portal-watch-history-section">
+    <div class="portal-section-heading"><div><h2>Watch history</h2><span class="muted">Cached from Tautulli · {{ watch_total_cached }} entr{{ 'y' if watch_total_cached == 1 else 'ies' }}</span></div></div>
+    <input class="portal-watch-filter-toggle" type="checkbox" id="portal-watch-filter-toggle" {% if watch_filters.q or watch_filters.device or watch_filters.library or watch_filters.media_type or watch_filters.from_date or watch_filters.to_date %}checked{% endif %}>
+    <label class="portal-watch-filter-summary" for="portal-watch-filter-toggle"><span>Filters</span><span class="portal-watch-filter-chevron" aria-hidden="true">⌄</span></label>
+    <form method="get" action="/portal/activity" class="portal-watch-filters">
+      <input type="hidden" name="rows" value="{{ watch_per_page }}">
+      <label>Search title<input type="search" name="q" value="{{ watch_filters.q }}" placeholder="Movie, episode, show…"></label>
+      <label>Device<select name="device"><option value="">All devices</option>{% for item in watch_devices %}<option value="{{ item }}" {% if watch_filters.device == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label>
+      <label>Library<select name="library"><option value="">All libraries</option>{% for item in watch_libraries %}<option value="{{ item }}" {% if watch_filters.library == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label>
+      <label>Type<select name="media_type"><option value="">All types</option>{% for item in watch_media_types %}<option value="{{ item }}" {% if watch_filters.media_type == item %}selected{% endif %}>{{ item|replace('_',' ')|title }}</option>{% endfor %}</select></label>
+      <label>From<input type="date" name="from_date" value="{{ watch_filters.from_date }}"></label>
+      <label>To<input type="date" name="to_date" value="{{ watch_filters.to_date }}"></label>
+      <div class="portal-watch-filter-actions"><a class="button-link secondary" href="/portal/activity">Reset</a><button>Apply filters</button></div>
+    </form>
+    <div class="portal-watch-list">
+      {% for item in watch_history %}
+      <article class="portal-watch-card">
+        <div class="portal-watch-top"><div><strong>{{ item.title }}</strong><span>{{ item.watched_at.strftime('%d %b %Y · %H:%M') }}</span></div>{% if item.media_type %}<span class="badge">{{ item.media_type|replace('_',' ') }}</span>{% endif %}</div>
+        <div class="portal-watch-meta">
+          <span><b>Library</b>{{ item.library_name }}</span>
+          <span><b>Device</b>{{ item.device_label }}</span>
+          <span><b>Platform</b>{{ item.platform_label }}</span>
+          <span><b>Playback</b>{{ format_duration(item.duration_seconds) }}</span>
+        </div>
+      </article>
+      {% else %}<div class="portal-empty-live">No watch-history entries match these filters.</div>{% endfor %}
+    </div>
+    <div class="portal-watch-pagination">
+      <form method="get" action="/portal/activity" class="portal-watch-page-size">
+        {% for key, value in watch_filters.items() %}{% if value %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+        <label>Rows per page
+          <select name="rows" onchange="this.form.submit()">
+            {% for count in [10, 25, 50] %}<option value="{{ count }}" {% if watch_per_page == count %}selected{% endif %}>{{ count }}</option>{% endfor %}
+          </select>
+        </label>
+      </form>
+      <div class="portal-watch-page-controls">
+        {% if watch_page > 1 %}<a class="button-link secondary" href="/portal/activity?{{ watch_pagination_base }}{% if watch_pagination_base %}&{% endif %}page={{ watch_page - 1 }}">‹ Previous</a>{% else %}<span class="button-link secondary disabled" aria-disabled="true">‹ Previous</span>{% endif %}
+        <span class="portal-watch-page-label">Page {{ watch_page }} of {{ watch_total_pages }} · {{ watch_filtered_total }} matching</span>
+        {% if watch_page < watch_total_pages %}<a class="button-link secondary" href="/portal/activity?{{ watch_pagination_base }}{% if watch_pagination_base %}&{% endif %}page={{ watch_page + 1 }}">Next ›</a>{% else %}<span class="button-link secondary disabled" aria-disabled="true">Next ›</span>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="portal-info-section">
+    <div class="portal-section-heading"><div><h2>Stream-limit history</h2><span class="muted">Your most recent enforcement events</span></div></div>
+    <div class="portal-enforcement-list">
+      {% for event in stream_events %}
+      <article class="portal-enforcement-card">
+        <div class="portal-enforcement-top"><strong>{{ event.created_at.strftime('%d %b %Y · %H:%M') }}</strong><span class="badge {{ 'active' if event.success else 'suspended' }}">{{ 'Stopped' if event.success else 'Failed' }}</span></div>
+        <div>{{ event.detected_streams }} streams detected · allowance {{ event.allowed_streams }}</div>
+        {% if event.title %}<span>{{ event.title }}{% if event.player %} · {{ event.player }}{% endif %}</span>{% endif %}
+      </article>
+      {% else %}<div class="portal-empty-live">You have no stream-limit enforcement events.</div>{% endfor %}
+    </div>
+  </section>
+</main>
+{{ portal_bottom_nav('activity') }}
+</div>
+</div>
+<script>
+(() => {
+  const list = document.getElementById('portal-live-sessions');
+  const count = document.getElementById('portal-live-count');
+  const status = document.getElementById('portal-live-status');
+  const refreshSeconds = {{ live_refresh_seconds|int }};
+  function esc(value) { const node = document.createElement('span'); node.textContent = value ?? ''; return node.innerHTML; }
+  function sessionCard(session) {
+    const key = esc(session.session_key || '');
+    const title = esc(session.title || 'Unknown title');
+    const player = esc(session.player || 'Plex player');
+    const state = esc((session.state || 'playing').replace(/^./, c => c.toUpperCase()));
+    return `<article class="portal-live-card" data-session-key="${key}"><div><strong>${title}</strong><span>${player} · ${state}</span></div><form method="post" action="/portal/activity/stop" onsubmit="return confirm('Stop this Plex stream? Playback will end immediately on that device.');"><input type="hidden" name="session_key" value="${key}"><button class="danger small-action">Stop stream</button></form></article>`;
+  }
+  async function refresh() {
+    try {
+      const response = await fetch('/portal/api/activity', {headers: {'Accept':'application/json'}, cache:'no-store'});
+      if (response.status === 401) { window.location.href = '/portal/login'; return; }
+      if (!response.ok) throw new Error('request failed');
+      const data = await response.json();
+      const sessions = data.sessions || [];
+      count.textContent = `${sessions.length} active`;
+      status.textContent = data.stale ? 'Live activity is temporarily unavailable; showing the last known sample.' : '';
+      status.classList.toggle('warning', !!data.stale);
+      list.innerHTML = sessions.length ? sessions.map(sessionCard).join('') : '<div class="portal-empty-live">Nothing is streaming on your Plex account right now.</div>';
+    } catch (_) {
+      status.textContent = 'Could not refresh live activity.';
+      status.classList.add('warning');
+    }
+  }
+  window.setInterval(refresh, Math.max(10, refreshSeconds) * 1000);
+})();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/portal/service-worker.js',{scope:'/portal'}).catch(()=>{}));}
+</script>
+</body></html>

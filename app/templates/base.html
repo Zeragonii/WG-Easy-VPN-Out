@@ -1,605 +1,130 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>{% block title %}VPN Router{% endblock %}</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #101214;
-      --panel: #181b1f;
-      --panel2: #20242a;
-      --text: #eef1f4;
-      --muted: #aeb6bf;
-      --border: #30363d;
-      --accent: #5da9ff;
-      --good: #43c17a;
-      --warn: #f1b44c;
-      --bad: #ef6b73;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      position: relative;
-    }
-    #particle-background {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-      pointer-events: none;
-    }
-    header, main {
-      position: relative;
-      z-index: 1;
-    }
-    header {
-      border-bottom: 1px solid var(--border);
-      background: var(--panel);
-      padding: .8rem 1.25rem;
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .brand-row, nav {
-      display: flex;
-      align-items: center;
-      gap: .8rem;
-      min-width: 0;
-    }
-    nav a {
-      color: var(--muted);
-      text-decoration: none;
-      padding: .4rem .55rem;
-      border-radius: 7px;
-    }
-    nav a:hover { background: var(--panel2); color: var(--text); }
-    header strong { font-size: 1.05rem; white-space: nowrap; }
-    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
-    .grid {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1rem;
-    }
-
-    .compact-details {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      margin-top: .75rem;
-      overflow: hidden;
-    }
-
-    .compact-details > summary {
-      list-style: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      min-height: 52px;
-      padding: .72rem .9rem;
-      user-select: none;
-    }
-
-    .compact-details > summary::-webkit-details-marker { display: none; }
-    .compact-details > summary::marker { display: none; }
-
-    .compact-details > summary:hover {
-      background: color-mix(in srgb, var(--panel2) 55%, transparent);
-    }
-
-    .compact-summary-main {
-      min-width: 0;
-    }
-
-    .compact-summary-title {
-      font-weight: 700;
-      line-height: 1.15;
-    }
-
-    .compact-summary-meta {
-      color: var(--muted);
-      font-size: .78rem;
-      margin-top: .18rem;
-      overflow-wrap: anywhere;
-    }
-
-    .compact-summary-chevron {
-      color: var(--muted);
-      flex: 0 0 auto;
-      transition: transform .15s ease;
-    }
-
-    .compact-details[open] > summary .compact-summary-chevron {
-      transform: rotate(90deg);
-    }
-
-    .compact-details-body {
-      border-top: 1px solid var(--border);
-      padding: .9rem;
-    }
-
-    .compact-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: .55rem;
-    }
-
-    .compact-stat {
-      padding: .6rem .7rem;
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      background: color-mix(in srgb, var(--panel2) 62%, transparent);
-    }
-
-    .compact-stat .muted {
-      font-size: .76rem;
-    }
-
-    .page-intro {
-      margin-bottom: .8rem;
-    }
-
-    .page-intro h1 {
-      margin-bottom: .25rem;
-    }
-
-    .secondary-note {
-      color: var(--muted);
-      font-size: .84rem;
-    }
-    .muted { color: var(--muted); }
-    .status-good { color: var(--good); }
-    .status-warn { color: var(--warn); }
-    .status-bad { color: var(--bad); }
-    input, select, button {
-      width: 100%;
-      padding: .75rem;
-      margin-top: .4rem;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--panel2);
-      color: var(--text);
-      font: inherit;
-    }
-    button {
-      cursor: pointer;
-      background: var(--accent);
-      color: #07111d;
-      border: 0;
-      font-weight: 700;
-    }
-    .inline-button { width: auto; padding: .45rem .75rem; margin: 0; }
-    .button-link { display:inline-block;text-decoration:none;background:var(--accent);color:#07111d;font-weight:700;padding:.65rem .85rem;border-radius:8px; }
-    .button-link.secondary { background:var(--panel2);color:var(--text);border:1px solid var(--border); }
-    .danger-button { width:auto;margin:0;background:var(--bad);color:#1b0709;padding:.65rem .85rem; }
-    label { display:block;margin-top:.9rem;color:var(--muted); }
-    .flash, .error-box {
-      border: 1px solid var(--bad);
-      background: color-mix(in srgb, var(--bad) 12%, var(--panel));
-      padding: .85rem;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-    }
-    code { background: var(--panel2); padding: .15rem .35rem; border-radius: 5px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td {
-      text-align: left;
-      padding: .8rem .65rem;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-    th { color: var(--muted); font-size: .85rem; font-weight: 600; }
-    .table-wrap { overflow-x: auto; }
-    .pill {
-      display: inline-block;
-      border-radius: 999px;
-      padding: .22rem .55rem;
-      font-size: .82rem;
-      background: var(--panel2);
-    }
-    @media (max-width: 700px) {
-      body {
-        overflow-x: hidden;
-      }
-      header {
-        align-items: stretch;
-        flex-direction: column;
-        gap: .65rem;
-        padding:
-          max(.75rem, env(safe-area-inset-top))
-          max(.85rem, env(safe-area-inset-right))
-          .75rem
-          max(.85rem, env(safe-area-inset-left));
-      }
-      .brand-row {
-        width: 100%;
-        align-items: stretch;
-        flex-direction: column;
-        gap: .55rem;
-      }
-      header strong {
-        font-size: 1.12rem;
-      }
-      nav {
-        width: 100%;
-        gap: .35rem;
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        padding-bottom: .15rem;
-        scrollbar-width: thin;
-        -webkit-overflow-scrolling: touch;
-      }
-      nav a {
-        flex: 0 0 auto;
-        min-height: 44px;
-        display: inline-flex;
-        align-items: center;
-        padding: .55rem .7rem;
-      }
-      header > form {
-        width: 100%;
-      }
-      header > form .inline-button {
-        width: 100%;
-        min-height: 44px;
-      }
-      main {
-        width: 100%;
-        padding:
-          1rem
-          max(.85rem, env(safe-area-inset-right))
-          max(1rem, env(safe-area-inset-bottom))
-          max(.85rem, env(safe-area-inset-left));
-      }
-      h1 {
-        font-size: clamp(1.55rem, 7vw, 2rem);
-        line-height: 1.12;
-      }
-      h2 {
-        line-height: 1.2;
-      }
-      input, select, button, .button-link {
-        min-height: 44px;
-      }
-      .inline-button, .danger-button {
-        min-height: 44px;
-      }
-      .card {
-        border-radius: 10px;
-      }
-      .table-wrap {
-        -webkit-overflow-scrolling: touch;
-      }
-    }
-  </style>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ title or 'Share Manager' }}</title>
+  <meta name="theme-color" content="#0f141c">
+  <meta name="application-name" content="Share Manager">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Share Manager">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/static/app.css?v={{ app_version }}">
 </head>
 <body>
-{% if background_particles_enabled %}
-<canvas id="particle-background" aria-hidden="true"></canvas>
-{% endif %}
-<header>
-  <div class="brand-row">
-    <strong>VPN Router</strong>
-    {% if current_user.is_authenticated %}
-    <nav aria-label="Main navigation">
-      {% if current_user.is_admin %}
-      <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-      {% endif %}
-      <a href="{{ url_for('clients.index') }}">{% if current_user.is_admin %}WG-Easy Clients{% else %}My VPN{% endif %}</a>
-      {% if current_user.is_admin %}
-      <a href="{{ url_for('traffic.index') }}">Traffic</a>
-      <a href="{{ url_for('vpn_profiles.index') }}">VPN Clients</a>
-      <a href="{{ url_for('routing_groups.index') }}">Routing Groups</a>
-      <a href="{{ url_for('users.index') }}">Users</a>
-      <a href="{{ url_for('backups.index') }}">Backup & Restore</a>
-      <a href="{{ url_for('diagnostics.index') }}">Diagnostics</a>
-      <a href="{{ url_for('settings.index') }}">Settings</a>
-      {% endif %}
+<div class="mobile-topbar">
+  <button type="button" class="mobile-nav-toggle ghost" aria-label="Open navigation" aria-controls="site-sidebar" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="mobile-brand">Share Manager <span>{{ app_version }}</span></div>
+</div>
+<div class="mobile-nav-overlay" hidden></div>
+<div class="layout">
+  <aside id="site-sidebar" aria-label="Sidebar navigation">
+    <div class="aside-top">
+      <div class="brand">Share Manager <span>{{ app_version }}</span></div>
+      <button type="button" class="ghost aside-close" aria-label="Close navigation">×</button>
+    </div>
+    <nav>
+      <a href="/" data-nav-root="/">Dashboard</a><a href="/customers" data-nav-root="/customers">Customers</a><a href="/tickets" data-nav-root="/tickets" class="nav-ticket-link"><span>Tickets</span><span class="nav-ticket-count" data-ticket-count aria-label="{{ admin_open_ticket_count }} active tickets" {% if not admin_open_ticket_count %}hidden{% endif %}>{{ admin_open_ticket_count }}</span></a><a href="/packages" data-nav-root="/packages">Packages</a><a href="/referrals" data-nav-root="/referrals">Referrals</a><a href="/payments" data-nav-root="/payments">Payments</a><a href="/faqs" data-nav-root="/faqs">FAQs</a><a href="/news" data-nav-root="/news">News</a><a href="/integrations" data-nav-root="/integrations">Integrations</a><a href="/stream-limits" data-nav-root="/stream-limits">Stream Limits</a><a href="/backups" data-nav-root="/backups">Backups</a>
     </nav>
-    {% endif %}
-  </div>
-  {% if current_user.is_authenticated %}
-  <form method="post" action="{{ url_for('auth.logout') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="inline-button" type="submit">Log out</button>
-  </form>
-  {% endif %}
-</header>
-<main>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-      <div class="flash">{{ message }}</div>
-    {% endfor %}
-  {% endwith %}
-  {% block content %}{% endblock %}
-</main>
-{% if background_particles_enabled %}
+    <form method="post" action="/logout"><button class="ghost">Sign out</button></form>
+  </aside>
+  <main>{% block content %}{% endblock %}</main>
+</div>
+<nav class="mobile-bottom-nav" aria-label="Quick navigation">
+  <a href="/" data-nav-root="/" aria-label="Dashboard">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>
+    <span>Dashboard</span>
+  </a>
+  <a href="/customers" data-nav-root="/customers" aria-label="Customers">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM8 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8 1c-3.33 0-6 1.67-6 4v3h12v-3c0-2.33-2.67-4-6-4ZM8 14c-3.11 0-6 1.57-6 4v2h6v-3c0-1.08.42-2.06 1.15-2.89A8.4 8.4 0 0 0 8 14Z"/></svg>
+    <span>Customers</span>
+  </a>
+  <a href="/payments" data-nav-root="/payments" aria-label="Payments">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11Zm2 2.5h14V7H5v2Zm0 3v5.5c0 .28.22.5.5.5h13a.5.5 0 0 0 .5-.5V12H5Zm2 3h5v2H7v-2Z"/></svg>
+    <span>Payments</span>
+  </a>
+</nav>
 <script>
 (() => {
-  const canvas = document.getElementById("particle-background");
-  if (!canvas) return;
+  const body = document.body;
+  const toggle = document.querySelector('.mobile-nav-toggle');
+  const closeButton = document.querySelector('.aside-close');
+  const overlay = document.querySelector('.mobile-nav-overlay');
+  const sidebar = document.getElementById('site-sidebar');
+  const navLinks = sidebar ? [...sidebar.querySelectorAll('nav a')] : [];
+  if (!toggle || !overlay || !sidebar) return;
 
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  if (reducedMotion.matches) {
-    canvas.remove();
-    return;
+  function setOpen(open) {
+    body.classList.toggle('nav-open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    overlay.hidden = !open;
   }
 
-  const ctx = canvas.getContext("2d", { alpha: true });
-  if (!ctx) {
-    canvas.remove();
-    return;
-  }
-
-  const particles = [];
-  const mouse = { x: null, y: null };
-  const STORAGE_KEY = "vpn-router-particle-state-v1";
-  const STORAGE_MAX_AGE_MS = 15000;
-  const MAX_DPR = 2;
-  const LINK_DISTANCE = 135;
-  const MOUSE_RADIUS = 155;
-  const BASE_SPEED = 0.18;
-  let width = 0;
-  let height = 0;
-  let dpr = 1;
-  let animationFrame = null;
-
-  function cssColor(name, fallback) {
-    const value = getComputedStyle(document.documentElement)
-      .getPropertyValue(name)
-      .trim();
-    return value || fallback;
-  }
-
-  function desiredParticleCount() {
-    // Deliberately modest: enough to look alive without turning a homelab UI
-    // into a GPU benchmark.
-    return Math.max(22, Math.min(82, Math.round((width * height) / 22000)));
-  }
-
-  function saveParticleState() {
-    try {
-      const state = {
-        savedAt: Date.now(),
-        width,
-        height,
-        particles: particles.map(particle => ({
-          x: particle.x,
-          y: particle.y,
-          vx: particle.vx,
-          vy: particle.vy,
-          radius: particle.radius,
-        })),
-      };
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Cosmetic state persistence must never affect page navigation.
-    }
-  }
-
-  function restoreParticleState() {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return false;
-
-      const state = JSON.parse(raw);
-      if (
-        !state
-        || !Array.isArray(state.particles)
-        || !Number.isFinite(state.width)
-        || !Number.isFinite(state.height)
-        || state.width <= 0
-        || state.height <= 0
-        || !Number.isFinite(state.savedAt)
-        || (Date.now() - state.savedAt) > STORAGE_MAX_AGE_MS
-      ) {
-        sessionStorage.removeItem(STORAGE_KEY);
-        return false;
-      }
-
-      const scaleX = width / state.width;
-      const scaleY = height / state.height;
-
-      particles.length = 0;
-      for (const saved of state.particles) {
-        if (
-          !Number.isFinite(saved.x)
-          || !Number.isFinite(saved.y)
-          || !Number.isFinite(saved.vx)
-          || !Number.isFinite(saved.vy)
-          || !Number.isFinite(saved.radius)
-        ) {
-          continue;
-        }
-
-        particles.push({
-          x: saved.x * scaleX,
-          y: saved.y * scaleY,
-          vx: saved.vx,
-          vy: saved.vy,
-          radius: saved.radius,
-        });
-      }
-
-      return particles.length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  function makeParticle() {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = BASE_SPEED * (0.55 + Math.random() * 0.9);
-    return {
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      radius: 1.1 + Math.random() * 1.45,
-    };
-  }
-
-  function syncParticleCount() {
-    const target = desiredParticleCount();
-    while (particles.length < target) particles.push(makeParticle());
-    if (particles.length > target) particles.length = target;
-  }
-
-  let hasRestoredInitialState = false;
-
-  function resize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
-
-    canvas.width = Math.max(1, Math.floor(width * dpr));
-    canvas.height = Math.max(1, Math.floor(height * dpr));
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    if (!hasRestoredInitialState) {
-      restoreParticleState();
-      hasRestoredInitialState = true;
-    }
-
-    syncParticleCount();
-  }
-
-  function updateParticle(particle) {
-    particle.x += particle.vx;
-    particle.y += particle.vy;
-
-    if (particle.x < -10) particle.x = width + 10;
-    if (particle.x > width + 10) particle.x = -10;
-    if (particle.y < -10) particle.y = height + 10;
-    if (particle.y > height + 10) particle.y = -10;
-
-    if (mouse.x === null || mouse.y === null) return;
-
-    const dx = particle.x - mouse.x;
-    const dy = particle.y - mouse.y;
-    const distanceSq = dx * dx + dy * dy;
-    if (distanceSq <= 0 || distanceSq >= MOUSE_RADIUS * MOUSE_RADIUS) return;
-
-    const distance = Math.sqrt(distanceSq);
-    const force = (1 - distance / MOUSE_RADIUS) * 0.025;
-    particle.vx += (dx / distance) * force;
-    particle.vy += (dy / distance) * force;
-
-    // Keep pointer interaction playful rather than letting particles accelerate
-    // into escape velocity after several seconds of hovering.
-    const speed = Math.hypot(particle.vx, particle.vy);
-    const maxSpeed = 0.65;
-    if (speed > maxSpeed) {
-      particle.vx = (particle.vx / speed) * maxSpeed;
-      particle.vy = (particle.vy / speed) * maxSpeed;
-    }
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, width, height);
-
-    const accent = cssColor("--accent", "#5da9ff");
-    const text = cssColor("--text", "#eef1f4");
-
-    for (const particle of particles) updateParticle(particle);
-
-    ctx.lineWidth = 0.75;
-    for (let i = 0; i < particles.length; i += 1) {
-      const a = particles[i];
-
-      for (let j = i + 1; j < particles.length; j += 1) {
-        const b = particles[j];
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
-        const distanceSq = dx * dx + dy * dy;
-        if (distanceSq > LINK_DISTANCE * LINK_DISTANCE) continue;
-
-        const distance = Math.sqrt(distanceSq);
-        const alpha = (1 - distance / LINK_DISTANCE) * 0.18;
-        ctx.strokeStyle = accent;
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      }
-    }
-
-    ctx.fillStyle = text;
-    for (const particle of particles) {
-      ctx.globalAlpha = 0.36;
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.globalAlpha = 1;
-    animationFrame = window.requestAnimationFrame(draw);
-  }
-
-  let resizeTimer = null;
-  window.addEventListener("resize", () => {
-    window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(resize, 100);
-  }, { passive: true });
-
-  window.addEventListener("pointermove", event => {
-    mouse.x = event.clientX;
-    mouse.y = event.clientY;
-  }, { passive: true });
-
-  window.addEventListener("pointerleave", () => {
-    mouse.x = null;
-    mouse.y = null;
-  }, { passive: true });
-
-  window.addEventListener("pagehide", saveParticleState, { capture: true });
-
-  // Periodic snapshots make restoration robust even if a browser skips the
-  // normal pagehide path during an abrupt navigation or refresh.
-  window.setInterval(saveParticleState, 1000);
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      saveParticleState();
-      if (animationFrame !== null) {
-        window.cancelAnimationFrame(animationFrame);
-        animationFrame = null;
-      }
-      return;
-    }
-    if (animationFrame === null) draw();
+  toggle.addEventListener('click', () => setOpen(!body.classList.contains('nav-open')));
+  overlay.addEventListener('click', () => setOpen(false));
+  closeButton?.addEventListener('click', () => setOpen(false));
+  navLinks.forEach(link => link.addEventListener('click', () => setOpen(false)));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && body.classList.contains('nav-open')) setOpen(false);
   });
-
-  reducedMotion.addEventListener?.("change", event => {
-    if (!event.matches) return;
-    if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
-    animationFrame = null;
-    canvas.remove();
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900 && body.classList.contains('nav-open')) setOpen(false);
   });
-
-  resize();
-  draw();
 })();
 </script>
-{% endif %}
+<script>
+(() => {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  document.querySelectorAll('[data-nav-root]').forEach(link => {
+    const root = link.dataset.navRoot;
+    const active = root === '/' ? path === '/' : (path === root || path.startsWith(root + '/'));
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+})();
+</script>
+
+<script>
+(() => {
+  const badge = document.querySelector('[data-ticket-count]');
+  if (!badge) return;
+  let inFlight = false;
+  async function refreshTicketCount() {
+    if (document.visibilityState !== 'visible' || inFlight) return;
+    inFlight = true;
+    try {
+      const response = await fetch('/api/admin/tickets/summary', {credentials: 'same-origin', cache: 'no-store'});
+      if (!response.ok) return;
+      const data = await response.json();
+      const count = Number(data.active_count || 0);
+      const unread = Number(data.unread_count || 0);
+      badge.textContent = String(count);
+      badge.hidden = count === 0;
+      badge.classList.toggle('has-unread', unread > 0);
+      badge.setAttribute('aria-label', `${count} active tickets${unread ? `, ${unread} unread` : ''}`);
+    } catch (_) {} finally { inFlight = false; }
+  }
+  refreshTicketCount();
+  setInterval(refreshTicketCount, 10000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshTicketCount(); });
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js', {scope: '/'}).catch(error => {
+      console.warn('Share Manager service worker registration failed:', error);
+    });
+  });
+}
+</script>
 </body>
 </html>
