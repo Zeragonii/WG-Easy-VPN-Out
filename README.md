@@ -1,3 +1,7 @@
+## v0.13.0a — Release validation hotfix
+
+Adds the repository-required AI-assisted development disclosure. No runtime behaviour changes.
+
 ## v0.13.0 — Seerr Management Integration
 
 Share Manager can now manage Seerr users through their existing Plex-linked identity. Configure the Seerr URL and API key under Integrations, then define request quotas on Packages. Movie limits count movie requests; TV limits count requested seasons. When several assigned Packages define a Seerr policy, the highest policy priority wins. Quota reconciliation can run automatically every 15 minutes, while customers see their current quota usage on the portal Account page.
@@ -556,3 +560,8 @@ v0.10.7 adds privacy-light portal adoption metrics: successful logins, 30-minute
 Share Manager can run a simple referral-credit programme without requiring public signup or payment automation. Every customer gets a random five-digit code. Admins may assign that code as another customer's referrer, after which future qualifying payments award the configured number of credits from that customer's billing tier.
 
 Credits are ledger-backed and auditable. Payment voids reverse the original award, historical rewards do not change when tier settings change, and old payments are never rewarded retroactively when a referral relationship is added. Customers can see their code/balance in Portal → Referrals and redeem the configured number of credits for complimentary billing periods. Admins can review balances and redeem on a customer's behalf from the Referrals page.
+
+## AI-assisted development disclosure
+
+Share Manager is developed with AI-assisted tooling under the direction of the project maintainer. AI assistance has been used for design discussion, implementation, debugging, test development, and documentation. AI-generated output is not treated as independent validation; releases remain subject to the project's automated validation and maintainer review.
+

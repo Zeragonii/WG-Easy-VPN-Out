@@ -1,3 +1,8 @@
+# 0.13.0a — Release validation disclosure hotfix
+
+- Added the required **AI-assisted development disclosure** to `README.md`.
+- No application, database, Seerr integration, or UI behaviour changed.
+
 # 0.13.0 — Seerr Management Integration
 
 - Upgraded the existing external Requests Platform link into an optional managed Seerr integration using Seerr API-key authentication.
