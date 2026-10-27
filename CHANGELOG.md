@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.12.1
+
+### Routing group name synchronization
+
+- Added **Sync Group Names** beside Rebuild Routing on the Routing Groups page.
+- Renames VPN-backed routing groups to match their current associated VPN profile names.
+- Leaves Default WAN groups untouched and preserves group IDs, clients, policies, DNS and tunnel state.
+- Handles duplicate VPN-profile targets and conflicts with protected WAN group names using numbered suffixes.
+- Uses a transactional two-phase rename to prevent intermediate uniqueness collisions.
+- Warns before replacing existing custom group names. No schema changes.
+
 ## 1.12.0
 
 ### Compact, minimalist interface

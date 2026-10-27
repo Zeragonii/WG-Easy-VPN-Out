@@ -93,6 +93,11 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="button-link secondary" type="submit">Rebuild Routing</button>
     </form>
+    <form method="post" action="{{ url_for('routing_groups.sync_names') }}"
+          onsubmit="return confirm('Rename all VPN-backed routing groups to match their associated VPN profile names? Existing custom group names will be replaced. Routing assignments will remain unchanged.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="button-link secondary" type="submit">Sync Group Names</button>
+    </form>
     <a class="button-link" href="{{ url_for('routing_groups.new') }}">+ Add Routing Group</a>
   </div>
 </div>

@@ -1173,6 +1173,13 @@ def main():
         if required_fragment not in vpn_detail:
             fail(f"v1.12.0 compact VPN detail UI is missing: {required_fragment}")
 
+    routing_groups_source = (ROOT / "app/routing_groups.py").read_text(encoding="utf-8")
+    routing_groups_template = (ROOT / "app/templates/routing_groups/index.html").read_text(encoding="utf-8")
+    if 'def sync_names():' not in routing_groups_source or '@bp.post("/sync-names")' not in routing_groups_source:
+        fail("v1.12.1 routing group name sync endpoint missing")
+    if 'routing_groups.sync_names' not in routing_groups_template or 'Sync Group Names' not in routing_groups_template:
+        fail("v1.12.1 routing group name sync button missing")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")

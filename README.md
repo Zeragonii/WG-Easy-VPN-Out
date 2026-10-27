@@ -213,6 +213,11 @@ period and then disconnects.
 This is assignment-driven rather than handshake-driven, so the outbound tunnel
 can already be ready when an offline WireGuard client reconnects.
 
+The Routing Groups page includes **Sync Group Names**, which updates VPN-backed
+group labels to match their associated VPN profile names without changing
+routing policies or client assignments. This replaces existing custom group
+names; WAN-only group names are preserved.
+
 ## Routing and DNS behavior
 
 ### Local/private traffic bypass

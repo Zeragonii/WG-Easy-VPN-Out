@@ -90,6 +90,64 @@ def index():
     )
 
 
+@bp.post("/sync-names")
+@login_required
+def sync_names():
+    """Align VPN-backed group names with profile names, without altering routing."""
+    groups = db.session.execute(
+        db.select(RoutingGroup).order_by(RoutingGroup.id.asc())
+    ).scalars().all()
+    candidates = [group for group in groups if group.vpn_profile is not None]
+    if not candidates:
+        flash("No VPN-backed routing groups to rename.", "success")
+        return redirect(url_for("routing_groups.index"))
+
+    # Reserve WAN group names. Renamed VPN groups release their old names.
+    reserved = {group.name.casefold() for group in groups if group.vpn_profile is None}
+    targets = {}
+    for group in candidates:
+        base = (group.vpn_profile.name or "").strip()[:120]
+        if not base:
+            continue
+        proposed = base
+        index = 2
+        while proposed.casefold() in reserved:
+            suffix = f" ({index})"
+            proposed = f"{base[:120 - len(suffix)]}{suffix}"
+            index += 1
+        reserved.add(proposed.casefold())
+        targets[group.id] = proposed
+
+    changes = [(group, targets[group.id]) for group in candidates
+               if group.id in targets and group.name != targets[group.id]]
+    if not changes:
+        flash("Routing group names are already in sync.", "success")
+        return redirect(url_for("routing_groups.index"))
+
+    # Two-phase rename permits swaps and resolves transient UNIQUE collisions.
+    # Intermediate names are guaranteed unique against every existing group.
+    used = {group.name.casefold() for group in groups} | reserved
+    for group, _ in changes:
+        token = f"__vpn_group_sync_{group.id}__"
+        while token.casefold() in used:
+            token += "_"
+        used.add(token.casefold())
+        group.name = token
+
+    try:
+        db.session.flush()
+        for group, name in changes:
+            group.name = name
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash("Could not sync names due to a database name conflict; no names changed.", "error")
+        return redirect(url_for("routing_groups.index"))
+
+    flash(f"Synced {len(changes)} routing group name(s) with their VPN profiles. Routing policies were not changed.", "success")
+    return redirect(url_for("routing_groups.index"))
+
+
 @bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new():
