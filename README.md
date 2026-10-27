@@ -256,6 +256,10 @@ unavailable.
 
 With **WAN fallback**, traffic may use WAN while the VPN is unavailable.
 
+## Runtime log retention
+
+VPN Router reads only a bounded tail of its runtime logs and rotates profiles at 10 MiB, keeping two historical rotations. Existing OpenVPN log descriptors remain usable during rotation.
+
 ## Data and backups
 
 Persistent state lives under:

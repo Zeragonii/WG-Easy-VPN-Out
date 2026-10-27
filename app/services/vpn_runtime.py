@@ -9,9 +9,17 @@ import signal
 import re
 import subprocess
 import tempfile
+import threading
 import time
 
 from .secrets import decrypt_secret
+
+# Bounded diagnostic reads and copy-truncate retention for live OpenVPN logs.
+_LOG_MAX_BYTES = 10 * 1024 * 1024
+_LOG_BACKUPS = 2
+_LOG_TAIL_BYTES = 1024 * 1024
+_LOG_CHUNK_BYTES = 64 * 1024
+_LOG_ROTATION_LOCK = threading.RLock()
 
 
 class VPNRuntimeError(RuntimeError):
@@ -98,9 +106,79 @@ class VPNRuntimeService:
                     return addr["local"]
         return None
 
-    def _log_tail(self, profile, lines=20):
+    def _rotate_log_if_needed(self, profile):
+        """Bound disk use without renaming a live OpenVPN file descriptor.
+
+        The existing log inode is truncated in place so OpenVPN keeps writing
+        normally. The newest 10 MiB of an oversized old log is kept in .log.1.
+        Rotation is best-effort and must never prevent application startup.
+        """
+        path = self._log_path(profile)
         try:
-            return self._log_path(profile).read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+            if path.stat().st_size <= _LOG_MAX_BYTES:
+                return
+        except OSError:
+            return
+        with _LOG_ROTATION_LOCK:
+            try:
+                if path.stat().st_size <= _LOG_MAX_BYTES:
+                    return
+                for number in range(_LOG_BACKUPS, 1, -1):
+                    previous = path.with_name(f"{path.name}.{number - 1}")
+                    target = path.with_name(f"{path.name}.{number}")
+                    if previous.exists():
+                        previous.replace(target)
+                newest = path.with_name(f"{path.name}.1")
+                temp = path.with_name(f"{path.name}.rotate-tmp")
+                try:
+                    with path.open("rb") as source, temp.open("wb") as dest:
+                        source.seek(0, os.SEEK_END)
+                        offset = max(0, source.tell() - _LOG_MAX_BYTES)
+                        source.seek(offset)
+                        if offset:
+                            source.readline()  # skip a truncated partial line
+                        while True:
+                            chunk = source.read(_LOG_CHUNK_BYTES)
+                            if not chunk:
+                                break
+                            dest.write(chunk)
+                    temp.replace(newest)
+                    # Same inode: OpenVPN's open append fd remains valid.
+                    with path.open("r+b") as live:
+                        live.truncate(0)
+                finally:
+                    temp.unlink(missing_ok=True)
+            except OSError:
+                return
+
+    def _log_tail(self, profile, lines=20):
+        """Read backwards with a strict 1 MiB cap regardless of log size."""
+        try:
+            requested = max(0, min(int(lines), 1000))
+        except (TypeError, ValueError):
+            requested = 20
+        if not requested:
+            return []
+        self._rotate_log_if_needed(profile)
+        path = self._log_path(profile)
+        try:
+            with path.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                position = handle.tell()
+                chunks = []
+                used = 0
+                newline_count = 0
+                while position > 0 and used < _LOG_TAIL_BYTES and newline_count <= requested:
+                    count = min(_LOG_CHUNK_BYTES, position, _LOG_TAIL_BYTES - used)
+                    position -= count
+                    handle.seek(position)
+                    chunk = handle.read(count)
+                    chunks.append(chunk)
+                    used += len(chunk)
+                    newline_count += chunk.count(b"\n")
+            if not chunks:
+                return []
+            return b"".join(reversed(chunks)).decode("utf-8", errors="replace").splitlines()[-requested:]
         except OSError:
             return []
 
@@ -225,6 +303,7 @@ class VPNRuntimeService:
         return (time.time() - latest) <= max_age
 
     def _wg_log(self, profile, message):
+        self._rotate_log_if_needed(profile)
         path = self._log_path(profile)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(
@@ -530,6 +609,7 @@ class VPNRuntimeService:
             raise VPNRuntimeError(f"VPN config file is missing: {config_path}")
 
         iface = self.interface_name(profile)
+        self._rotate_log_if_needed(profile)
         log_path = self._log_path(profile)
         auth_path = self._auth_path(profile)
 

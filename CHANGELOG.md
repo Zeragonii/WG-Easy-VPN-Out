@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.12.1a
+
+### Runtime logfile safety
+
+- Bounded VPN runtime log-tail reads to 1 MiB, fixing worker boot crashes from multi-gigabyte logs.
+- Rotates runtime logs when they exceed 10 MiB, retaining two 10 MiB history files per profile.
+- Uses copy-truncate to preserve existing OpenVPN append file descriptors.
+- Automatically reins in oversized historical logs during status checks; rotation errors do not block boot.
+- Includes the v1.12.1 Sync Group Names feature without changes to routing logic or schema v9.
+
 ## 1.12.1
 
 ### Routing group name synchronization

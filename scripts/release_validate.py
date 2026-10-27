@@ -1180,6 +1180,13 @@ def main():
     if 'routing_groups.sync_names' not in routing_groups_template or 'Sync Group Names' not in routing_groups_template:
         fail("v1.12.1 routing group name sync button missing")
 
+    runtime = (ROOT / "app/services/vpn_runtime.py").read_text(encoding="utf-8")
+    for fragment in ("_LOG_MAX_BYTES = 10 * 1024 * 1024", "_LOG_TAIL_BYTES = 1024 * 1024", "def _rotate_log_if_needed", "live.truncate(0)", "def _log_tail", "handle.seek(position)"):
+        if fragment not in runtime:
+            fail(f"v1.12.1a runtime log safety missing: {fragment}")
+    if 'self._log_path(profile).read_text(encoding="utf-8", errors="replace")' in runtime:
+        fail("Unbounded log reader is still present")
+
     changelog_text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if f"## {version}" not in changelog_text:
         fail(f"CHANGELOG.md has no section for {version}")
